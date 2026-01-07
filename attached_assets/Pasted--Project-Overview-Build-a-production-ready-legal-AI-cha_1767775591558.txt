@@ -1,0 +1,333 @@
+
+Project Overview
+
+Build a production-ready legal AI chatbot for the Chakshi platform with intelligent document processing, multi-layer RAG reasoning, legal drafting capabilities, and cost-optimized model selection. The system must handle 20k-40k token documents  and queries at ₹0.40/query while maintaining lawyer-grade accuracy. the user can upload upto 600-800 pages of documents to ask question. also will be able to press mic icon and chat with the chabot..
+
+
+Core Architecture Requirements
+
+1. Technology Stack
+
+Backend: Node.js with Express/Fastify
+Database: PostgreSQL with pgvector for embeddings
+Vector Store: Pinecone or Qdrant for scalable semantic search
+File Storage: AWS S3 or Cloudflare R2
+OCR: Tesseract.js or cloud OCR (Google Vision API fallback)
+PDF Processing: pdf-parse, pdf.js
+API Integration: OpenAI SDK with custom routing logic
+Frontend Integration: REST API with WebSocket support for streaming
+Web Scraping: Playwright (for JS-heavy sites),
+Job Queue: Bull/BullMQ for background processing
+Admin UI: React Admin or Refine for rapid dashboard development
+File Processing: multer (upload), archiver/unzipper (archives)
+Webhooks: Ngrok for local dev, production webhooks for Drive/cloud
+
+2. Document Intake & Processing System
+
+Requirements:
+
+
+Accept multiple formats: PDF, scanned images, Word docs, case bundles
+OCR processing for scanned documents with 95%+ accuracy
+Text extraction handling 20k-40k token documents
+Intelligent chunking with legal context awareness (maintain section integrity)
+Metadata extraction: case numbers, dates, parties, courts, citations
+Cost target: ₹1 per document using nano/mini models
+Implementation:
+javascript
+code
+
+
+// Document processing pipeline
+1. Upload & validation
+2. Format detection & conversion
+3. OCR (if needed) using GPT-4o-mini for image-to-text
+4. Text cleaning & normalization
+5. Legal entity extraction (NER)
+6. Context-aware chunking (500-1000 tokens, preserve legal sections)
+7. Embedding generation using text-embedding-3-small
+8. Vector storage with metadata indexing
+9. Full-text search indexing (PostgreSQL + tsvector)
+3. Multi-Layer RAG & Legal Reasoning Engine
+
+Layer 1 - Fast Understanding (GPT-4o-mini):
+
+
+Vector similarity search (top-k=10)
+Hybrid search: semantic + keyword matching
+Initial answer generation with citations
+Confidence scoring
+Cost: ~₹0.15 per query
+Layer 2 - Error Checker (GPT-4.1):
+Contradiction detection against source documents
+Statute compliance verification
+Hallucination detection using grounded verification
+Citation accuracy check
+Triggered when: confidence < 0.8 OR legal complexity detected
+Cost: ~₹0.20 per verification
+Layer 3 - Deep Reasoning (o1-pro):
+Complex legal interpretation
+Multi-jurisdiction analysis
+Ambiguous precedent resolution
+Only triggered for: constitutional matters, conflicting precedents, novel legal issues
+Cost: ~₹2.00 per deep analysis (used <5% of queries)
+Smart Escalation Logic:
+javascript
+code
+
+
+// Auto-decide model tier based on:
+- Query complexity score
+- Document contradiction flags
+- Legal domain classification (criminal, civil, constitutional, etc.)
+- User-specified stakes (low/medium/high)
+- Previous layer confidence scores
+4. Legal Drafting System
+
+Draft Types:
+
+
+Petitions, written statements, notices, contracts, briefs, arguments, applications, replies
+Model Selection:
+Basic drafts (notices, simple applications): GPT-4o-mini
+Fact-heavy drafts (petitions, written statements): GPT-4o-mini → GPT-4.1 review
+High-stakes judicial drafts (Supreme Court, complex litigation): o1-pro
+Training Data Integration:
+Fine-tune on 1000+ provided legal documents
+RAG over 79 Indian legal websites (for latest formats & precedents)
+Template library with jurisdiction-specific variations
+Features:
+Automatic section numbering & legal formatting
+Citation insertion with verification
+Fact extraction from case documents
+Party name consistency checks
+Precedent integration with authority ranking
+
+5. Precedent & Judgment Analysis
+
+Capabilities:
+
+
+Case-to-case comparison with similarity scoring
+Ratio decidendi extraction using GPT-4.1
+Fact pattern matching with weighted importance
+Conflicting precedent detection & reconciliation
+Authority hierarchy analysis (SC > HC > District)
+Strongest argument recommendation
+Implementation:
+javascript
+code
+
+
+// Precedent analysis pipeline
+1. Extract facts + legal issues from both cases
+2. Compute fact similarity (embeddings + structured comparison)
+3. Identify ratio decidendi using fine-tuned extraction
+4. Compare legal principles
+5. Detect contradictions
+6. Rank precedent strength (binding vs persuasive)
+7. Generate comparative analysis report
+6. Hallucination Prevention System
+
+Multi-Layer Verification:
+
+
+Source Grounding Check (Mini): Every claim tied to specific document chunk
+Statute Cross-Reference (4.1): Verify against Bare Acts & amendments
+Contradiction Detection (4.1): Check internal consistency
+Pro Review (o1-pro): Only when ambiguity/conflict detected
+Safety Rails:
+
+Citation requirement: All legal claims must cite source
+Confidence thresholds: Flag answers <0.75 confidence
+Human review trigger: Auto-flag for review on sensitive matters
+Audit trail: Log all retrieval paths & model decisions
+
+7. Token-Optimized Cost Control
+
+Automatic Model Router:
+javascript
+
+code
+
+
+const MODEL_DECISION_MATRIX = {
+  embeddings: 'text-embedding-3-small',
+  intake_ocr: 'gpt-4o-mini',
+  basic_query: 'gpt-4o-mini',
+  query_verification: 'gpt-4.1',
+  simple_draft: 'gpt-4o-mini',
+  complex_draft: 'gpt-4.1',
+  judicial_draft: 'o1-pro',
+  precedent_analysis: 'gpt-4.1',
+  deep_reasoning: 'o1-pro'
+};
+Cost Optimization Strategies:
+
+
+Aggressive prompt compression for large documents
+Smart chunking to minimize token usage
+Cache frequent queries (Redis)
+Batch processing for embeddings
+Streaming responses to reduce wait time perception
+
+8. Training Data Integration
+
+1000+ Document Training:
+
+
+Extract patterns from provided legal documents
+Build few-shot examples for drafting
+Create domain-specific prompt templates
+Fine-tune extraction models (entities, clauses, obligations)
+79 Website Scraping:
+Indian Kanoon, SCC Online, Manupatra, etc.
+Latest judgments & precedents
+Statutory updates & amendments
+Court format templates
+Keep embeddings updated (monthly refresh)
+These are the 79 websites :
+https://www.mca.gov.in/content/mca/global/en/acts-rules/ebooks/acts.html
+https://www.mca.gov.in/content/mca/global/en/acts-rules/ebooks/notifications.html
+https://www.mca.gov.in/content/mca/global/en/acts-rules/ebooks/circulars.html
+https://www.mca.gov.in/content/mca/global/en/data-and-reports/reports/monthly-information-bulletin.html
+https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&ssid=7&smid=0
+https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=1&ssid=82&smid=0
+https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=23&smid=0
+https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=25&smid=0
+https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=27&smid=0
+https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=28&smid=0
+https://www.rbi.org.in/Scripts/NotificationUser.aspx#
+https://www.rbi.org.in/Scripts/BS_ViewBulletin.aspx
+https://www.rbi.org.in/scripts/BS_Listofallreturns.aspx
+https://www.rbi.org.in/Scripts/Statistics.aspx
+https://www.rbi.org.in/Scripts/BS_ViewMasterCirculardetails.aspx
+https://irdai.gov.in/circulars
+https://irdai.gov.in/consolidated-gazette-notified-regulations
+https://irdai.gov.in/notifications
+https://irdai.gov.in/guidelines
+https://irdai.gov.in/orders1
+https://irdai.gov.in/notices1
+https://irdai.gov.in/other-communication
+https://irdai.gov.in/public-notices?filtersApplied=true&filterDepartment=CAD
+https://irdai.gov.in/public-notices1
+https://www.pfrda.org.in/web/pfrda/regulatory-framework/notifications
+https://www.pfrda.org.in/web/pfrda/regulatory-framework/regulations
+https://www.pfrda.org.in/web/pfrda/regulatory-framework/guidelines
+https://www.pfrda.org.in/web/pfrda/regulatory-framework/orders/notices
+https://www.pfrda.org.in/web/pfrda/regulatory-framework/master-circulars/active-master-circulars
+https://www.cciindia.org/events.html
+https://www.pfrda.org.in/web/pfrda/research-publications/pension-bulletin
+https://www.pfrda.org.in/web/pfrda/media/press-releases
+https://ibbi.gov.in//en/legal-framework/notifications
+https://ibbi.gov.in//en/legal-framework/updated
+https://ibbi.gov.in//en/legal-framework/circulars
+https://ibbi.gov.in//en/legal-framework/guidelines
+https://ibbi.gov.in//en/legal-framework/other-authorities
+https://ibbi.gov.in//en/media/press-releases
+https://services.gst.gov.in/services/advisory/advisoryandreleases
+https://www.incometax.gov.in/iec/foportal/help/individual/return-applicable-1
+https://www.cbic.gov.in/entities/citizen-corner
+https://www.cbic.gov.in/entities/view-sticker
+https://incometaxindia.gov.in/Pages/communications/notifications.aspx
+https://incometaxindia.gov.in/Pages/communications/circulars.aspx
+https://labour.gov.in/en
+https://www.epfindia.gov.in/site_en/Updates.php
+https://esic.gov.in/circulars
+https://esic.gov.in/newsevents
+https://dgms.gov.in/UserView/index?mid=1354
+https://clc.gov.in/clc/
+https://www.pib.gov.in/indexd.aspx?lang=1&reg=3
+https://eshram.gov.in/indexmain
+https://moef.gov.in/circular-orders-2
+https://cpcb.nic.in/important-announcements.php
+https://cpcb.nic.in/latest-cpcb.php
+https://cpcb.nic.in/index.php
+http://cercind.gov.in/index-en.html
+https://pcbassam.org/
+https://apeda.gov.in/announcements
+https://fssai.gov.in/all-whatnew.php
+https://www.dgft.gov.in/CP/?opt=notification
+https://www.icegate.gov.in/
+https://www.commerce.gov.in/whats-new/
+https://www.wto.org/english/news_e/news_e.htm
+https://www.cdsco.gov.in/opencms/opencms/en/Notifications/Circulars/
+https://www.nabard.org/EngDefault.aspx
+https://www.sidbi.in/en/circulars
+https://bankofbaroda.bank.in/
+https://dea.gov.in/
+https://main.ecgc.in/english/
+https://powermin.gov.in/en/circular
+https://www.trai.gov.in/notifications/press-release
+https://dot.gov.in/latest-updates
+https://coal.nic.in/whats-new
+https://coal.nic.in/media/press-release
+https://mopng.gov.in/en/home/whatsnew
+https://egazette.gov.in/(S(nxiklrijatepricvbflk4mhi))/RecentUploads.aspx?Category=6
+https://steel.gov.in/press-release
+https://www.dpiit.gov.in/
+https://www.startupindia.gov.in/content/sih/en/government-schemes.html
+https://india.gov.in/news/news-on-air
+for indian kanoon thisis the shared token : Your current token is dc6efbf8684c57dfdd86db5063404ccd16940e5f
+
+API Design
+
+javascript
+
+code
+
+
+// Core endpoints
+POST /api/documents/upload          // Upload & process document
+GET  /api/documents/:id/summary      // Get AI summary
+POST /api/chat/query                 // Ask legal question (multi-layer RAG)
+POST /api/drafts/generate            // Generate legal draft
+POST /api/analysis/precedent         // Compare cases
+POST /api/analysis/contract          // Analyze contract
+GET  /api/chat/history/:sessionId    // Get conversation history
+POST /api/documents/batch-process    // Bulk document processing
+Key Features for Implementation
+
+Streaming Responses: Use WebSocket/SSE for real-time answer generation
+Citation UI: Inline citations with clickable links to source paragraphs
+Confidence Indicators: Show confidence scores + verification status
+Model Transparency: Display which AI model tier was used
+Cost Tracking: Per-query cost display in admin dashboard
+Audit Logs: Complete reasoning chain for compliance
+Export Options: Export answers with full citations in PDF/DOCX
+Collaborative Features: Share queries & annotate answers
+Session Management: Maintain conversation context across queries
+Feedback Loop: Thumbs up/down to improve model selection
+
+Performance Targets
+
+Document processing: <30 seconds for 40k tokens
+Query response (Layer 1): <5 seconds
+Query response (Layer 2): <10 seconds
+99% uptime
+Support 100+ concurrent users
+<₹0.40 average query cost
+<₹1.00 average document processing cost
+
+Security & Compliance
+
+End-to-end encryption for sensitive documents
+Role-based access control (RBAC)
+Document retention policies
+Audit trail for all AI operations
+GDPR/data privacy compliance
+Watermarking for generated documents
+
+Deliverables
+
+Complete backend API with all endpoints
+Document processing pipeline
+Multi-
+layer RAG system with model router
+Legal drafting engine
+Precedent analysis module
+Admin dashboard for monitoring costs/usage
+API documentation
+Deployment configuration (Docker + cloud)
+Testing suite with legal accuracy benchmarks
+Make an admin dashboard as well where admin can upload zip files , folders and other files , also if possible then drive links to train the knowledgebase of chatbot.. also admin can insert link of any website to train the knowledge base of the chatbot..  Refer https://www.draftbotpro.com/ for more ideas.. i want to integrate that as well. You can take inspiration from these images:
