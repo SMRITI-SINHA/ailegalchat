@@ -24,6 +24,11 @@ The platform is organized into three main sections:
 - Legal Memo Generator - IRAC structured memos with hallucination guard
 - Compliance Checklist Generator - Industry-specific checklists with legal references
 
+**Study Buddy** (Beta: Coming Soon)
+- Case Predict AI - Predict case outcomes using Advanced AI with detailed reasoning
+- Counter Argument Generator - Develop opposing viewpoints, rebuttals, and explore multiple angles
+- Legal Sandbox - Interactive learning environment for moot courts, entrance prep, and legal simulations
+
 ### Core Capabilities
 - **Document Processing**: Upload PDFs, Word docs, and scanned images with OCR support
 - **Multi-tier AI**: GPT-4o-mini (fast), GPT-4.1 (standard), o3 (pro) model routing
@@ -72,7 +77,10 @@ The platform is organized into three main sections:
 │   │       ├── chat-nyaya.tsx      # Nyaya AI
 │   │       ├── research-assistant.tsx  # AI Research
 │   │       ├── research-memo.tsx       # Legal Memo
-│   │       └── research-compliance.tsx # Compliance Checklist
+│   │       ├── research-compliance.tsx # Compliance Checklist
+│   │       ├── study-case-predict.tsx  # Case Predict AI (Beta)
+│   │       ├── study-counter-args.tsx  # Counter Arguments (Beta)
+│   │       └── study-sandbox.tsx       # Legal Sandbox (Beta)
 │   ├── hooks/           # Custom React hooks
 │   ├── lib/             # Utilities and query client
 │   └── App.tsx          # Main app with routing
@@ -147,3 +155,8 @@ The application runs via `npm run dev` which starts both the Express backend and
 - Added research notes save functionality with naming capability
 - Removed export button from compliance checklist generator
 - Fixed UploadDropzone component prop usage (onUpload instead of onFilesSelected)
+- Added HTML sanitization utility (stripHtmlTags) to clean Indian Kanoon search results
+- Added Old vs New law categorization (BNS/BNSS/BSA = New Laws 2023+, IPC/CrPC/Evidence Act = Old Laws)
+- Added Study Buddy section to hub home page with 3 beta features
+- Added Study Buddy navigation group in sidebar with beta badges
+- Created 3 Study Buddy placeholder pages (Case Predict AI, Counter Arguments, Legal Sandbox) marked as "Beta: Coming Soon"
