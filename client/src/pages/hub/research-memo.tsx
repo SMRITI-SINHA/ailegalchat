@@ -200,11 +200,11 @@ DISCLAIMER: This memorandum is generated for research and informational purposes
                   <span className="text-sm text-muted-foreground">Legal Memorandum</span>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" data-testid="button-copy">
                     <Copy className="mr-2 h-4 w-4" />
                     Copy
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" data-testid="button-export">
                     <Download className="mr-2 h-4 w-4" />
                     Export
                   </Button>

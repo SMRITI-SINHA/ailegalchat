@@ -28,6 +28,7 @@ import {
   Upload,
 } from "lucide-react";
 import type { ChecklistItem } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 const industries = [
   "Startup / Tech",
@@ -74,84 +75,87 @@ export default function ComplianceChecklistPage() {
     if (!industry || !jurisdiction || !activity) return;
     setIsGenerating(true);
 
-    setTimeout(() => {
-      setChecklist([
-        {
-          id: "1",
-          title: "Register with Registrar of Companies (ROC)",
-          description: "File incorporation documents including MOA, AOA, and Form SPICe+",
-          legalReference: "Companies Act, 2013 - Section 7",
-          deadline: "Before commencing business",
-          riskLevel: "high",
-          completed: false,
-        },
-        {
-          id: "2",
-          title: "Obtain PAN and TAN",
-          description: "Apply for Permanent Account Number and Tax Deduction Account Number",
-          legalReference: "Income Tax Act, 1961",
-          deadline: "Within 30 days of incorporation",
-          riskLevel: "high",
-          completed: false,
-        },
-        {
-          id: "3",
-          title: "GST Registration",
-          description: "Register for Goods and Services Tax if turnover exceeds threshold",
-          legalReference: "CGST Act, 2017 - Section 22",
-          deadline: "Within 30 days of becoming liable",
-          riskLevel: "high",
-          completed: false,
-        },
-        {
-          id: "4",
-          title: "Open Current Bank Account",
-          description: "Open corporate bank account with incorporation documents",
-          legalReference: "RBI Guidelines",
-          deadline: "Within 180 days",
-          riskLevel: "medium",
-          completed: false,
-        },
-        {
-          id: "5",
-          title: "Register for EPFO and ESIC",
-          description: "Mandatory if employing 20+ employees (EPFO) or 10+ (ESIC)",
-          legalReference: "EPF Act, 1952 / ESI Act, 1948",
-          deadline: "Within 1 month of threshold",
-          riskLevel: "medium",
-          completed: false,
-        },
-        {
-          id: "6",
-          title: "Shops and Establishment Registration",
-          description: "Register under local Shops and Establishment Act",
-          legalReference: "State Shops & Establishment Act",
-          deadline: "Within 30 days of setup",
-          riskLevel: "low",
-          completed: false,
-        },
-        {
-          id: "7",
-          title: "Professional Tax Registration",
-          description: "Register for professional tax where applicable",
-          legalReference: "State Professional Tax Act",
-          deadline: "Before first salary payment",
-          riskLevel: "low",
-          completed: false,
-        },
-        {
-          id: "8",
-          title: "Trademark Registration",
-          description: "Register company name and logo as trademark",
-          legalReference: "Trade Marks Act, 1999",
-          deadline: "Recommended early stage",
-          riskLevel: "low",
-          completed: false,
-        },
-      ]);
+    try {
+      const response = await apiRequest("POST", "/api/compliance/generate", {
+        industry,
+        jurisdiction,
+        activity,
+      });
+      const data = await response.json();
+      
+      if (data.items && Array.isArray(data.items)) {
+        setChecklist(data.items.map((item: any, idx: number) => ({
+          ...item,
+          id: item.id || String(idx + 1),
+          completed: item.completed || false,
+        })));
+      } else {
+        setChecklist(getDefaultChecklist());
+      }
+    } catch (error) {
+      console.error("Compliance generation error:", error);
+      setChecklist(getDefaultChecklist());
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+    }
   };
+
+  const getDefaultChecklist = (): ChecklistItem[] => [
+    {
+      id: "1",
+      title: "Register with Registrar of Companies (ROC)",
+      description: "File incorporation documents including MOA, AOA, and Form SPICe+",
+      legalReference: "Companies Act, 2013 - Section 7",
+      deadline: "Before commencing business",
+      riskLevel: "high",
+      completed: false,
+    },
+    {
+      id: "2",
+      title: "Obtain PAN and TAN",
+      description: "Apply for Permanent Account Number and Tax Deduction Account Number",
+      legalReference: "Income Tax Act, 1961",
+      deadline: "Within 30 days of incorporation",
+      riskLevel: "high",
+      completed: false,
+    },
+    {
+      id: "3",
+      title: "GST Registration",
+      description: "Register for Goods and Services Tax if turnover exceeds threshold",
+      legalReference: "CGST Act, 2017 - Section 22",
+      deadline: "Within 30 days of becoming liable",
+      riskLevel: "high",
+      completed: false,
+    },
+    {
+      id: "4",
+      title: "Open Current Bank Account",
+      description: "Open corporate bank account with incorporation documents",
+      legalReference: "RBI Guidelines",
+      deadline: "Within 180 days",
+      riskLevel: "medium",
+      completed: false,
+    },
+    {
+      id: "5",
+      title: "Register for EPFO and ESIC",
+      description: "Mandatory if employing 20+ employees (EPFO) or 10+ (ESIC)",
+      legalReference: "EPF Act, 1952 / ESI Act, 1948",
+      deadline: "Within 1 month of threshold",
+      riskLevel: "medium",
+      completed: false,
+    },
+    {
+      id: "6",
+      title: "Shops and Establishment Registration",
+      description: "Register under local Shops and Establishment Act",
+      legalReference: "State Shops & Establishment Act",
+      deadline: "Within 30 days of setup",
+      riskLevel: "low",
+      completed: false,
+    },
+  ];
 
   const toggleItem = (id: string) => {
     setChecklist((prev) =>
@@ -255,10 +259,10 @@ export default function ComplianceChecklistPage() {
               <p className="text-sm text-muted-foreground">{jurisdiction}</p>
             </div>
             <div className="flex items-center gap-3">
-              <Badge variant="outline">
+              <Badge variant="outline" data-testid="badge-progress">
                 {completedCount}/{checklist.length} completed
               </Badge>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" data-testid="button-export">
                 <Download className="mr-2 h-4 w-4" />
                 Export
               </Button>

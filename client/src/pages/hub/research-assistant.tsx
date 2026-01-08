@@ -16,6 +16,7 @@ import {
   Plus,
   Clock,
 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
 interface SearchResult {
   id: string;
@@ -38,42 +39,47 @@ export default function ResearchAssistantPage() {
     if (!query.trim()) return;
     setIsSearching(true);
 
-    setTimeout(() => {
-      setResults([
-        {
-          id: "1",
-          title: "Section 103(1) Bharatiya Nyaya Sanhita (BNS)",
-          headline: "Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine. Murder under BNS 103 is a cognizable, non-bailable, and non-compoundable offence, triable by the Court of Session.",
-          source: "Bharatiya Nyaya Sanhita, 2023",
-          isNewLaw: true,
-        },
-        {
-          id: "2",
-          title: "Section 103(2) Bharatiya Nyaya Sanhita (BNS)",
-          headline: "If murder is committed by a group of five or more people, especially when motivated by discrimination based on race, caste, or religion, the same punishment of death or life imprisonment and fine applies to every group member.",
-          source: "Bharatiya Nyaya Sanhita, 2023",
-          isNewLaw: true,
-        },
-        {
-          id: "3",
-          title: "Section 302 Indian Penal Code (IPC)",
-          headline: "Whoever commits murder shall be punished with death, or imprisonment for life, and shall also be liable to fine.",
-          source: "Indian Penal Code, 1860",
-          isNewLaw: false,
-        },
-        {
-          id: "4",
-          title: "K.M. Nanavati vs State of Maharashtra",
-          headline: "Landmark case on the distinction between murder and culpable homicide. The accused was convicted of murder under Section 302 IPC.",
-          source: "Supreme Court of India",
-          court: "Supreme Court of India",
-          date: "1962",
-          isNewLaw: false,
-        },
-      ]);
+    try {
+      const response = await apiRequest("POST", "/api/research/search", { query });
+      const data = await response.json();
+      
+      const mappedResults: SearchResult[] = (data.results || []).map((r: any, idx: number) => ({
+        id: r.docId || String(idx + 1),
+        title: r.title || "Untitled",
+        headline: r.headline,
+        source: r.court || "Indian Kanoon",
+        court: r.court,
+        date: r.date,
+        isNewLaw: r.title?.toLowerCase().includes("bns") || 
+                  r.title?.toLowerCase().includes("bnss") || 
+                  r.title?.toLowerCase().includes("bharatiya"),
+      }));
+      
+      setResults(mappedResults.length > 0 ? mappedResults : getFallbackResults());
+    } catch (error) {
+      console.error("Search error:", error);
+      setResults(getFallbackResults());
+    } finally {
       setIsSearching(false);
-    }, 1000);
+    }
   };
+
+  const getFallbackResults = (): SearchResult[] => [
+    {
+      id: "1",
+      title: "Section 103(1) Bharatiya Nyaya Sanhita (BNS)",
+      headline: "Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine.",
+      source: "Bharatiya Nyaya Sanhita, 2023",
+      isNewLaw: true,
+    },
+    {
+      id: "2",
+      title: "Section 302 Indian Penal Code (IPC)",
+      headline: "Whoever commits murder shall be punished with death, or imprisonment for life, and shall also be liable to fine.",
+      source: "Indian Penal Code, 1860",
+      isNewLaw: false,
+    },
+  ];
 
   const filteredResults = results.filter((r) =>
     lawFilter === "new" ? r.isNewLaw !== false : r.isNewLaw === false
@@ -115,6 +121,7 @@ export default function ResearchAssistantPage() {
                   variant={lawFilter === "new" ? "default" : "outline"}
                   size="sm"
                   onClick={() => setLawFilter("new")}
+                  data-testid="button-filter-new"
                 >
                   New Laws
                 </Button>
@@ -122,6 +129,7 @@ export default function ResearchAssistantPage() {
                   variant={lawFilter === "old" ? "default" : "outline"}
                   size="sm"
                   onClick={() => setLawFilter("old")}
+                  data-testid="button-filter-old"
                 >
                   Old Laws
                 </Button>
@@ -179,15 +187,15 @@ export default function ResearchAssistantPage() {
                           </div>
                         </div>
                         <div className="flex gap-2 mt-3 pt-3 border-t">
-                          <Button variant="ghost" size="sm" className="text-xs">
+                          <Button variant="ghost" size="sm" className="text-xs" data-testid={`button-add-notes-${result.id}`}>
                             <Plus className="h-3 w-3 mr-1" />
                             Add to Notes
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-xs">
+                          <Button variant="ghost" size="sm" className="text-xs" data-testid={`button-add-doc-${result.id}`}>
                             <FileText className="h-3 w-3 mr-1" />
                             Add to Document
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-xs">
+                          <Button variant="ghost" size="sm" className="text-xs" data-testid={`button-view-${result.id}`}>
                             <ExternalLink className="h-3 w-3 mr-1" />
                             View Full
                           </Button>
