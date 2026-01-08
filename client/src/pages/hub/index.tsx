@@ -16,6 +16,9 @@ import {
   ArrowRight,
   Sparkles,
   Play,
+  Brain,
+  Swords,
+  FlaskConical,
 } from "lucide-react";
 
 const draftingCards = [
@@ -80,6 +83,33 @@ const researchCards = [
   },
 ];
 
+const studyBuddyCards = [
+  {
+    title: "Case Predict AI",
+    description: "Predict case outcomes using Advanced AI and get strategic approaches with detailed reasoning",
+    icon: Brain,
+    url: "/hub/study/case-predict",
+    tags: ["Case Analysis", "Predictions", "Risk Assessment"],
+    isBeta: true,
+  },
+  {
+    title: "Counter Argument Generator",
+    description: "Develop opposing viewpoints, rebuttals, and explore multiple angles of legal challenges",
+    icon: Swords,
+    url: "/hub/study/counter-args",
+    tags: ["Counter Arguments", "Strategic Rebuttals", "Factual Analysis"],
+    isBeta: true,
+  },
+  {
+    title: "Legal Sandbox",
+    description: "Interactive learning environment for moot courts, entrance prep, and legal simulations",
+    icon: FlaskConical,
+    url: "/hub/study/sandbox",
+    tags: ["Study Buddy", "Moot Court Simulation"],
+    isBeta: true,
+  },
+];
+
 const tutorialVideos = [
   { title: "Prepare List of Dates and Chat with PDF", description: "Chat with PDF / Document Review", icon: Play },
   { title: "Upload Your Draft", description: "Upload your Draft", icon: Play },
@@ -136,6 +166,41 @@ export default function HubPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-sm">{card.title}</h3>
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{card.description}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-4">Study Buddy</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {studyBuddyCards.map((card) => (
+            <Link key={card.url + card.title} href={card.url}>
+              <Card className="hover-elevate cursor-pointer h-full relative" data-testid={`card-hub-${card.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                {card.isBeta && (
+                  <Badge variant="secondary" className="absolute top-2 right-2 text-[10px]">
+                    Beta: Coming Soon
+                  </Badge>
+                )}
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-md bg-muted">
+                      <card.icon className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-sm">{card.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{card.description}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {card.tags.slice(0, 2).map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-[10px] py-0">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </CardContent>

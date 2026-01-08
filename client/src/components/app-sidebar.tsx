@@ -33,6 +33,9 @@ import {
   Shield,
   IndianRupee,
   FolderOpen,
+  Brain,
+  Swords,
+  FlaskConical,
 } from "lucide-react";
 
 const draftingItems = [
@@ -52,6 +55,12 @@ const researchItems = [
   { title: "AI Research", url: "/hub/research/assistant", icon: Search },
   { title: "Legal Memo", url: "/hub/research/memo", icon: Scroll },
   { title: "Compliance Checklist", url: "/hub/research/compliance", icon: ClipboardCheck },
+];
+
+const studyBuddyItems = [
+  { title: "Case Predict AI", url: "/hub/study/case-predict", icon: Brain, isBeta: true },
+  { title: "Counter Arguments", url: "/hub/study/counter-args", icon: Swords, isBeta: true },
+  { title: "Legal Sandbox", url: "/hub/study/sandbox", icon: FlaskConical, isBeta: true },
 ];
 
 const mainNavItems = [
@@ -151,6 +160,29 @@ export function AppSidebar({ totalSpend = 0 }: AppSidebarProps) {
                     <Link href={item.url} data-testid={`nav-${item.url.split("/").pop()}`}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs text-muted-foreground">Study Buddy</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {studyBuddyItems.map((item) => (
+                <SidebarMenuItem key={item.url}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <Link href={item.url} data-testid={`nav-${item.url.split("/").pop()}`}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {item.isBeta && (
+                        <Badge variant="outline" className="ml-auto text-[9px] py-0 px-1">
+                          Beta
+                        </Badge>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

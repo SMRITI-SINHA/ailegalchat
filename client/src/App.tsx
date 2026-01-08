@@ -25,6 +25,9 @@ import NyayaAIPage from "@/pages/hub/chat-nyaya";
 import ResearchAssistantPage from "@/pages/hub/research-assistant";
 import LegalMemoPage from "@/pages/hub/research-memo";
 import ComplianceChecklistPage from "@/pages/hub/research-compliance";
+import CasePredictPage from "@/pages/hub/study-case-predict";
+import CounterArgsPage from "@/pages/hub/study-counter-args";
+import LegalSandboxPage from "@/pages/hub/study-sandbox";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const style = {
@@ -76,6 +79,9 @@ function Router() {
         <Route path="/hub/research/assistant" component={ResearchAssistantPage} />
         <Route path="/hub/research/memo" component={LegalMemoPage} />
         <Route path="/hub/research/compliance" component={ComplianceChecklistPage} />
+        <Route path="/hub/study/case-predict" component={CasePredictPage} />
+        <Route path="/hub/study/counter-args" component={CounterArgsPage} />
+        <Route path="/hub/study/sandbox" component={LegalSandboxPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

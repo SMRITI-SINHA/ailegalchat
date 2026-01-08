@@ -151,8 +151,7 @@ DISCLAIMER: This memorandum is generated for research and informational purposes
                     <div>
                       <Label>Reference Documents (Optional)</Label>
                       <UploadDropzone
-                        onFilesSelected={(files) => console.log("Files:", files)}
-                        acceptedTypes={[".pdf", ".docx"]}
+                        onUpload={async (files) => console.log("Files:", files)}
                         maxFiles={5}
                       />
                     </div>

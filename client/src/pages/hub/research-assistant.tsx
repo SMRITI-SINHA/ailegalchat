@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { stripHtmlTags, isNewLaw } from "@/lib/utils";
 import type { ResearchQuery } from "@shared/schema";
 
 interface SearchResult {
@@ -81,14 +82,12 @@ export default function ResearchAssistantPage() {
       
       const mappedResults: SearchResult[] = (data.results || []).map((r: any, idx: number) => ({
         id: r.docId || String(idx + 1),
-        title: r.title || "Untitled",
-        headline: r.headline,
+        title: stripHtmlTags(r.title) || "Untitled",
+        headline: stripHtmlTags(r.headline),
         source: r.court || "Indian Kanoon",
         court: r.court,
         date: r.date,
-        isNewLaw: r.title?.toLowerCase().includes("bns") || 
-                  r.title?.toLowerCase().includes("bnss") || 
-                  r.title?.toLowerCase().includes("bharatiya"),
+        isNewLaw: isNewLaw(r.title),
       }));
       
       setResults(mappedResults);
