@@ -397,8 +397,7 @@ export default function AIDraftingPage() {
                 </CardHeader>
                 <CardContent>
                   <UploadDropzone
-                    onFilesSelected={(files) => console.log("Files:", files)}
-                    acceptedTypes={[".pdf", ".docx", ".doc", ".txt"]}
+                    onUpload={async (files) => console.log("Files:", files)}
                     maxFiles={10}
                   />
                   <Button className="w-full mt-4" onClick={() => setStartOption("type_facts")}>
@@ -416,8 +415,7 @@ export default function AIDraftingPage() {
                 </CardHeader>
                 <CardContent>
                   <UploadDropzone
-                    onFilesSelected={(files) => console.log("Files:", files)}
-                    acceptedTypes={[".pdf", ".docx", ".doc", ".txt"]}
+                    onUpload={async (files) => console.log("Files:", files)}
                     maxFiles={1}
                   />
                   <Button className="w-full mt-4">

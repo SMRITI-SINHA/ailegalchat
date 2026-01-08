@@ -126,50 +126,13 @@ export class IndianKanoonService {
   }
 
   private getMockResults(query: string): IndianKanoonResult[] {
-    return [
-      {
-        docId: "mock-1",
-        title: `K.S. Puttaswamy vs Union of India - Privacy Judgment`,
-        headline: `The right to privacy is a fundamental right under Article 21...`,
-        docSize: 125000,
-        court: "Supreme Court of India",
-        date: "2017-08-24",
-      },
-      {
-        docId: "mock-2",
-        title: `Vishaka vs State of Rajasthan - Sexual Harassment Guidelines`,
-        headline: `Guidelines to prevent sexual harassment at workplace...`,
-        docSize: 45000,
-        court: "Supreme Court of India",
-        date: "1997-08-13",
-      },
-      {
-        docId: "mock-3",
-        title: `Kesavananda Bharati vs State of Kerala - Basic Structure Doctrine`,
-        headline: `The basic structure of the Constitution cannot be amended...`,
-        docSize: 250000,
-        court: "Supreme Court of India",
-        date: "1973-04-24",
-      },
-    ];
+    // Return empty array - no mock data per user request
+    return [];
   }
 
-  private getMockDocument(docId: string): { content: string; title: string; citations: string[] } {
-    return {
-      content: `This is a sample legal document from Indian Kanoon (Document ID: ${docId}). 
-      
-The judgment discusses important legal principles relevant to the matter at hand. 
-The Hon'ble Court held that constitutional rights must be interpreted in light of 
-evolving societal values while maintaining the basic structure of the Constitution.
-
-HELD: The petition is allowed. The impugned order is set aside.`,
-      title: "Sample Legal Document",
-      citations: [
-        "Constitution of India, Article 21",
-        "Maneka Gandhi vs Union of India (1978) 1 SCC 248",
-        "A.K. Gopalan vs State of Madras AIR 1950 SC 27",
-      ],
-    };
+  private getMockDocument(docId: string): { content: string; title: string; citations: string[] } | null {
+    // Return null - no mock data per user request
+    return null;
   }
 
   private extractActName(title: string): string {

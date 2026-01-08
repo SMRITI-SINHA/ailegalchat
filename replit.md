@@ -142,3 +142,8 @@ The application runs via `npm run dev` which starts both the Express backend and
 - Added SOC 2 compliance badge and zero data retention indicator
 - Support for 22 Indian languages in drafting
 - Firm style training capability for consistent drafting
+- Removed all mock data from Indian Kanoon service - now returns empty when API unavailable
+- Added compliance checklist save/load functionality with tabbed interface (Generate/Saved tabs)
+- Added research notes save functionality with naming capability
+- Removed export button from compliance checklist generator
+- Fixed UploadDropzone component prop usage (onUpload instead of onFilesSelected)

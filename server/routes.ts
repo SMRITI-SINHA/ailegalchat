@@ -522,6 +522,111 @@ Ensure all citations are to actual Indian statutes and case law. Use proper lega
     }
   });
 
+  // Compliance Checklists CRUD
+  app.get("/api/compliance/checklists", async (req: Request, res: Response) => {
+    try {
+      const checklists = await storage.getComplianceChecklists();
+      // Parse items JSON before sending to client
+      const parsedChecklists = checklists.map(c => ({
+        ...c,
+        items: typeof c.items === "string" ? JSON.parse(c.items) : c.items,
+      }));
+      res.json(parsedChecklists);
+    } catch (error) {
+      console.error("Error fetching checklists:", error);
+      res.status(500).json({ error: "Failed to fetch checklists" });
+    }
+  });
+
+  app.post("/api/compliance/checklists", async (req: Request, res: Response) => {
+    try {
+      const { title, industry, jurisdiction, activity, items } = req.body;
+      if (!title || !items) {
+        return res.status(400).json({ error: "Title and items are required" });
+      }
+      const checklist = await storage.createComplianceChecklist({
+        title,
+        industry: industry || "",
+        jurisdiction: jurisdiction || "",
+        activity: activity || "",
+        items: JSON.stringify(items),
+        status: "active",
+      });
+      res.json(checklist);
+    } catch (error) {
+      console.error("Error saving checklist:", error);
+      res.status(500).json({ error: "Failed to save checklist" });
+    }
+  });
+
+  app.get("/api/compliance/checklists/:id", async (req: Request, res: Response) => {
+    try {
+      const checklist = await storage.getComplianceChecklist(req.params.id);
+      if (!checklist) {
+        return res.status(404).json({ error: "Checklist not found" });
+      }
+      // Parse items JSON before sending to client
+      res.json({
+        ...checklist,
+        items: typeof checklist.items === "string" ? JSON.parse(checklist.items) : checklist.items,
+      });
+    } catch (error) {
+      console.error("Error fetching checklist:", error);
+      res.status(500).json({ error: "Failed to fetch checklist" });
+    }
+  });
+
+  app.delete("/api/compliance/checklists/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteComplianceChecklist(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting checklist:", error);
+      res.status(500).json({ error: "Failed to delete checklist" });
+    }
+  });
+
+  // Research Notes CRUD - uses ResearchQuery model with "note:" prefix to distinguish from search results
+  app.get("/api/research/notes", async (req: Request, res: Response) => {
+    try {
+      const allQueries = await storage.getResearchQueries();
+      // Filter to only return notes (queries with "note:" prefix)
+      const notes = allQueries.filter(q => q.query.startsWith("note:"));
+      // Parse results JSON before sending
+      const parsedNotes = notes.map(n => ({
+        ...n,
+        query: n.query.replace("note:", ""), // Remove prefix for display
+        results: typeof n.results === "string" ? JSON.parse(n.results) : n.results,
+      }));
+      res.json(parsedNotes);
+    } catch (error) {
+      console.error("Error fetching notes:", error);
+      res.status(500).json({ error: "Failed to fetch notes" });
+    }
+  });
+
+  app.post("/api/research/notes", async (req: Request, res: Response) => {
+    try {
+      const { title, content, query } = req.body;
+      if (!title || !content) {
+        return res.status(400).json({ error: "Title and content are required" });
+      }
+      // Store with "note:" prefix to distinguish from regular search queries
+      const note = await storage.createResearchQuery({
+        query: `note:${title}`,
+        results: JSON.stringify({ title, content, savedAt: new Date().toISOString() }),
+      });
+      res.json({
+        ...note,
+        query: title, // Return without prefix
+        results: { title, content, savedAt: new Date().toISOString() },
+      });
+    } catch (error) {
+      console.error("Error saving note:", error);
+      res.status(500).json({ error: "Failed to save note" });
+    }
+  });
+
   app.post("/api/compliance/generate", async (req: Request, res: Response) => {
     try {
       const { industry, jurisdiction, activity } = req.body;
