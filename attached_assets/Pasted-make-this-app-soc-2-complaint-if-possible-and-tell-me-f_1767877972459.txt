@@ -1,0 +1,345 @@
+make this app soc 2 complaint if possible and tell me for it to be soc 2 compliant what we have too do..Ensure any tool used for client information has robust security measures, such as data anonymization, encryption, and a clear "Zero Data Retention" policy to prevent client data from being used for training public models....    in the sidebar create a section called Chakshi AI Hub and in that section the interface opens up with cards divided into sections like drafting ( which contains cards : Ai legal Drafting, empty document, Custom Drafting, Train your drafts)   , ai chat( which includes cards like : Cnr chatbot, Chat with PDF, Nyaya AI(which is an intelligent ai chatbot)),  research(AI Research Asistant(integrated with indian kanoon), Legal Memo, Smart Compliance Checklist Generator),ai assisted learning ( where there are cards like : Casepredict AI , counter argument generator and legal sandbox)    and in the nyaya chatbot, chatwithpdf, research assistant, casepredictai, counter argument generator and legal sandbox:  add an option for user to upload uto 800- pages of documents and ask questions also.    
+DRAFTING SECTION: 
+AI Legal drafting : start by drafting and do legal research side by side. When user clicks on this it asks for Start drafting by : Uploading reference documents
+(Upload existing documents to use as reference for your draft) or Typing facts of the matter (Start fresh by providing the facts and details of your case) or  Upload your own draft ( where user can upload their draft and then edit in the interface with ai assistance).  For ai generated drafts give a toggle button “Use trained firm style?” → ON / OFF.
+Then based on these 3 options , it  opens a beautiful drafting interface with research panel on the side in which the ai research assistant is integrated. Add review draft feature which analyses the whole draft for any grammatical eorrors , analyses risk and show them.. Upon clicking correct errors button , it coreects the gramatical eros.. And upon clicking reduce risk all the risk clauses get corrected and highlighted so user can check or update those manually. Then there is a save button as well to safe the draft. 
+Build an AI Legal Drafting engine that generates structured, court-ready Indian legal documents (petitions, replies, notices, applications, affidavits, contracts, etc.) based on user-provided facts, jurisdiction, document type, and party details. The system must follow Indian drafting conventions, procedural formatting, and legal tone, automatically organize content into standard sections (title, parties, jurisdiction, facts, grounds, prayers/reliefs, verification), and allow dynamic customization based on document type and forum (District Court, High Court, NCLT, Consumer Forum, etc.). Drafts must be coherent, internally consistent, and editable, with clear placeholders where factual uncertainty exists rather than assumptions.
+The drafting engine must integrate controlled legal references by optionally citing verified Indian statutes and sections only, using a statute whitelist to prevent hallucinations, and must never invent case law unless explicitly requested. Include safeguards to flag missing inputs, contradictory facts, or jurisdictional errors, and add a mandatory disclaimer that outputs are for drafting assistance only. Architect the system modularly (input parser, document schema selector, drafting engine, statute validator, final formatter) so it scales across multiple document types while maintaining predictable, professional, court-safe output aligned with Indian legal practice.
+
+empty document : start with an empty draft. Without any prompt or reference docs. Research assistant side by side. Include the Same review draft feature here as well.
+
+  Custom Drafting: Allows user to upload a specific draft format and generate draft  by uploading reference docs or with a prompt:
+Edit it inside the drafting interface with research assistant and the review draft feature.
+
+
+Optionally choose whether to apply trained firm style (toggle)
+Train Your Drafts: This is a setup screen, not a drafting editor. Card Title Train Your DraftsCard Subtitle (short) Teach Chakshi how your firm drafts documents. Let user Upload their firm’s SOPs, playbooks, and past drafts to help Chakshi understand and train their  preferred structure, language, clauses, and tone.This training is persistent and will be automatically applied to all AI-generated drafts for their account. UI requirements:
+Upload multiple documents
+
+
+Show explanation text:
+ “These documents help Chakshi learn your firm’s drafting style, structure, and tone. This training is applied automatically to future drafts.”
+UI requirements:
+Upload multiple documents
+
+
+Show explanation text:
+ “These documents help Chakshi learn your firm’s drafting style, structure, and tone. This training is applied automatically to future drafts.”
+
+AI CHAT SECTION : 
+Cnr chatbot section ( here i will embed my prebuilt ai cnr chatbot so leave this interface empty).
+ChatwithPDF: Upload  PDF ( give an upload button from where user can upload upto 800 pages documents)  , PREPARE A IST OF DATES, find important points from large pdfs, get insights , generate timelines. What this feature does
+Upload bulk documents:
+
+
+Case files
+
+
+Emails
+
+
+PDFs
+
+
+Evidence folders
+User can chatwith pdf ai to perform:
+Document clustering
+
+
+Issue tagging
+
+
+Timeline generation
+
+
+Key evidence identification
+
+
+Contradictions & gaps
+
+
+Relevance scoring and etc
+Smart cross-integration
+From Chatwithpdf results:
+“Send key findings to Drafting”
+
+
+“Generate Legal Memo”
+
+
+“Ask Nyaya AI about this evidence” ( since chatwithpdf can only answer based on documents with ai assistance to perform operations based on the document so user can ask nyaya ai for anything, nyaya ai assistance inside of chatwithPDF ) 
+
+
+This keeps workflow fluid.
+Nyaya AI :  AI chatbot which is trained on 1000+ documents and 80-90 urls. Gives latest updates about any legal query. Legal assistant.
+RESEARCH SECTION : 
+AI Research Assistant: integrated with Indian kanoon. And very intelligent research assistant. Build an AI Legal Research Assistant designed for Indian law that allows users to ask any legal question or request analysis of a specific case, and receive accurate, citation-backed answers in seconds. The assistant must parse the user’s query, identify the legal domain (constitutional, criminal, civil, corporate, labour, tax, etc.), extract the core legal issues, and conduct structured legal research across Indian statutes and judicial precedents. Every response must clearly explain the applicable law in plain but professional language and always display sources, including relevant statutory provisions and case law with proper Indian citations, prioritizing Supreme Court and High Court decisions.The research engine must be hallucination-safe and confidence-aware: it may only cite verified statutes and real cases, flag uncertainty where law is unsettled, and explicitly state when no direct precedent exists. Architect the system modularly (query understanding, issue framing, statute lookup, case law retrieval, answer synthesis, citation formatter), and ensure responses are neutral, non-advisory, and research-focused rather than argumentative. The assistant should support follow-up questions, refine answers contextually, and maintain a consistent disclaimer that outputs are for legal research and informational purposes only, mirroring the fast, minimal, high-trust experience suggested by the AI Legal Research interface.
+
+Legal Memo: Prepare comprehensive legal memo with citations and sources.. Research assistant on the right side inside the legal memo interface.. Build a Legal Memo Generator that:
+Accepts facts, issues, and optional PDFs
+
+
+Performs Indian legal research
+
+
+Generates a formal legal memorandum
+
+
+Includes statutory provisions + case law
+
+
+Clearly separates:
+
+
+Facts
+
+
+Law
+
+
+Analysis
+
+
+Conclusion
+
+
+Has zero hallucinated statutes or cases
+REQUIRED BACKEND ARCHITECTURE
+User Input
+ ↓
+Issue Extraction Engine
+ ↓
+Statutory Research Engine
+ ↓
+Case Law Research Engine
+ ↓
+Legal Analysis Engine (IRAC)
+ ↓
+Memo Drafting Engine
+ ↓
+Citation Formatter
+ ↓
+Hallucination Guard
+ ↓
+Final Memo Output
+
+
+Each module must be independently testable.
+
+
+This feature should support litigation strategy. ISSUE EXTRACTION ENGINE
+Purpose
+Convert messy facts into precise legal questions.
+Function
+extract_issues(facts: str, user_issues: Optional[str]) -> List[Issue]
+
+Rules
+If user provides issues → refine them
+
+
+Else → auto-detect issues
+
+
+Issues must be legally framed, not vague
+
+
+✅ Good:
+“Whether termination of a director without notice violates principles of natural justice under Indian company law?”
+❌ Bad:
+“Was the termination unfair?”
+
+STATUTORY RESEARCH ENGINE (ANTI-HALLUCINATION)
+Function
+find_statutes(issue: Issue) -> List[Statute]
+
+HARD CONSTRAINTS
+Use real Indian Acts only
+
+
+Section-level accuracy required
+
+
+No guessing sections
+
+
+Example Output
+{
+  "act": "Companies Act, 2013",
+  "sections": ["241", "242"],
+  "summary": "Relates to oppression and mismanagement"
+}
+
+
+ CASE LAW RESEARCH ENGINE
+Function
+find_case_law(issue: Issue) -> List[CaseLaw]
+
+Case Object Schema
+{
+  "case_name": "Needle Industries (India) Ltd. v. Needle Industries Newey (India) Holding Ltd.",
+  "citation": "(1981) 3 SCC 333",
+  "court": "Supreme Court of India",
+  "principle": "Scope of oppression under company law",
+  "confidence": "High"
+}
+
+Rules
+Prefer Supreme Court & High Courts
+
+
+SCC / AIR citation preferred
+
+
+If confidence < High → mark clearly
+
+
+
+ LEGAL ANALYSIS ENGINE (IRAC ONLY)
+Function
+analyze_issue(issue, statutes, cases, facts) -> Analysis
+
+Mandatory Structure
+Issue
+
+
+Rule (Statute + Case Law)
+
+
+Application (facts → law)
+
+
+Tentative Conclusion
+
+
+⚠️ Conclusions must be hedged, not definitive.
+
+LEGAL MEMO DRAFTING ENGINE 📝
+Function
+generate_legal_memo(analyses, facts) -> MemoText
+
+STRICT FORMAT
+LEGAL MEMORANDUM
+
+To:
+From:
+Date:
+Subject:
+
+I. QUESTIONS PRESENTED
+
+II. BRIEF ANSWERS
+
+III. FACTUAL BACKGROUND
+
+IV. APPLICABLE LAW
+   A. Statutory Provisions
+   B. Judicial Precedents
+
+V. ANALYSIS
+
+VI. CONCLUSION
+
+VII. SOURCES & REFERENCES
+
+Tone Rules
+Neutral
+
+
+Objective
+
+
+Court-safe
+
+
+No persuasive language
+
+
+
+ CITATION & SOURCES FORMATTER
+Function
+format_sources(statutes, cases) -> ReferenceList
+
+Example
+Companies Act, 2013, §§ 241–242.
+Needle Industries (India) Ltd. v. Needle Industries Newey (India) Holding Ltd., (1981) 3 SCC 333.
+
+
+ HALLUCINATION CONTROL SYSTEM 🚨
+(CRITICAL FEATURE)
+A. Statute Whitelist
+Maintain a verified list of Acts + sections.
+If a statute/section is NOT in whitelist → block output.
+
+B. Case Confidence Scoring
+Each case must include:
+confidence: High / Medium / Low
+
+
+If Medium or Low → add disclaimer in memo.
+DISCLAIMER ENGINE (AUTO)
+Append to every memo:
+“This memorandum is generated for research and informational purposes only and does not constitute legal advice.” ABSOLUTE RULES
+❌ No fake cases
+
+
+❌ No invented sections
+
+
+❌ No moral opinions
+
+
+❌ No legal advice tone
+
+
+✅ Cite EVERYTHING
+
+
+✅ Modular design only
+
+
+
+
+Smart Compliance Checklist generator: “Compliance Checklist Generator”
+🧾 What it does
+User inputs:
+
+
+Industry (startup, fintech, edtech, etc.)
+
+
+Jurisdiction
+
+
+Activity (fundraise, employment, data processing, etc.)
+
+
+AI generates:
+
+
+Step-by-step checklist
+
+
+Legal references
+
+
+Deadlines
+
+
+Risk flags
+
+
+Each item has:
+✅ Tick checkbox
+
+
+📝 Notes
+
+
+📎 Upload proof
+
+
+💾 Save checklist
+
+
+
+

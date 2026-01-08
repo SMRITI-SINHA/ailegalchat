@@ -14,6 +14,17 @@ import DocumentsPage from "@/pages/documents";
 import ChatPage from "@/pages/chat";
 import DraftingPage from "@/pages/drafting";
 import SettingsPage from "@/pages/settings";
+import HubPage from "@/pages/hub";
+import AIDraftingPage from "@/pages/hub/drafting-ai";
+import EmptyDraftPage from "@/pages/hub/drafting-empty";
+import CustomDraftPage from "@/pages/hub/drafting-custom";
+import TrainDraftsPage from "@/pages/hub/drafting-train";
+import CNRChatPage from "@/pages/hub/chat-cnr";
+import ChatWithPDFPage from "@/pages/hub/chat-pdf";
+import NyayaAIPage from "@/pages/hub/chat-nyaya";
+import ResearchAssistantPage from "@/pages/hub/research-assistant";
+import LegalMemoPage from "@/pages/hub/research-memo";
+import ComplianceChecklistPage from "@/pages/hub/research-compliance";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const style = {
@@ -54,6 +65,17 @@ function Router() {
         <Route path="/chat" component={ChatPage} />
         <Route path="/drafting" component={DraftingPage} />
         <Route path="/settings" component={SettingsPage} />
+        <Route path="/hub" component={HubPage} />
+        <Route path="/hub/drafting/ai" component={AIDraftingPage} />
+        <Route path="/hub/drafting/empty" component={EmptyDraftPage} />
+        <Route path="/hub/drafting/custom" component={CustomDraftPage} />
+        <Route path="/hub/drafting/train" component={TrainDraftsPage} />
+        <Route path="/hub/chat/cnr" component={CNRChatPage} />
+        <Route path="/hub/chat/pdf" component={ChatWithPDFPage} />
+        <Route path="/hub/chat/nyaya" component={NyayaAIPage} />
+        <Route path="/hub/research/assistant" component={ResearchAssistantPage} />
+        <Route path="/hub/research/memo" component={LegalMemoPage} />
+        <Route path="/hub/research/compliance" component={ComplianceChecklistPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

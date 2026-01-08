@@ -4,6 +4,7 @@ import multer from "multer";
 import OpenAI from "openai";
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes } from "@shared/schema";
+import { indianKanoon } from "./indian-kanoon";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -420,6 +421,159 @@ Format with proper section numbering and legal terminology.`;
     } catch (error) {
       console.error("Error fetching stats:", error);
       res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  app.post("/api/research/search", async (req: Request, res: Response) => {
+    try {
+      const { query, page = 0 } = req.body;
+      if (!query) {
+        return res.status(400).json({ error: "Query is required" });
+      }
+      const results = await indianKanoon.search(query, page);
+      res.json({ results, isConfigured: indianKanoon.isConfigured() });
+    } catch (error) {
+      console.error("Research search error:", error);
+      res.status(500).json({ error: "Failed to search" });
+    }
+  });
+
+  app.post("/api/research/statutes", async (req: Request, res: Response) => {
+    try {
+      const { query } = req.body;
+      if (!query) {
+        return res.status(400).json({ error: "Query is required" });
+      }
+      const statutes = await indianKanoon.searchStatutes(query);
+      res.json({ statutes });
+    } catch (error) {
+      console.error("Statute search error:", error);
+      res.status(500).json({ error: "Failed to search statutes" });
+    }
+  });
+
+  app.get("/api/research/document/:docId", async (req: Request, res: Response) => {
+    try {
+      const document = await indianKanoon.getDocument(req.params.docId);
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.json(document);
+    } catch (error) {
+      console.error("Document fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch document" });
+    }
+  });
+
+  app.post("/api/memos/generate", async (req: Request, res: Response) => {
+    try {
+      const { facts, issues, documentIds } = req.body;
+      if (!facts) {
+        return res.status(400).json({ error: "Facts are required" });
+      }
+
+      const prompt = `Generate a comprehensive legal memorandum using the IRAC format based on the following:
+
+FACTS:
+${facts}
+
+${issues ? `ISSUES TO ANALYZE:\n${issues}` : "Identify the key legal issues from the facts."}
+
+Generate a complete legal memo with:
+1. QUESTIONS PRESENTED - Clear statement of legal questions
+2. BRIEF ANSWERS - Concise answers to each question
+3. FACTUAL BACKGROUND - Summary of relevant facts
+4. APPLICABLE LAW - Relevant statutes and case law (cite Indian law)
+5. ANALYSIS - Apply law to facts using IRAC methodology
+6. CONCLUSION - Final recommendations
+
+Ensure all citations are to actual Indian statutes and case law. Use proper legal citation format.`;
+
+      const response = await openai.chat.completions.create({
+        model: MODEL_TIERS.standard,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert legal research assistant specializing in Indian law. Generate comprehensive legal memoranda with proper citations to Indian statutes and case law.",
+          },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 4096,
+      });
+
+      const fullMemo = response.choices[0]?.message?.content || "";
+      const cost = MODEL_COSTS.standard;
+
+      await storage.addCostEntry({
+        type: "memo_generation",
+        description: "Generated legal memorandum",
+        amount: cost,
+        modelUsed: "standard",
+      });
+
+      res.json({
+        fullMemo,
+        modelUsed: "standard",
+        cost,
+      });
+    } catch (error) {
+      console.error("Memo generation error:", error);
+      res.status(500).json({ error: "Failed to generate memo" });
+    }
+  });
+
+  app.post("/api/compliance/generate", async (req: Request, res: Response) => {
+    try {
+      const { industry, jurisdiction, activity } = req.body;
+      if (!industry || !jurisdiction || !activity) {
+        return res.status(400).json({ error: "Industry, jurisdiction, and activity are required" });
+      }
+
+      const prompt = `Generate a compliance checklist for the following:
+
+Industry: ${industry}
+Jurisdiction: ${jurisdiction}
+Activity: ${activity}
+
+For each compliance item, provide:
+1. Title - Clear name of the compliance requirement
+2. Description - What needs to be done
+3. Legal Reference - Specific act, section, or regulation
+4. Deadline - When it must be completed
+5. Risk Level - high/medium/low based on penalties for non-compliance
+
+Generate at least 8-10 relevant compliance items specific to Indian law and regulations.`;
+
+      const response = await openai.chat.completions.create({
+        model: MODEL_TIERS.mini,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert compliance advisor specializing in Indian regulatory requirements. Generate accurate compliance checklists with proper legal references.",
+          },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 2048,
+      });
+
+      const content = response.choices[0]?.message?.content || "";
+      const cost = MODEL_COSTS.mini;
+
+      await storage.addCostEntry({
+        type: "compliance_checklist",
+        description: `Generated checklist for ${industry} - ${activity}`,
+        amount: cost,
+        modelUsed: "mini",
+      });
+
+      res.json({
+        content,
+        modelUsed: "mini",
+        cost,
+      });
+    } catch (error) {
+      console.error("Compliance generation error:", error);
+      res.status(500).json({ error: "Failed to generate checklist" });
     }
   });
 

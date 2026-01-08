@@ -26,6 +26,7 @@ export const documents = pgTable("documents", {
   status: text("status").notNull().default("pending"),
   processingCost: real("processing_cost").default(0),
   summary: text("summary"),
+  extractedText: text("extracted_text"),
   uploadedAt: timestamp("uploaded_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -40,6 +41,7 @@ export type Document = typeof documents.$inferSelect;
 export const chatSessions = pgTable("chat_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
+  sessionType: text("session_type").default("general"),
   documentIds: text("document_ids").array(),
   modelTier: text("model_tier").default("mini"),
   totalCost: real("total_cost").default(0),
@@ -84,7 +86,12 @@ export const drafts = pgTable("drafts", {
   content: text("content"),
   status: text("status").notNull().default("draft"),
   modelUsed: text("model_used"),
+  language: text("language").default("English"),
+  useFirmStyle: boolean("use_firm_style").default(false),
   sessionId: varchar("session_id"),
+  referenceDocIds: text("reference_doc_ids").array(),
+  riskAnalysis: text("risk_analysis"),
+  grammarErrors: text("grammar_errors"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -97,6 +104,91 @@ export const insertDraftSchema = createInsertSchema(drafts).omit({
 
 export type InsertDraft = z.infer<typeof insertDraftSchema>;
 export type Draft = typeof drafts.$inferSelect;
+
+export const trainingDocs = pgTable("training_docs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  size: integer("size").notNull(),
+  content: text("content"),
+  status: text("status").notNull().default("pending"),
+  uploadedAt: timestamp("uploaded_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertTrainingDocSchema = createInsertSchema(trainingDocs).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type InsertTrainingDoc = z.infer<typeof insertTrainingDocSchema>;
+export type TrainingDoc = typeof trainingDocs.$inferSelect;
+
+export const legalMemos = pgTable("legal_memos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  facts: text("facts").notNull(),
+  issues: text("issues"),
+  applicableLaw: text("applicable_law"),
+  analysis: text("analysis"),
+  conclusion: text("conclusion"),
+  sources: text("sources"),
+  fullMemo: text("full_memo"),
+  status: text("status").notNull().default("draft"),
+  modelUsed: text("model_used"),
+  documentIds: text("document_ids").array(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertLegalMemoSchema = createInsertSchema(legalMemos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertLegalMemo = z.infer<typeof insertLegalMemoSchema>;
+export type LegalMemo = typeof legalMemos.$inferSelect;
+
+export const complianceChecklists = pgTable("compliance_checklists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  industry: text("industry").notNull(),
+  jurisdiction: text("jurisdiction").notNull(),
+  activity: text("activity").notNull(),
+  items: text("items"),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertComplianceChecklistSchema = createInsertSchema(complianceChecklists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertComplianceChecklist = z.infer<typeof insertComplianceChecklistSchema>;
+export type ComplianceChecklist = typeof complianceChecklists.$inferSelect;
+
+export const researchQueries = pgTable("research_queries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  query: text("query").notNull(),
+  results: text("results"),
+  legalDomain: text("legal_domain"),
+  statutes: text("statutes"),
+  caseLaw: text("case_law"),
+  analysis: text("analysis"),
+  sources: text("sources"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertResearchQuerySchema = createInsertSchema(researchQueries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertResearchQuery = z.infer<typeof insertResearchQuerySchema>;
+export type ResearchQuery = typeof researchQueries.$inferSelect;
 
 export const costLedger = pgTable("cost_ledger", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -126,6 +218,11 @@ export const draftTypes = [
   "affidavit",
   "memo",
   "agreement",
+  "power_of_attorney",
+  "deed",
+  "will",
+  "mou",
+  "nda",
 ] as const;
 
 export type DraftType = typeof draftTypes[number];
@@ -135,3 +232,88 @@ export type ModelTier = typeof modelTiers[number];
 
 export const documentStatuses = ["pending", "processing", "completed", "failed"] as const;
 export type DocumentStatus = typeof documentStatuses[number];
+
+export const sessionTypes = ["general", "research", "chatwithpdf", "nyaya"] as const;
+export type SessionType = typeof sessionTypes[number];
+
+export const indianLanguages = [
+  "English",
+  "Hindi",
+  "Marathi",
+  "Gujarati",
+  "Bengali",
+  "Telugu",
+  "Tamil",
+  "Kannada",
+  "Malayalam",
+  "Punjabi",
+  "Odia",
+  "Assamese",
+  "Bhojpuri",
+  "Rajasthani",
+  "Kashmiri",
+  "Konkani",
+  "Manipuri",
+  "Sanskrit",
+  "Urdu",
+  "Sindhi",
+  "Nepali",
+  "Dogri",
+] as const;
+
+export type IndianLanguage = typeof indianLanguages[number];
+
+export interface IndianKanoonResult {
+  docId: string;
+  title: string;
+  headline?: string;
+  docSize?: number;
+  court?: string;
+  date?: string;
+}
+
+export interface LegalProvision {
+  id: string;
+  source: string;
+  section: string;
+  text: string;
+  isNewLaw: boolean;
+}
+
+export interface Citation {
+  id: string;
+  source: string;
+  text: string;
+  page?: number;
+  confidence?: number;
+  url?: string;
+}
+
+export interface RiskItem {
+  id: string;
+  text: string;
+  severity: "low" | "medium" | "high";
+  suggestion: string;
+  startIndex: number;
+  endIndex: number;
+}
+
+export interface GrammarError {
+  id: string;
+  text: string;
+  correction: string;
+  startIndex: number;
+  endIndex: number;
+}
+
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  description: string;
+  legalReference?: string;
+  deadline?: string;
+  riskLevel: "low" | "medium" | "high";
+  completed: boolean;
+  notes?: string;
+  proofUploaded?: boolean;
+}

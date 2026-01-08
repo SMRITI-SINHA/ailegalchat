@@ -11,6 +11,14 @@ import type {
   InsertDraft,
   CostLedger,
   InsertCostLedger,
+  TrainingDoc,
+  InsertTrainingDoc,
+  LegalMemo,
+  InsertLegalMemo,
+  ComplianceChecklist,
+  InsertComplianceChecklist,
+  ResearchQuery,
+  InsertResearchQuery,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -43,6 +51,27 @@ export interface IStorage {
   getCostLedger(): Promise<CostLedger[]>;
   addCostEntry(entry: InsertCostLedger): Promise<CostLedger>;
   getTotalCost(): Promise<number>;
+
+  getTrainingDocs(): Promise<TrainingDoc[]>;
+  getTrainingDoc(id: string): Promise<TrainingDoc | undefined>;
+  createTrainingDoc(doc: InsertTrainingDoc): Promise<TrainingDoc>;
+  deleteTrainingDoc(id: string): Promise<void>;
+
+  getLegalMemos(): Promise<LegalMemo[]>;
+  getLegalMemo(id: string): Promise<LegalMemo | undefined>;
+  createLegalMemo(memo: InsertLegalMemo): Promise<LegalMemo>;
+  updateLegalMemo(id: string, updates: Partial<LegalMemo>): Promise<LegalMemo | undefined>;
+  deleteLegalMemo(id: string): Promise<void>;
+
+  getComplianceChecklists(): Promise<ComplianceChecklist[]>;
+  getComplianceChecklist(id: string): Promise<ComplianceChecklist | undefined>;
+  createComplianceChecklist(checklist: InsertComplianceChecklist): Promise<ComplianceChecklist>;
+  updateComplianceChecklist(id: string, updates: Partial<ComplianceChecklist>): Promise<ComplianceChecklist | undefined>;
+  deleteComplianceChecklist(id: string): Promise<void>;
+
+  getResearchQueries(): Promise<ResearchQuery[]>;
+  getResearchQuery(id: string): Promise<ResearchQuery | undefined>;
+  createResearchQuery(query: InsertResearchQuery): Promise<ResearchQuery>;
 }
 
 export class MemStorage implements IStorage {
@@ -52,6 +81,10 @@ export class MemStorage implements IStorage {
   private chatMessages: Map<string, ChatMessage>;
   private drafts: Map<string, Draft>;
   private costLedger: Map<string, CostLedger>;
+  private trainingDocs: Map<string, TrainingDoc>;
+  private legalMemos: Map<string, LegalMemo>;
+  private complianceChecklists: Map<string, ComplianceChecklist>;
+  private researchQueries: Map<string, ResearchQuery>;
 
   constructor() {
     this.users = new Map();
@@ -60,6 +93,10 @@ export class MemStorage implements IStorage {
     this.chatMessages = new Map();
     this.drafts = new Map();
     this.costLedger = new Map();
+    this.trainingDocs = new Map();
+    this.legalMemos = new Map();
+    this.complianceChecklists = new Map();
+    this.researchQueries = new Map();
     this.seedData();
   }
 
@@ -74,6 +111,7 @@ export class MemStorage implements IStorage {
         status: "completed",
         processingCost: 0.95,
         summary: "This is a comprehensive service agreement between ABC Corp and XYZ Ltd covering IT consulting services for a 2-year term. Key clauses include payment terms, intellectual property rights, confidentiality obligations, and termination conditions.",
+        extractedText: null,
         uploadedAt: new Date(Date.now() - 600000),
       },
       {
@@ -85,6 +123,7 @@ export class MemStorage implements IStorage {
         status: "completed",
         processingCost: 1.20,
         summary: "Civil suit regarding property boundary dispute in South Delhi. The petitioner claims adverse possession over a 500 sq yard plot. Multiple witness statements and land records are included.",
+        extractedText: null,
         uploadedAt: new Date(Date.now() - 3600000),
       },
       {
@@ -96,6 +135,7 @@ export class MemStorage implements IStorage {
         status: "processing",
         processingCost: 0,
         summary: null,
+        extractedText: null,
         uploadedAt: new Date(Date.now() - 120000),
       },
     ];
@@ -106,6 +146,7 @@ export class MemStorage implements IStorage {
       {
         id: "session-1",
         title: "Contract Analysis",
+        sessionType: "general",
         documentIds: ["doc-1"],
         modelTier: "standard",
         totalCost: 4.20,
@@ -116,6 +157,7 @@ export class MemStorage implements IStorage {
       {
         id: "session-2",
         title: "Property Law Research",
+        sessionType: "research",
         documentIds: ["doc-2"],
         modelTier: "pro",
         totalCost: 12.50,
@@ -135,7 +177,12 @@ export class MemStorage implements IStorage {
         content: "IN THE COURT OF CIVIL JUDGE...",
         status: "completed",
         modelUsed: "standard",
+        language: "English",
+        useFirmStyle: false,
         sessionId: "session-2",
+        referenceDocIds: null,
+        riskAnalysis: null,
+        grammarErrors: null,
         createdAt: new Date(Date.now() - 7200000),
         updatedAt: new Date(Date.now() - 3600000),
       },
@@ -146,7 +193,12 @@ export class MemStorage implements IStorage {
         content: "LEGAL NOTICE\n\nTo,\nThe Managing Director...",
         status: "draft",
         modelUsed: "mini",
+        language: "English",
+        useFirmStyle: false,
         sessionId: null,
+        referenceDocIds: null,
+        riskAnalysis: null,
+        grammarErrors: null,
         createdAt: new Date(Date.now() - 14400000),
         updatedAt: new Date(Date.now() - 10800000),
       },
@@ -183,8 +235,15 @@ export class MemStorage implements IStorage {
   async createDocument(insertDoc: InsertDocument): Promise<Document> {
     const id = randomUUID();
     const doc: Document = {
-      ...insertDoc,
       id,
+      name: insertDoc.name,
+      type: insertDoc.type,
+      size: insertDoc.size,
+      pages: insertDoc.pages ?? null,
+      status: insertDoc.status ?? "pending",
+      processingCost: insertDoc.processingCost ?? null,
+      summary: insertDoc.summary ?? null,
+      extractedText: insertDoc.extractedText ?? null,
       uploadedAt: new Date(),
     };
     this.documents.set(id, doc);
@@ -217,8 +276,13 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const now = new Date();
     const session: ChatSession = {
-      ...insertSession,
       id,
+      title: insertSession.title,
+      sessionType: insertSession.sessionType ?? null,
+      documentIds: insertSession.documentIds ?? null,
+      modelTier: insertSession.modelTier ?? null,
+      totalCost: insertSession.totalCost ?? null,
+      messageCount: insertSession.messageCount ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -252,8 +316,14 @@ export class MemStorage implements IStorage {
   async createChatMessage(insertMsg: InsertChatMessage): Promise<ChatMessage> {
     const id = randomUUID();
     const msg: ChatMessage = {
-      ...insertMsg,
       id,
+      sessionId: insertMsg.sessionId,
+      role: insertMsg.role,
+      content: insertMsg.content,
+      modelUsed: insertMsg.modelUsed ?? null,
+      confidence: insertMsg.confidence ?? null,
+      cost: insertMsg.cost ?? null,
+      citations: insertMsg.citations ?? null,
       createdAt: new Date(),
     };
     this.chatMessages.set(id, msg);
@@ -274,8 +344,18 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const now = new Date();
     const draft: Draft = {
-      ...insertDraft,
       id,
+      title: insertDraft.title,
+      type: insertDraft.type,
+      content: insertDraft.content ?? null,
+      status: insertDraft.status ?? "draft",
+      modelUsed: insertDraft.modelUsed ?? null,
+      language: insertDraft.language ?? null,
+      useFirmStyle: insertDraft.useFirmStyle ?? null,
+      sessionId: insertDraft.sessionId ?? null,
+      referenceDocIds: insertDraft.referenceDocIds ?? null,
+      riskAnalysis: insertDraft.riskAnalysis ?? null,
+      grammarErrors: insertDraft.grammarErrors ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -304,8 +384,11 @@ export class MemStorage implements IStorage {
   async addCostEntry(insertEntry: InsertCostLedger): Promise<CostLedger> {
     const id = randomUUID();
     const entry: CostLedger = {
-      ...insertEntry,
       id,
+      type: insertEntry.type,
+      description: insertEntry.description ?? null,
+      amount: insertEntry.amount,
+      modelUsed: insertEntry.modelUsed ?? null,
       createdAt: new Date(),
     };
     this.costLedger.set(id, entry);
@@ -314,6 +397,147 @@ export class MemStorage implements IStorage {
 
   async getTotalCost(): Promise<number> {
     return Array.from(this.costLedger.values()).reduce((sum, entry) => sum + entry.amount, 0);
+  }
+
+  async getTrainingDocs(): Promise<TrainingDoc[]> {
+    return Array.from(this.trainingDocs.values()).sort(
+      (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    );
+  }
+
+  async getTrainingDoc(id: string): Promise<TrainingDoc | undefined> {
+    return this.trainingDocs.get(id);
+  }
+
+  async createTrainingDoc(insertDoc: InsertTrainingDoc): Promise<TrainingDoc> {
+    const id = randomUUID();
+    const doc: TrainingDoc = {
+      id,
+      name: insertDoc.name,
+      type: insertDoc.type,
+      size: insertDoc.size,
+      content: insertDoc.content ?? null,
+      status: insertDoc.status ?? "pending",
+      uploadedAt: new Date(),
+    };
+    this.trainingDocs.set(id, doc);
+    return doc;
+  }
+
+  async deleteTrainingDoc(id: string): Promise<void> {
+    this.trainingDocs.delete(id);
+  }
+
+  async getLegalMemos(): Promise<LegalMemo[]> {
+    return Array.from(this.legalMemos.values()).sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
+  async getLegalMemo(id: string): Promise<LegalMemo | undefined> {
+    return this.legalMemos.get(id);
+  }
+
+  async createLegalMemo(insertMemo: InsertLegalMemo): Promise<LegalMemo> {
+    const id = randomUUID();
+    const now = new Date();
+    const memo: LegalMemo = {
+      id,
+      title: insertMemo.title,
+      facts: insertMemo.facts,
+      issues: insertMemo.issues ?? null,
+      applicableLaw: insertMemo.applicableLaw ?? null,
+      analysis: insertMemo.analysis ?? null,
+      conclusion: insertMemo.conclusion ?? null,
+      sources: insertMemo.sources ?? null,
+      fullMemo: insertMemo.fullMemo ?? null,
+      status: insertMemo.status ?? "draft",
+      modelUsed: insertMemo.modelUsed ?? null,
+      documentIds: insertMemo.documentIds ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.legalMemos.set(id, memo);
+    return memo;
+  }
+
+  async updateLegalMemo(id: string, updates: Partial<LegalMemo>): Promise<LegalMemo | undefined> {
+    const memo = this.legalMemos.get(id);
+    if (!memo) return undefined;
+    const updated = { ...memo, ...updates, updatedAt: new Date() };
+    this.legalMemos.set(id, updated);
+    return updated;
+  }
+
+  async deleteLegalMemo(id: string): Promise<void> {
+    this.legalMemos.delete(id);
+  }
+
+  async getComplianceChecklists(): Promise<ComplianceChecklist[]> {
+    return Array.from(this.complianceChecklists.values()).sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
+  async getComplianceChecklist(id: string): Promise<ComplianceChecklist | undefined> {
+    return this.complianceChecklists.get(id);
+  }
+
+  async createComplianceChecklist(insertChecklist: InsertComplianceChecklist): Promise<ComplianceChecklist> {
+    const id = randomUUID();
+    const now = new Date();
+    const checklist: ComplianceChecklist = {
+      id,
+      title: insertChecklist.title,
+      industry: insertChecklist.industry,
+      jurisdiction: insertChecklist.jurisdiction,
+      activity: insertChecklist.activity,
+      items: insertChecklist.items ?? null,
+      status: insertChecklist.status ?? "active",
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.complianceChecklists.set(id, checklist);
+    return checklist;
+  }
+
+  async updateComplianceChecklist(id: string, updates: Partial<ComplianceChecklist>): Promise<ComplianceChecklist | undefined> {
+    const checklist = this.complianceChecklists.get(id);
+    if (!checklist) return undefined;
+    const updated = { ...checklist, ...updates, updatedAt: new Date() };
+    this.complianceChecklists.set(id, updated);
+    return updated;
+  }
+
+  async deleteComplianceChecklist(id: string): Promise<void> {
+    this.complianceChecklists.delete(id);
+  }
+
+  async getResearchQueries(): Promise<ResearchQuery[]> {
+    return Array.from(this.researchQueries.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getResearchQuery(id: string): Promise<ResearchQuery | undefined> {
+    return this.researchQueries.get(id);
+  }
+
+  async createResearchQuery(insertQuery: InsertResearchQuery): Promise<ResearchQuery> {
+    const id = randomUUID();
+    const query: ResearchQuery = {
+      id,
+      query: insertQuery.query,
+      results: insertQuery.results ?? null,
+      legalDomain: insertQuery.legalDomain ?? null,
+      statutes: insertQuery.statutes ?? null,
+      caseLaw: insertQuery.caseLaw ?? null,
+      analysis: insertQuery.analysis ?? null,
+      sources: insertQuery.sources ?? null,
+      createdAt: new Date(),
+    };
+    this.researchQueries.set(id, query);
+    return query;
   }
 }
 
