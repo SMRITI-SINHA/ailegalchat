@@ -169,3 +169,7 @@ The application runs via `npm run dev` which starts both the Express backend and
 - All editor entry paths (generate, upload, custom) create draft records before opening editor
 - Research sidebar uses react-query with proper cache invalidation for notes
 - Custom drafting upload view hides firm style/language controls until editor mode
+- Redesigned Custom Drafting with multi-step wizard: language selection → format upload (with disclaimer) → case details → review & generate → opens in editor with research sidebar
+- Redesigned Legal Memo Generator with language selection, opens generated memo in editor with research sidebar
+- Backend endpoints (drafts/generate, memos/generate) now include strong language instructions for non-English content generation
+- AI generates content precisely in the selected language (supports all 22 Indian languages)

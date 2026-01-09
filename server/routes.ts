@@ -310,18 +310,24 @@ When referencing case law or statutes, use proper legal citation format.`;
 
   app.post("/api/drafts/generate", async (req: Request, res: Response) => {
     try {
-      const { type, title, facts, parties, jurisdiction, additionalInfo } = req.body;
+      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference } = req.body;
 
-      if (!type || !title || !facts) {
-        return res.status(400).json({ error: "Type, title, and facts are required" });
+      if (!type || !facts) {
+        return res.status(400).json({ error: "Type and facts are required" });
       }
 
+      const selectedLanguage = language || "English";
+      const draftTitle = title || "Untitled Draft";
       const tier = type === "brief" || type === "petition" ? "standard" : "mini";
       const model = MODEL_TIERS[tier];
 
+      const languageInstruction = selectedLanguage !== "English" 
+        ? `\n\nCRITICAL LANGUAGE REQUIREMENT: You MUST write the ENTIRE document in ${selectedLanguage} language. Every word, every sentence, every section heading must be in ${selectedLanguage}. Do not use English at all except for proper nouns, case citations (like "AIR 2023 SC 456"), or statute names (like "Indian Contract Act, 1872"). The document must be grammatically correct and professionally written in ${selectedLanguage} using appropriate legal terminology in that language.`
+        : "";
+
       const prompt = `Generate a professional legal ${type} with the following details:
 
-Title: ${title}
+Title: ${draftTitle}
 Parties: ${parties || "To be specified"}
 Jurisdiction: ${jurisdiction || "As applicable"}
 
@@ -329,6 +335,8 @@ Facts of the Case:
 ${facts}
 
 ${additionalInfo ? `Additional Instructions: ${additionalInfo}` : ""}
+${additionalPrompts ? `User's Additional Prompts: ${additionalPrompts}` : ""}
+${formatReference ? `Note: User has provided a format reference document named "${formatReference}" - maintain a professional legal document structure.` : ""}
 
 Generate a complete, properly formatted legal document following Indian legal conventions. Include:
 1. Proper heading and court details
@@ -338,15 +346,18 @@ Generate a complete, properly formatted legal document following Indian legal co
 5. Prayer/Relief sought
 6. Verification and signature blocks
 
-Format with proper section numbering and legal terminology.`;
+Format with proper section numbering and legal terminology.${languageInstruction}`;
+
+      const systemPrompt = selectedLanguage !== "English"
+        ? `You are an expert legal document drafter specializing in Indian law. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE document in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal arguments must be in ${selectedLanguage}.`
+        : "You are an expert legal document drafter specializing in Indian law. Generate properly formatted legal documents following standard Indian legal conventions.";
 
       const response = await openai.chat.completions.create({
         model,
         messages: [
           {
             role: "system",
-            content:
-              "You are an expert legal document drafter specializing in Indian law. Generate properly formatted legal documents following standard Indian legal conventions.",
+            content: systemPrompt,
           },
           { role: "user", content: prompt },
         ],
@@ -357,7 +368,7 @@ Format with proper section numbering and legal terminology.`;
       const cost = tier === "standard" ? 1.50 : 0.80;
 
       const draft = await storage.createDraft({
-        title,
+        title: draftTitle,
         type,
         content,
         status: "completed",
@@ -481,12 +492,23 @@ Format with proper section numbering and legal terminology.`;
 
   app.post("/api/memos/generate", async (req: Request, res: Response) => {
     try {
-      const { facts, issues, documentIds } = req.body;
+      const { facts, issues, documentIds, language, jurisdiction, parties, title } = req.body;
       if (!facts) {
         return res.status(400).json({ error: "Facts are required" });
       }
 
+      const selectedLanguage = language || "English";
+      const memoTitle = title || "Legal Memorandum";
+
+      const languageInstruction = selectedLanguage !== "English" 
+        ? `\n\nCRITICAL LANGUAGE REQUIREMENT: You MUST write the ENTIRE memorandum in ${selectedLanguage} language. Every word, every sentence, every section heading must be in ${selectedLanguage}. Do not use English at all except for proper nouns, case citations (like "AIR 2023 SC 456"), or statute names (like "Indian Contract Act, 1872"). The memorandum must be grammatically correct and professionally written in ${selectedLanguage} using appropriate legal terminology in that language.`
+        : "";
+
       const prompt = `Generate a comprehensive legal memorandum using the IRAC format based on the following:
+
+${memoTitle !== "Legal Memorandum" ? `SUBJECT: ${memoTitle}` : ""}
+${parties ? `PARTIES: ${parties}` : ""}
+${jurisdiction ? `JURISDICTION: ${jurisdiction}` : ""}
 
 FACTS:
 ${facts}
@@ -501,14 +523,18 @@ Generate a complete legal memo with:
 5. ANALYSIS - Apply law to facts using IRAC methodology
 6. CONCLUSION - Final recommendations
 
-Ensure all citations are to actual Indian statutes and case law. Use proper legal citation format.`;
+Ensure all citations are to actual Indian statutes and case law. Use proper legal citation format.${languageInstruction}`;
+
+      const systemPrompt = selectedLanguage !== "English"
+        ? `You are an expert legal research assistant specializing in Indian law. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE memorandum in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal analysis must be in ${selectedLanguage}.`
+        : "You are an expert legal research assistant specializing in Indian law. Generate comprehensive legal memoranda with proper citations to Indian statutes and case law.";
 
       const response = await openai.chat.completions.create({
         model: MODEL_TIERS.standard,
         messages: [
           {
             role: "system",
-            content: "You are an expert legal research assistant specializing in Indian law. Generate comprehensive legal memoranda with proper citations to Indian statutes and case law.",
+            content: systemPrompt,
           },
           { role: "user", content: prompt },
         ],
