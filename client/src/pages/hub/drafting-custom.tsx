@@ -62,6 +62,8 @@ export default function CustomDraftPage() {
   const [draftId, setDraftId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState<IndianLanguage>("English");
 
   const { data: allDrafts = [], isLoading } = useQuery<Draft[]>({
     queryKey: ["/api/drafts"],
@@ -143,8 +145,46 @@ export default function CustomDraftPage() {
     setDraftId(draft.id);
     setDraftTitle(draft.title);
     setDraftContent(draft.content || "");
+    setCurrentLanguage((draft.language as IndianLanguage) || "English");
     setViewMode("editor");
     setShowResearchSidebar(true);
+  };
+
+  const handleOpenDraftFromEditor = (draft: Draft) => {
+    setDraftId(draft.id);
+    setDraftTitle(draft.title);
+    setDraftContent(draft.content || "");
+    setCurrentLanguage((draft.language as IndianLanguage) || "English");
+  };
+
+  const handleTranslate = async (targetLanguage: IndianLanguage) => {
+    setIsTranslating(true);
+    try {
+      const response = await apiRequest("POST", "/api/drafts/translate", {
+        content: draftContent,
+        targetLanguage,
+      });
+      const result = await response.json();
+      setDraftContent(result.translatedContent || draftContent);
+      setCurrentLanguage(targetLanguage);
+    } catch (error) {
+      console.error("Translation error:", error);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleMakeCopy = async () => {
+    const response = await apiRequest("POST", "/api/drafts", {
+      title: `${draftTitle} (Copy)`,
+      type: "custom",
+      content: draftContent,
+      status: "draft",
+    });
+    const copyDraft = await response.json();
+    setDraftId(copyDraft.id);
+    setDraftTitle(`${draftTitle} (Copy)`);
+    queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
   };
 
   const handleAddToDocument = (text: string) => {
@@ -422,6 +462,12 @@ export default function CustomDraftPage() {
           onSave={handleSave}
           isSaving={isSaving}
           showAiHelper
+          currentLanguage={currentLanguage}
+          onTranslate={handleTranslate}
+          isTranslating={isTranslating}
+          drafts={allDrafts}
+          onOpenDraft={handleOpenDraftFromEditor}
+          onMakeCopy={handleMakeCopy}
         />
       </div>
       <ResearchSidebar

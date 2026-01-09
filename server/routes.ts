@@ -414,6 +414,45 @@ Format with proper section numbering and legal terminology.${languageInstruction
     }
   });
 
+  app.post("/api/drafts/translate", async (req: Request, res: Response) => {
+    try {
+      const { content, targetLanguage } = req.body;
+
+      if (!content || !targetLanguage) {
+        return res.status(400).json({ error: "Content and targetLanguage are required" });
+      }
+
+      const systemPrompt = `You are a professional legal translator fluent in all Indian languages. Translate the following legal document to ${targetLanguage}. 
+Maintain the exact structure, formatting, section numbers, and legal terminology.
+Only translate the content - do not add explanations or comments.
+For proper nouns, case citations, and official statute names, keep them in their original form.
+Ensure the translation is accurate and uses appropriate legal terminology in ${targetLanguage}.`;
+
+      const response = await openai.chat.completions.create({
+        model: MODEL_TIERS.standard,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Translate this legal document to ${targetLanguage}:\n\n${content}` },
+        ],
+        max_completion_tokens: 8192,
+      });
+
+      const translatedContent = response.choices[0]?.message?.content || content;
+
+      await storage.addCostEntry({
+        type: "translation",
+        description: `Translated document to ${targetLanguage}`,
+        amount: MODEL_COSTS.standard,
+        modelUsed: "standard",
+      });
+
+      res.json({ translatedContent, language: targetLanguage });
+    } catch (error) {
+      console.error("Error translating document:", error);
+      res.status(500).json({ error: "Failed to translate document" });
+    }
+  });
+
   app.get("/api/costs", async (req: Request, res: Response) => {
     try {
       const ledger = await storage.getCostLedger();

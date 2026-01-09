@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -20,7 +21,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Undo2,
   Redo2,
@@ -46,11 +57,13 @@ import {
   Loader2,
   File,
   FileDown,
-  FileUp,
-  FilePlus,
-  Printer,
+  FolderOpen,
   Copy,
+  Edit3,
+  Languages,
 } from "lucide-react";
+import { indianLanguages, type IndianLanguage } from "@shared/schema";
+import type { Draft } from "@shared/schema";
 
 interface PremiumEditorProps {
   title: string;
@@ -61,6 +74,13 @@ interface PremiumEditorProps {
   showAiHelper?: boolean;
   onSave?: () => void;
   isSaving?: boolean;
+  currentLanguage?: IndianLanguage;
+  onLanguageChange?: (language: IndianLanguage) => void;
+  onTranslate?: (targetLanguage: IndianLanguage) => Promise<void>;
+  isTranslating?: boolean;
+  drafts?: Draft[];
+  onOpenDraft?: (draft: Draft) => void;
+  onMakeCopy?: () => void;
 }
 
 const fontFamilies = ["Arial", "Georgia", "Times New Roman", "Courier New", "Verdana"];
@@ -76,67 +96,101 @@ export function PremiumEditor({
   showAiHelper = true,
   onSave,
   isSaving = false,
+  currentLanguage = "English",
+  onLanguageChange,
+  onTranslate,
+  isTranslating = false,
+  drafts = [],
+  onOpenDraft,
+  onMakeCopy,
 }: PremiumEditorProps) {
   const [zoom, setZoom] = useState(100);
   const [fontFamily, setFontFamily] = useState("Arial");
   const [fontSize, setFontSize] = useState(11);
   const [headingStyle, setHeadingStyle] = useState("Normal text");
+  const [selectedLanguage, setSelectedLanguage] = useState<IndianLanguage>(currentLanguage);
+  const [showOpenDialog, setShowOpenDialog] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [renameValue, setRenameValue] = useState(title);
   const editorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleNewDocument = () => {
-    if (content && !confirm("Create a new document? Unsaved changes will be lost.")) return;
-    onTitleChange("Untitled Document");
-    onContentChange("");
-  };
+  useEffect(() => {
+    setSelectedLanguage(currentLanguage);
+  }, [currentLanguage]);
 
-  const handleExport = () => {
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${title || "document"}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  useEffect(() => {
+    setRenameValue(title);
+  }, [title]);
 
-  const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head><title>${title}</title></head>
-          <body style="font-family: ${fontFamily}; font-size: ${fontSize}pt; padding: 40px;">
-            <h1>${title}</h1>
-            <div style="white-space: pre-wrap;">${content}</div>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
+  const canTranslate = selectedLanguage !== currentLanguage && onTranslate;
+
+  const handleDownload = (format: "txt" | "docx" | "pdf") => {
+    if (format === "txt") {
+      const blob = new Blob([content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title || "document"}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === "docx") {
+      const htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' 
+              xmlns:w='urn:schemas-microsoft-com:office:word' 
+              xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>${title}</title></head>
+        <body style="font-family: ${fontFamily}; font-size: ${fontSize}pt;">
+          <h1>${title}</h1>
+          <div style="white-space: pre-wrap;">${content}</div>
+        </body>
+        </html>`;
+      const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title || "document"}.doc`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === "pdf") {
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head><title>${title}</title></head>
+            <body style="font-family: ${fontFamily}; font-size: ${fontSize}pt; padding: 40px;">
+              <h1>${title}</h1>
+              <div style="white-space: pre-wrap;">${content}</div>
+              <script>window.print(); window.close();</script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
     }
   };
 
-  const handleOpenFile = () => {
-    fileInputRef.current?.click();
+  const handleMakeCopy = () => {
+    if (onMakeCopy) {
+      onMakeCopy();
+    } else {
+      onTitleChange(`${title} (Copy)`);
+    }
   };
 
-  const handleFileChange = (e: { target: HTMLInputElement }) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      onContentChange(text);
-      onTitleChange(file.name.replace(/\.[^.]+$/, ""));
-    };
-    reader.readAsText(file);
-    e.target.value = "";
+  const handleRename = () => {
+    setRenameValue(title);
+    setShowRenameDialog(true);
   };
 
-  const handleCopyAll = () => {
-    navigator.clipboard.writeText(content);
+  const confirmRename = () => {
+    onTitleChange(renameValue);
+    setShowRenameDialog(false);
+  };
+
+  const handleTranslate = async () => {
+    if (onTranslate && canTranslate) {
+      await onTranslate(selectedLanguage);
+    }
   };
 
   const ToolbarButton = ({ icon: Icon, tooltip, onClick, active }: { icon: any; tooltip: string; onClick?: () => void; active?: boolean }) => (
@@ -175,6 +229,42 @@ export function PremiumEditor({
             data-testid="input-doc-title"
           />
         </div>
+        <div className="flex items-center gap-2">
+          <Select 
+            value={selectedLanguage} 
+            onValueChange={(v) => setSelectedLanguage(v as IndianLanguage)}
+          >
+            <SelectTrigger className="h-8 w-32 text-xs" data-testid="select-editor-language">
+              <Languages className="h-3 w-3 mr-1" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <ScrollArea className="h-64">
+                {indianLanguages.map((lang) => (
+                  <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                ))}
+              </ScrollArea>
+            </SelectContent>
+          </Select>
+          {canTranslate && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTranslate}
+              disabled={isTranslating}
+              data-testid="button-translate"
+            >
+              {isTranslating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Translating...
+                </>
+              ) : (
+                "Translate"
+              )}
+            </Button>
+          )}
+        </div>
         {onSave && (
           <Button
             variant="default"
@@ -198,14 +288,58 @@ export function PremiumEditor({
         )}
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".txt,.md"
-        onChange={handleFileChange}
-        className="hidden"
-        data-testid="input-file-upload"
-      />
+      <Dialog open={showOpenDialog} onOpenChange={setShowOpenDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Open Draft</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[300px]">
+            {drafts.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No saved drafts available</p>
+            ) : (
+              <div className="space-y-2">
+                {drafts.map((draft) => (
+                  <Button
+                    key={draft.id}
+                    variant="ghost"
+                    className="w-full justify-start text-left h-auto py-2"
+                    onClick={() => {
+                      if (onOpenDraft) {
+                        onOpenDraft(draft);
+                      }
+                      setShowOpenDialog(false);
+                    }}
+                    data-testid={`draft-item-${draft.id}`}
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium">{draft.title}</span>
+                      <span className="text-xs text-muted-foreground">{draft.type}</span>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename Document</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            placeholder="Document title"
+            data-testid="input-rename"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRenameDialog(false)}>Cancel</Button>
+            <Button onClick={confirmRename} data-testid="button-confirm-rename">Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center gap-1 px-3 py-1.5 border-b bg-muted/20 flex-wrap">
         <DropdownMenu>
@@ -216,33 +350,36 @@ export function PremiumEditor({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={handleNewDocument} data-testid="menu-new">
-              <FilePlus className="h-4 w-4 mr-2" />
-              New Document
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleOpenFile} data-testid="menu-open">
-              <FileUp className="h-4 w-4 mr-2" />
-              Open File...
+            <DropdownMenuItem onClick={() => setShowOpenDialog(true)} data-testid="menu-open">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Open
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {onSave && (
-              <DropdownMenuItem onClick={onSave} disabled={isSaving} data-testid="menu-save">
-                <Save className="h-4 w-4 mr-2" />
-                Save
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={handleExport} data-testid="menu-export">
-              <FileDown className="h-4 w-4 mr-2" />
-              Export as Text
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleCopyAll} data-testid="menu-copy-all">
+            <DropdownMenuItem onClick={handleMakeCopy} data-testid="menu-copy">
               <Copy className="h-4 w-4 mr-2" />
-              Copy All
+              Make a Copy
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handlePrint} data-testid="menu-print">
-              <Printer className="h-4 w-4 mr-2" />
-              Print
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <FileDown className="h-4 w-4 mr-2" />
+                Download
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onClick={() => handleDownload("txt")} data-testid="menu-download-txt">
+                  Text (.txt)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload("docx")} data-testid="menu-download-docx">
+                  Word (.doc)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload("pdf")} data-testid="menu-download-pdf">
+                  PDF (Print to PDF)
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleRename} data-testid="menu-rename">
+              <Edit3 className="h-4 w-4 mr-2" />
+              Rename
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

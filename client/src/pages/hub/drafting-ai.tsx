@@ -56,7 +56,7 @@ import { formatDistanceToNow } from "date-fns";
 
 type StartOption = "upload_reference" | "type_facts" | "upload_draft" | null;
 type ViewMode = "list" | "input_form" | "editor";
-type FilterType = "all" | "custom" | "ai" | "user" | "memo";
+type FilterType = "all" | "custom" | "ai" | "user";
 
 export default function AIDraftingPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -68,8 +68,10 @@ export default function AIDraftingPage() {
   const [draftContent, setDraftContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [showResearchSidebar, setShowResearchSidebar] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [currentLanguage, setCurrentLanguage] = useState<IndianLanguage>("English");
   const [filter, setFilter] = useState<FilterType>("all");
   const [formData, setFormData] = useState({
     title: "",
@@ -86,9 +88,8 @@ export default function AIDraftingPage() {
   const filteredDrafts = drafts.filter((draft) => {
     if (filter === "all") return true;
     if (filter === "custom") return draft.type === "custom";
-    if (filter === "memo") return draft.type === "memo";
     if (filter === "ai") return draft.modelUsed !== null && draft.modelUsed !== undefined;
-    if (filter === "user") return !draft.modelUsed && draft.type !== "custom" && draft.type !== "memo";
+    if (filter === "user") return !draft.modelUsed && draft.type !== "custom";
     return true;
   });
 
@@ -200,6 +201,41 @@ export default function AIDraftingPage() {
     setSelectedDraftId(null);
   };
 
+  const handleTranslate = async (targetLanguage: IndianLanguage) => {
+    setIsTranslating(true);
+    try {
+      const response = await apiRequest("POST", "/api/drafts/translate", {
+        content: draftContent,
+        targetLanguage,
+      });
+      const result = await response.json();
+      setDraftContent(result.translatedContent || draftContent);
+      setCurrentLanguage(targetLanguage);
+    } catch (error) {
+      console.error("Translation error:", error);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleOpenDraftFromEditor = (draft: Draft) => {
+    setSelectedDraftId(draft.id);
+    setDraftTitle(draft.title || "Untitled Draft");
+    setDraftContent(draft.content || "");
+    setCurrentLanguage((draft.language as IndianLanguage) || "English");
+  };
+
+  const handleMakeCopy = async () => {
+    const copyDraft = await createDraftMutation.mutateAsync(`${draftTitle} (Copy)`);
+    await updateDraftMutation.mutateAsync({
+      id: copyDraft.id,
+      title: `${draftTitle} (Copy)`,
+      content: draftContent,
+    });
+    setSelectedDraftId(copyDraft.id);
+    setDraftTitle(`${draftTitle} (Copy)`);
+  };
+
   const handleAddToDocument = (text: string) => {
     setDraftContent((prev) => prev + "\n\n" + text);
   };
@@ -262,9 +298,6 @@ export default function AIDraftingPage() {
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem checked={filter === "user"} onCheckedChange={() => setFilter("user")}>
                   User Created
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={filter === "memo"} onCheckedChange={() => setFilter("memo")}>
-                  Legal Memos
                 </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -595,6 +628,12 @@ export default function AIDraftingPage() {
           onSave={handleSave}
           isSaving={isSaving}
           showAiHelper
+          currentLanguage={currentLanguage}
+          onTranslate={handleTranslate}
+          isTranslating={isTranslating}
+          drafts={drafts}
+          onOpenDraft={handleOpenDraftFromEditor}
+          onMakeCopy={handleMakeCopy}
         />
       </div>
       <ResearchSidebar

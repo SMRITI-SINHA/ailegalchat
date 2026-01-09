@@ -57,9 +57,11 @@ export default function LegalMemoPage() {
   const [parties, setParties] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [memoContent, setMemoContent] = useState("");
   const [showResearchSidebar, setShowResearchSidebar] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [currentLanguage, setCurrentLanguage] = useState<IndianLanguage>("English");
 
   const { data: allDrafts = [], isLoading } = useQuery<Draft[]>({
     queryKey: ["/api/drafts"],
@@ -176,6 +178,43 @@ export default function LegalMemoPage() {
 
   const handleAddToDocument = (text: string) => {
     setMemoContent((prev) => prev + "\n\n" + text);
+  };
+
+  const handleOpenMemoFromEditor = (draft: Draft) => {
+    setDraftId(draft.id);
+    setMemoTitle(draft.title);
+    setMemoContent(draft.content || "");
+    setCurrentLanguage((draft.language as IndianLanguage) || "English");
+  };
+
+  const handleTranslate = async (targetLanguage: IndianLanguage) => {
+    setIsTranslating(true);
+    try {
+      const response = await apiRequest("POST", "/api/drafts/translate", {
+        content: memoContent,
+        targetLanguage,
+      });
+      const result = await response.json();
+      setMemoContent(result.translatedContent || memoContent);
+      setCurrentLanguage(targetLanguage);
+    } catch (error) {
+      console.error("Translation error:", error);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleMakeCopy = async () => {
+    const response = await apiRequest("POST", "/api/drafts", {
+      title: `${memoTitle} (Copy)`,
+      type: "memo",
+      content: memoContent,
+      status: "draft",
+    });
+    const copyDraft = await response.json();
+    setDraftId(copyDraft.id);
+    setMemoTitle(`${memoTitle} (Copy)`);
+    queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
   };
 
   const resetForm = () => {
@@ -457,6 +496,12 @@ export default function LegalMemoPage() {
           }}
           onSave={handleSave}
           isSaving={isSaving}
+          currentLanguage={currentLanguage}
+          onTranslate={handleTranslate}
+          isTranslating={isTranslating}
+          drafts={allDrafts}
+          onOpenDraft={handleOpenMemoFromEditor}
+          onMakeCopy={handleMakeCopy}
           showAiHelper
         />
       </div>
