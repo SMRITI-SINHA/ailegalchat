@@ -447,27 +447,6 @@ export default function AIDraftingPage() {
               {startOption === "upload_draft" && "Upload Your Draft"}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Switch
-                id="firm-style"
-                checked={useFirmStyle}
-                onCheckedChange={setUseFirmStyle}
-                data-testid="switch-firm-style"
-              />
-              <Label htmlFor="firm-style" className="text-sm">Use trained style</Label>
-            </div>
-            <Select value={language} onValueChange={(v) => setLanguage(v as IndianLanguage)}>
-              <SelectTrigger className="w-32" data-testid="select-language">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {indianLanguages.map((lang) => (
-                  <SelectItem key={lang} value={lang}>{lang}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
         <ScrollArea className="flex-1 p-6">
