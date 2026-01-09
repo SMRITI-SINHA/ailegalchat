@@ -1,13 +1,21 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -19,17 +27,31 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 import { PremiumEditor } from "@/components/premium-editor";
 import { ResearchSidebar } from "@/components/research-sidebar";
 import { StreamingIndicator } from "@/components/streaming-text";
-import { ArrowLeft, ArrowRight, FileText, Sparkles, AlertTriangle, Languages, Upload, FileEdit, Wand2, CheckCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  FileText,
+  Sparkles,
+  AlertTriangle,
+  Languages,
+  Upload,
+  Wand2,
+  Plus,
+  Palette,
+  Calendar,
+  Edit,
+  Trash2,
+} from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { IndianLanguage, Draft } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
+import { formatDistanceToNow } from "date-fns";
 
-type Step = 1 | 2 | 3 | 4;
-type ViewMode = "wizard" | "editor";
+type ViewMode = "list" | "editor";
 
 export default function CustomDraftPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>("wizard");
-  const [currentStep, setCurrentStep] = useState<Step>(1);
+  const [, navigate] = useLocation();
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [language, setLanguage] = useState<IndianLanguage>("English");
   const [uploadedFormat, setUploadedFormat] = useState<File | null>(null);
   const [caseFacts, setCaseFacts] = useState("");
@@ -39,22 +61,49 @@ export default function CustomDraftPage() {
   const [showResearchSidebar, setShowResearchSidebar] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const createDraftMutation = useMutation({
-    mutationFn: async (data: { title: string; content: string }) => {
-      const response = await apiRequest("POST", "/api/drafts", {
-        title: data.title,
-        type: "custom",
-        content: data.content,
-        status: "draft",
-      });
-      return response.json() as Promise<Draft>;
+  const { data: allDrafts = [], isLoading } = useQuery<Draft[]>({
+    queryKey: ["/api/drafts"],
+  });
+
+  const customDrafts = allDrafts.filter((d) => d.type === "custom");
+
+  const deleteDraftMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/drafts/${id}`);
     },
-    onSuccess: (draft) => {
-      setDraftId(draft.id);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
     },
   });
+
+  const updateDraftMutation = useMutation({
+    mutationFn: async (data: { id: string; title: string; content: string }) => {
+      const response = await apiRequest("PATCH", `/api/drafts/${data.id}`, {
+        title: data.title,
+        content: data.content,
+      });
+      return response.json() as Promise<Draft>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
+    },
+  });
+
+  const handleSave = async () => {
+    if (!draftId) return;
+    setIsSaving(true);
+    try {
+      await updateDraftMutation.mutateAsync({
+        id: draftId,
+        title: draftTitle,
+        content: draftContent,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleUpload = async (files: File[]) => {
     if (files.length > 0) {
@@ -63,7 +112,7 @@ export default function CustomDraftPage() {
   };
 
   const handleGenerate = async () => {
-    if (!caseFacts.trim()) return;
+    if (!caseFacts.trim() || !uploadedFormat) return;
     setIsGenerating(true);
 
     try {
@@ -73,12 +122,13 @@ export default function CustomDraftPage() {
         facts: caseFacts,
         additionalPrompts,
         language,
-        formatReference: uploadedFormat?.name || null,
+        formatReference: uploadedFormat.name,
       });
       const draft = await response.json();
       setDraftId(draft.id);
       setDraftTitle(draft.title || "Custom Draft");
       setDraftContent(draft.content || "");
+      setShowGenerateDialog(false);
       setViewMode("editor");
       setShowResearchSidebar(true);
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
@@ -89,22 +139,29 @@ export default function CustomDraftPage() {
     }
   };
 
+  const handleOpenDraft = (draft: Draft) => {
+    setDraftId(draft.id);
+    setDraftTitle(draft.title);
+    setDraftContent(draft.content || "");
+    setViewMode("editor");
+    setShowResearchSidebar(true);
+  };
+
   const handleAddToDocument = (text: string) => {
     setDraftContent((prev) => prev + "\n\n" + text);
   };
 
-  const canProceedToStep2 = language.length > 0;
-  const canProceedToStep3 = true;
-  const canProceedToStep4 = caseFacts.trim().length > 0;
+  const resetForm = () => {
+    setLanguage("English");
+    setUploadedFormat(null);
+    setCaseFacts("");
+    setAdditionalPrompts("");
+    setDraftTitle("Custom Draft");
+  };
 
-  const steps = [
-    { number: 1, title: "Language", icon: Languages },
-    { number: 2, title: "Format", icon: Upload },
-    { number: 3, title: "Case Details", icon: FileEdit },
-    { number: 4, title: "Generate", icon: Wand2 },
-  ];
+  const canGenerate = caseFacts.trim().length > 0 && uploadedFormat !== null;
 
-  if (viewMode === "wizard") {
+  if (viewMode === "list") {
     return (
       <div className="h-full flex flex-col">
         <div className="p-4 border-b flex items-center gap-4">
@@ -113,108 +170,160 @@ export default function CustomDraftPage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <h1 className="font-semibold text-lg">Custom Drafting</h1>
-          <Badge variant="outline">
-            <Sparkles className="h-3 w-3 mr-1" />
-            AI Powered
-          </Badge>
-        </div>
-
-        <div className="p-4 border-b bg-muted/30">
-          <div className="max-w-2xl mx-auto flex items-center justify-between">
-            {steps.map((step, index) => (
-              <div key={step.number} className="flex items-center">
-                <div className="flex flex-col items-center">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                      currentStep === step.number
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : currentStep > step.number
-                        ? "border-primary bg-primary/20 text-primary"
-                        : "border-muted-foreground/30 text-muted-foreground"
-                    }`}
-                  >
-                    {currentStep > step.number ? (
-                      <CheckCircle className="h-5 w-5" />
-                    ) : (
-                      <step.icon className="h-5 w-5" />
-                    )}
-                  </div>
-                  <span className={`text-xs mt-1 ${currentStep >= step.number ? "text-foreground" : "text-muted-foreground"}`}>
-                    {step.title}
-                  </span>
-                </div>
-                {index < steps.length - 1 && (
-                  <div className={`w-16 h-0.5 mx-2 ${currentStep > step.number ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                )}
-              </div>
-            ))}
+          <div className="flex items-center gap-3 flex-1">
+            <div className="p-2 rounded-md bg-primary/10">
+              <Palette className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="font-semibold">Custom Drafts</h1>
+              <p className="text-xs text-muted-foreground">Drafts created with your custom format templates</p>
+            </div>
           </div>
+          <Button
+            onClick={() => {
+              resetForm();
+              setShowGenerateDialog(true);
+            }}
+            data-testid="button-generate-custom"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Generate Custom Draft
+          </Button>
         </div>
 
         <ScrollArea className="flex-1 p-6">
-          {currentStep === 1 && (
-            <Card className="max-w-2xl mx-auto">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Languages className="h-4 w-4" />
-                  Select Language
-                </CardTitle>
-                <CardDescription>
-                  Choose the language in which you want the draft to be generated. The AI will write the entire document precisely in this language.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Draft Language</Label>
-                  <Select value={language} onValueChange={(v) => setLanguage(v as IndianLanguage)}>
-                    <SelectTrigger className="w-full mt-2" data-testid="select-language">
-                      <SelectValue placeholder="Select language" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {indianLanguages.map((lang) => (
-                        <SelectItem key={lang} value={lang}>{lang}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <StreamingIndicator />
+            </div>
+          ) : customDrafts.length === 0 ? (
+            <Card className="max-w-md mx-auto mt-8">
+              <CardContent className="p-8 text-center">
+                <Palette className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <h3 className="font-semibold mb-2">No Custom Drafts Yet</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Create your first custom draft by uploading your format template and providing case details.
+                </p>
                 <Button
-                  className="w-full"
-                  onClick={() => setCurrentStep(2)}
-                  disabled={!canProceedToStep2}
-                  data-testid="button-next-step"
+                  onClick={() => {
+                    resetForm();
+                    setShowGenerateDialog(true);
+                  }}
+                  data-testid="button-generate-first"
                 >
-                  Continue
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Custom Draft
                 </Button>
               </CardContent>
             </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {customDrafts.map((draft) => (
+                <Card
+                  key={draft.id}
+                  className="hover-elevate cursor-pointer group"
+                  onClick={() => handleOpenDraft(draft)}
+                  data-testid={`card-draft-${draft.id}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-md bg-muted">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-medium text-sm truncate">{draft.title}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-[10px]">Custom</Badge>
+                            {draft.language && draft.language !== "English" && (
+                              <Badge variant="secondary" className="text-[10px]">{draft.language}</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDraft(draft);
+                          }}
+                          data-testid={`button-edit-${draft.id}`}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteDraftMutation.mutate(draft.id);
+                          }}
+                          data-testid={`button-delete-${draft.id}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-3 line-clamp-2">
+                      {draft.content?.substring(0, 100) || "Empty draft"}...
+                    </p>
+                    <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      <span>{formatDistanceToNow(new Date(draft.updatedAt), { addSuffix: true })}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
+        </ScrollArea>
 
-          {currentStep === 2 && (
-            <Card className="max-w-2xl mx-auto">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
+        <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Wand2 className="h-5 w-5" />
+                Generate Custom Draft
+              </DialogTitle>
+              <DialogDescription>
+                Upload your format template and provide case details to generate a new draft
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Languages className="h-4 w-4" />
+                  Draft Language
+                </Label>
+                <Select value={language} onValueChange={(v) => setLanguage(v as IndianLanguage)}>
+                  <SelectTrigger data-testid="select-language">
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {indianLanguages.map((lang) => (
+                      <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
                   <Upload className="h-4 w-4" />
-                  Upload Draft Format (Optional)
-                </CardTitle>
-                <CardDescription>
-                  Upload a reference document to match its style, tone, and format
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+                  Format Template <span className="text-destructive">*</span>
+                </Label>
                 <Alert className="bg-amber-500/10 border-amber-500/30">
                   <AlertTriangle className="h-4 w-4 text-amber-500" />
                   <AlertDescription className="text-sm">
-                    <strong>Important:</strong> This document is used ONLY as a style and format reference. The AI will pick up the tone, structure, and formatting patterns from this document but will NOT use any of its content. Your draft will be generated based on the case facts you provide in the next step.
+                    Upload a reference document for style and formatting. The AI will match its tone and structure but NOT use its content.
                   </AlertDescription>
                 </Alert>
-
-                <UploadDropzone
-                  onUpload={handleUpload}
-                  maxFiles={1}
-                />
-
+                <UploadDropzone onUpload={handleUpload} maxFiles={1} />
                 {uploadedFormat && (
                   <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
                     <FileText className="h-4 w-4 text-muted-foreground" />
@@ -222,158 +331,78 @@ export default function CustomDraftPage() {
                     <Badge variant="secondary" className="ml-auto">Format Reference</Badge>
                   </div>
                 )}
+              </div>
 
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setCurrentStep(1)} data-testid="button-prev-step">
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button className="flex-1" onClick={() => setCurrentStep(3)} data-testid="button-next-step">
-                    {uploadedFormat ? "Continue" : "Skip & Continue"}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              <div className="space-y-2">
+                <Label>Draft Title</Label>
+                <Input
+                  placeholder="e.g., Petition for Bail - State vs. Sharma"
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  data-testid="input-title"
+                />
+              </div>
 
-          {currentStep === 3 && (
-            <Card className="max-w-2xl mx-auto">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <FileEdit className="h-4 w-4" />
-                  Case Details
-                </CardTitle>
-                <CardDescription>
-                  Provide the facts and details of your case. The AI will use this information to generate your draft.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Draft Title</Label>
-                  <input
-                    type="text"
-                    className="w-full mt-2 px-3 py-2 border rounded-md bg-background"
-                    placeholder="e.g., Petition for Bail - State vs. Sharma"
-                    value={draftTitle}
-                    onChange={(e) => setDraftTitle(e.target.value)}
-                    data-testid="input-title"
-                  />
-                </div>
-                <div>
-                  <Label>Matter of Facts <span className="text-destructive">*</span></Label>
-                  <Textarea
-                    placeholder="Describe the complete facts of the case including:&#10;- Background and circumstances&#10;- Parties involved&#10;- Timeline of events&#10;- Key issues and claims&#10;- Relevant legal provisions"
-                    rows={8}
-                    value={caseFacts}
-                    onChange={(e) => setCaseFacts(e.target.value)}
-                    className="mt-2"
-                    data-testid="textarea-facts"
-                  />
-                </div>
-                <div>
-                  <Label>Additional Instructions (Optional)</Label>
-                  <Textarea
-                    placeholder="Any specific instructions for the AI:&#10;- Particular sections to emphasize&#10;- Specific legal arguments to include&#10;- Tone preferences (formal, assertive, etc.)&#10;- Any other requirements"
-                    rows={4}
-                    value={additionalPrompts}
-                    onChange={(e) => setAdditionalPrompts(e.target.value)}
-                    className="mt-2"
-                    data-testid="textarea-prompts"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label>Matter of Facts <span className="text-destructive">*</span></Label>
+                <Textarea
+                  placeholder="Describe the complete facts of the case including:
+- Background and circumstances
+- Parties involved
+- Timeline of events
+- Key issues and claims
+- Relevant legal provisions"
+                  rows={6}
+                  value={caseFacts}
+                  onChange={(e) => setCaseFacts(e.target.value)}
+                  data-testid="textarea-facts"
+                />
+              </div>
 
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setCurrentStep(2)} data-testid="button-prev-step">
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={() => setCurrentStep(4)}
-                    disabled={!canProceedToStep4}
-                    data-testid="button-next-step"
-                  >
-                    Review & Generate
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              <div className="space-y-2">
+                <Label>Additional Instructions (Optional)</Label>
+                <Textarea
+                  placeholder="Any specific instructions for the AI..."
+                  rows={3}
+                  value={additionalPrompts}
+                  onChange={(e) => setAdditionalPrompts(e.target.value)}
+                  data-testid="textarea-prompts"
+                />
+              </div>
 
-          {currentStep === 4 && (
-            <Card className="max-w-2xl mx-auto">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Wand2 className="h-4 w-4" />
-                  Review & Generate
-                </CardTitle>
-                <CardDescription>
-                  Review your selections and generate the draft
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
-                  <div className="flex justify-between items-center py-2 border-b">
-                    <span className="text-sm text-muted-foreground">Language</span>
-                    <Badge variant="secondary">{language}</Badge>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b">
-                    <span className="text-sm text-muted-foreground">Format Reference</span>
-                    <span className="text-sm">{uploadedFormat ? uploadedFormat.name : "None"}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b">
-                    <span className="text-sm text-muted-foreground">Draft Title</span>
-                    <span className="text-sm font-medium">{draftTitle}</span>
-                  </div>
-                  <div className="py-2 border-b">
-                    <span className="text-sm text-muted-foreground">Case Facts Preview</span>
-                    <p className="text-sm mt-1 line-clamp-3">{caseFacts}</p>
-                  </div>
-                  {additionalPrompts && (
-                    <div className="py-2">
-                      <span className="text-sm text-muted-foreground">Additional Instructions</span>
-                      <p className="text-sm mt-1 line-clamp-2">{additionalPrompts}</p>
-                    </div>
+              <Alert className="bg-blue-500/10 border-blue-500/30">
+                <Sparkles className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-sm">
+                  The AI will generate your draft entirely in <strong>{language}</strong> using the provided facts and your format template's style.
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowGenerateDialog(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleGenerate}
+                  disabled={!canGenerate || isGenerating}
+                  className="flex-1"
+                  data-testid="button-generate"
+                >
+                  {isGenerating ? (
+                    <>
+                      <StreamingIndicator className="mr-2" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="mr-2 h-4 w-4" />
+                      Generate Draft
+                    </>
                   )}
-                </div>
-
-                <Alert className="bg-blue-500/10 border-blue-500/30">
-                  <Sparkles className="h-4 w-4 text-blue-500" />
-                  <AlertDescription className="text-sm">
-                    The AI will generate your draft entirely in <strong>{language}</strong> using the provided facts. After generation, you can edit the document and use the Research Assistant for additional legal research.
-                  </AlertDescription>
-                </Alert>
-
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setCurrentStep(3)} data-testid="button-prev-step">
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={handleGenerate}
-                    disabled={isGenerating}
-                    data-testid="button-generate"
-                  >
-                    {isGenerating ? (
-                      <>
-                        <StreamingIndicator className="mr-2" />
-                        Generating Draft in {language}...
-                      </>
-                    ) : (
-                      <>
-                        <Wand2 className="mr-2 h-4 w-4" />
-                        Generate Draft
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </ScrollArea>
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -387,10 +416,11 @@ export default function CustomDraftPage() {
           content={draftContent}
           onContentChange={setDraftContent}
           onBack={() => {
-            setViewMode("wizard");
-            setCurrentStep(1);
+            setViewMode("list");
             setShowResearchSidebar(false);
           }}
+          onSave={handleSave}
+          isSaving={isSaving}
           showAiHelper
         />
       </div>

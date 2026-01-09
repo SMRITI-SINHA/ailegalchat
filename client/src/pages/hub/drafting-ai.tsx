@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
@@ -25,6 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { PremiumEditor } from "@/components/premium-editor";
 import { ResearchSidebar } from "@/components/research-sidebar";
@@ -39,16 +44,21 @@ import {
   Clock,
   ArrowLeft,
   Sparkles,
+  Filter,
+  FileSignature,
+  Calendar,
+  Edit,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Draft, IndianLanguage } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
+import { formatDistanceToNow } from "date-fns";
 
 type StartOption = "upload_reference" | "type_facts" | "upload_draft" | null;
-type ViewMode = "list" | "option_select" | "input_form" | "editor";
+type ViewMode = "list" | "input_form" | "editor";
+type FilterType = "all" | "custom" | "ai" | "user" | "memo";
 
 export default function AIDraftingPage() {
-  const [, setLocation] = useLocation();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [startOption, setStartOption] = useState<StartOption>(null);
   const [useFirmStyle, setUseFirmStyle] = useState(false);
@@ -57,8 +67,10 @@ export default function AIDraftingPage() {
   const [draftTitle, setDraftTitle] = useState("Untitled Draft");
   const [draftContent, setDraftContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [showResearchSidebar, setShowResearchSidebar] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterType>("all");
   const [formData, setFormData] = useState({
     title: "",
     facts: "",
@@ -67,8 +79,17 @@ export default function AIDraftingPage() {
     documentType: "petition",
   });
 
-  const { data: drafts, isLoading: draftsLoading } = useQuery<Draft[]>({
+  const { data: drafts = [], isLoading: draftsLoading } = useQuery<Draft[]>({
     queryKey: ["/api/drafts"],
+  });
+
+  const filteredDrafts = drafts.filter((draft) => {
+    if (filter === "all") return true;
+    if (filter === "custom") return draft.type === "custom";
+    if (filter === "memo") return draft.type === "memo";
+    if (filter === "ai") return draft.modelUsed !== null && draft.modelUsed !== undefined;
+    if (filter === "user") return !draft.modelUsed && draft.type !== "custom" && draft.type !== "memo";
+    return true;
   });
 
   const deleteDraftMutation = useMutation({
@@ -80,11 +101,24 @@ export default function AIDraftingPage() {
     },
   });
 
+  const updateDraftMutation = useMutation({
+    mutationFn: async (data: { id: string; title: string; content: string }) => {
+      const response = await apiRequest("PATCH", `/api/drafts/${data.id}`, {
+        title: data.title,
+        content: data.content,
+      });
+      return response.json() as Promise<Draft>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
+    },
+  });
+
   const createDraftMutation = useMutation({
     mutationFn: async (title: string) => {
       const response = await apiRequest("POST", "/api/drafts", {
         title,
-        type: "custom",
+        type: "petition",
         content: "",
         status: "draft",
       });
@@ -94,6 +128,20 @@ export default function AIDraftingPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
     },
   });
+
+  const handleSave = async () => {
+    if (!selectedDraftId) return;
+    setIsSaving(true);
+    try {
+      await updateDraftMutation.mutateAsync({
+        id: selectedDraftId,
+        title: draftTitle,
+        content: draftContent,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleContinueToEditorWithDraft = async (title: string) => {
     const draft = await createDraftMutation.mutateAsync(title);
@@ -156,6 +204,22 @@ export default function AIDraftingPage() {
     setDraftContent((prev) => prev + "\n\n" + text);
   };
 
+  const getTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      custom: "Custom",
+      memo: "Memo",
+      petition: "Petition",
+      written_statement: "Written Statement",
+      notice: "Notice",
+      contract: "Contract",
+      affidavit: "Affidavit",
+      application: "Application",
+      reply: "Reply",
+      brief: "Brief",
+    };
+    return labels[type] || type;
+  };
+
   if (viewMode === "list") {
     return (
       <div className="h-full flex flex-col">
@@ -166,16 +230,49 @@ export default function AIDraftingPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <h1 className="font-semibold text-lg">AI Legal Drafting</h1>
+            <div className="p-2 rounded-md bg-primary/10">
+              <FileSignature className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="font-semibold">AI Legal Drafting</h1>
+              <p className="text-xs text-muted-foreground">All your drafts in one place</p>
+            </div>
             <Badge variant="outline">
               <Sparkles className="h-3 w-3 mr-1" />
               AI Powered
             </Badge>
           </div>
-          <Button onClick={() => setShowGenerateDialog(true)} data-testid="button-generate-draft">
-            <Plus className="mr-2 h-4 w-4" />
-            Generate Draft
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" data-testid="button-filter">
+                  <Filter className="h-4 w-4 mr-2" />
+                  {filter === "all" ? "All Drafts" : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuCheckboxItem checked={filter === "all"} onCheckedChange={() => setFilter("all")}>
+                  All Drafts
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={filter === "custom"} onCheckedChange={() => setFilter("custom")}>
+                  Custom Drafts
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={filter === "ai"} onCheckedChange={() => setFilter("ai")}>
+                  AI Generated
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={filter === "user"} onCheckedChange={() => setFilter("user")}>
+                  User Created
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={filter === "memo"} onCheckedChange={() => setFilter("memo")}>
+                  Legal Memos
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={() => setShowGenerateDialog(true)} data-testid="button-generate-draft">
+              <Plus className="mr-2 h-4 w-4" />
+              Generate Draft
+            </Button>
+          </div>
         </div>
 
         <ScrollArea className="flex-1 p-6">
@@ -185,44 +282,67 @@ export default function AIDraftingPage() {
                 <Skeleton key={i} className="h-32" />
               ))}
             </div>
-          ) : drafts && drafts.length > 0 ? (
+          ) : filteredDrafts.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {drafts.map((draft) => (
+              {filteredDrafts.map((draft) => (
                 <Card
                   key={draft.id}
-                  className="hover-elevate cursor-pointer"
+                  className="hover-elevate cursor-pointer group"
                   onClick={() => handleOpenDraft(draft)}
                   data-testid={`card-draft-${draft.id}`}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium truncate">{draft.title}</h3>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {(draft.content || "").substring(0, 100)}...
-                        </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Badge variant="secondary" className="text-[10px]">
-                            {draft.type}
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {new Date(draft.createdAt).toLocaleDateString()}
-                          </span>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-md bg-muted">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-medium text-sm truncate">{draft.title}</h3>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <Badge variant="outline" className="text-[10px]">{getTypeLabel(draft.type)}</Badge>
+                            {draft.modelUsed && (
+                              <Badge variant="secondary" className="text-[10px]">AI</Badge>
+                            )}
+                            {draft.language && draft.language !== "English" && (
+                              <Badge variant="secondary" className="text-[10px]">{draft.language}</Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 flex-shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteDraftMutation.mutate(draft.id);
-                        }}
-                        data-testid={`button-delete-draft-${draft.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDraft(draft);
+                          }}
+                          data-testid={`button-edit-${draft.id}`}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteDraftMutation.mutate(draft.id);
+                          }}
+                          data-testid={`button-delete-${draft.id}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-3 line-clamp-2">
+                      {(draft.content || "").substring(0, 100) || "Empty draft"}...
+                    </p>
+                    <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      <span>{formatDistanceToNow(new Date(draft.updatedAt), { addSuffix: true })}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -231,14 +351,20 @@ export default function AIDraftingPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <FileEdit className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="font-medium text-lg mb-2">No drafts yet</h3>
+              <h3 className="font-medium text-lg mb-2">
+                {filter === "all" ? "No drafts yet" : `No ${filter} drafts`}
+              </h3>
               <p className="text-muted-foreground mb-4">
-                Click "Generate Draft" to create your first AI-powered legal document
+                {filter === "all"
+                  ? 'Click "Generate Draft" to create your first AI-powered legal document'
+                  : "Try changing the filter to see other drafts"}
               </p>
-              <Button onClick={() => setShowGenerateDialog(true)} data-testid="button-generate-first">
-                <Plus className="mr-2 h-4 w-4" />
-                Generate Draft
-              </Button>
+              {filter === "all" && (
+                <Button onClick={() => setShowGenerateDialog(true)} data-testid="button-generate-first">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Generate Draft
+                </Button>
+              )}
             </div>
           )}
         </ScrollArea>
@@ -487,6 +613,8 @@ export default function AIDraftingPage() {
           content={draftContent}
           onContentChange={setDraftContent}
           onBack={handleBackToList}
+          onSave={handleSave}
+          isSaving={isSaving}
           showAiHelper
         />
       </div>

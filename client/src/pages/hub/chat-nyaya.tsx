@@ -1,22 +1,37 @@
 import { useState, useRef, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ModelBadge } from "@/components/model-badge";
 import { ConfidenceIndicator } from "@/components/confidence-indicator";
 import { CostDisplay } from "@/components/cost-display";
 import { CitationCard } from "@/components/citation-card";
+import { StreamingIndicator } from "@/components/streaming-text";
 import {
   Scale,
   Send,
   Sparkles,
-  BookOpen,
   Lightbulb,
   MessageSquare,
+  History,
+  Clock,
+  Trash2,
+  ArrowLeft,
 } from "lucide-react";
-import type { ModelTier, Citation } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { ModelTier, Citation, ChatSession } from "@shared/schema";
+import { formatDistanceToNow } from "date-fns";
 
 interface Message {
   id: string;
@@ -39,7 +54,37 @@ export default function NyayaAIPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { data: sessions = [], isLoading: sessionsLoading } = useQuery<ChatSession[]>({
+    queryKey: ["/api/chat/sessions"],
+  });
+
+  const nyayaSessions = sessions.filter((s) => s.sessionType === "nyaya");
+
+  const createSessionMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const response = await apiRequest("POST", "/api/chat/sessions", {
+        title,
+        sessionType: "nyaya",
+      });
+      return response.json() as Promise<ChatSession>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
+    },
+  });
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/chat/sessions/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
+    },
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -53,6 +98,14 @@ export default function NyayaAIPage() {
     const query = message || input.trim();
     if (!query || isLoading) return;
 
+    let sessionId = currentSessionId;
+    
+    if (!sessionId && messages.length === 0) {
+      const session = await createSessionMutation.mutateAsync(query.substring(0, 50) + "...");
+      sessionId = session.id;
+      setCurrentSessionId(session.id);
+    }
+
     const userMsg: Message = { id: Date.now().toString(), role: "user", content: query };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
@@ -62,7 +115,7 @@ export default function NyayaAIPage() {
       const response = await fetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: query }),
+        body: JSON.stringify({ message: query, sessionId }),
       });
 
       if (!response.body) throw new Error("No response body");
@@ -100,7 +153,9 @@ export default function NyayaAIPage() {
                   citations: data.citations || [],
                 };
               }
-            } catch (e) {}
+            } catch {
+              // Skip invalid JSON
+            }
           }
         }
       }
@@ -123,10 +178,26 @@ export default function NyayaAIPage() {
     }
   };
 
+  const handleOpenSession = (session: ChatSession) => {
+    setCurrentSessionId(session.id);
+    setMessages([]);
+    setShowHistoryDialog(false);
+  };
+
+  const handleNewChat = () => {
+    setCurrentSessionId(null);
+    setMessages([]);
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 border-b flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
+          <Link href="/hub">
+            <Button variant="ghost" size="icon" data-testid="button-back-hub">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
           <div className="p-2 rounded-md bg-primary/10">
             <Scale className="h-5 w-5 text-primary" />
           </div>
@@ -135,10 +206,21 @@ export default function NyayaAIPage() {
             <p className="text-xs text-muted-foreground">Your intelligent legal assistant</p>
           </div>
         </div>
-        <Badge variant="outline" className="gap-1">
-          <Sparkles className="h-3 w-3" />
-          Trained on 1000+ legal documents
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="gap-1">
+            <Sparkles className="h-3 w-3" />
+            Trained on 1000+ legal documents
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowHistoryDialog(true)}
+            data-testid="button-history"
+          >
+            <History className="h-4 w-4 mr-2" />
+            Previous Chats
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
@@ -159,6 +241,7 @@ export default function NyayaAIPage() {
                       key={i}
                       className="hover-elevate cursor-pointer"
                       onClick={() => handleSend(q)}
+                      data-testid={`card-sample-${i}`}
                     >
                       <CardContent className="p-3 flex items-start gap-2">
                         <Lightbulb className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -232,6 +315,82 @@ export default function NyayaAIPage() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Previous Chats
+            </DialogTitle>
+            <DialogDescription>
+              Continue a previous conversation or start a new one
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <Button onClick={handleNewChat} variant="outline" className="w-full" data-testid="button-new-chat">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Start New Chat
+            </Button>
+
+            {sessionsLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <StreamingIndicator />
+              </div>
+            ) : nyayaSessions.length === 0 ? (
+              <div className="text-center py-8">
+                <History className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">No previous chats found</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-64">
+                <div className="space-y-2">
+                  {nyayaSessions.map((session) => (
+                    <Card
+                      key={session.id}
+                      className="hover-elevate cursor-pointer group"
+                      onClick={() => handleOpenSession(session)}
+                      data-testid={`card-session-${session.id}`}
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-medium truncate">{session.title}</h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Clock className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true })}
+                              </span>
+                              {session.messageCount && session.messageCount > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  {session.messageCount} messages
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteSessionMutation.mutate(session.id);
+                            }}
+                            data-testid={`button-delete-${session.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
