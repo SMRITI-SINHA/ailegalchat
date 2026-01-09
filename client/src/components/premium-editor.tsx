@@ -23,8 +23,6 @@ import {
 import {
   Undo2,
   Redo2,
-  Printer,
-  ZoomIn,
   Bold,
   Italic,
   Underline,
@@ -41,9 +39,10 @@ import {
   Outdent,
   Strikethrough,
   Wand2,
-  ChevronDown,
   ArrowLeft,
   Plus,
+  Save,
+  Loader2,
 } from "lucide-react";
 
 interface PremiumEditorProps {
@@ -53,6 +52,8 @@ interface PremiumEditorProps {
   onContentChange: (content: string) => void;
   onBack?: () => void;
   showAiHelper?: boolean;
+  onSave?: () => void;
+  isSaving?: boolean;
 }
 
 const fontFamilies = ["Arial", "Georgia", "Times New Roman", "Courier New", "Verdana"];
@@ -66,6 +67,8 @@ export function PremiumEditor({
   onContentChange,
   onBack,
   showAiHelper = true,
+  onSave,
+  isSaving = false,
 }: PremiumEditorProps) {
   const [zoom, setZoom] = useState(100);
   const [fontFamily, setFontFamily] = useState("Arial");
@@ -109,22 +112,32 @@ export function PremiumEditor({
             data-testid="input-doc-title"
           />
         </div>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <span>File</span>
-          <span>Edit</span>
-          <span>View</span>
-          <span>Insert</span>
-          <span>Format</span>
-          <span>Tools</span>
-          <span>Extensions</span>
-          <span>Help</span>
-        </div>
+        {onSave && (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onSave}
+            disabled={isSaving}
+            data-testid="button-save"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-1 px-3 py-1.5 border-b bg-muted/20 flex-wrap">
         <ToolbarButton icon={Undo2} tooltip="Undo" />
         <ToolbarButton icon={Redo2} tooltip="Redo" />
-        <ToolbarButton icon={Printer} tooltip="Print" />
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
