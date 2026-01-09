@@ -20,6 +20,7 @@ import {
   Swords,
   FlaskConical,
   MessageSquare,
+  StickyNote,
 } from "lucide-react";
 
 const draftingCards = [
@@ -88,6 +89,12 @@ const researchCards = [
     description: "Industry-specific checklists with legal references",
     icon: ClipboardCheck,
     url: "/hub/research/compliance",
+  },
+  {
+    title: "Saved Notes",
+    description: "View and manage all your research notes",
+    icon: StickyNote,
+    url: "/hub/research/notes",
   },
 ];
 
@@ -182,7 +189,7 @@ export default function HubPage() {
 
       <section>
         <h2 className="text-lg font-semibold mb-4">Research</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {researchCards.map((card) => (
             <FeatureCard key={card.url} card={card} />
           ))}
