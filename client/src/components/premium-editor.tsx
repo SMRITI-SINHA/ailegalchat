@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -61,6 +62,8 @@ import {
   Copy,
   Edit3,
   Languages,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { indianLanguages, type IndianLanguage } from "@shared/schema";
 import type { Draft } from "@shared/schema";
@@ -81,11 +84,28 @@ interface PremiumEditorProps {
   drafts?: Draft[];
   onOpenDraft?: (draft: Draft) => void;
   onMakeCopy?: () => void;
+  onAiAssist?: (prompt: string) => Promise<string>;
+  isGenerating?: boolean;
 }
 
 const fontFamilies = ["Arial", "Georgia", "Times New Roman", "Courier New", "Verdana"];
 const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72];
 const headingStyles = ["Normal text", "Heading 1", "Heading 2", "Heading 3", "Heading 4"];
+
+const legalExamples = [
+  "Draft a Non-Disclosure Agreement",
+  "Write a Legal Notice for breach of contract",
+  "Create a Power of Attorney document",
+  "Generate a Sale Deed template",
+  "Draft an Employment Contract clause",
+  "Write a Bail Application for Section 498A",
+  "Create a Partnership Deed",
+  "Draft a Writ Petition under Article 226",
+  "Write a Reply to Legal Notice",
+  "Generate a Leave and License Agreement",
+  "Draft Written Arguments for Civil Suit",
+  "Create a Rent Agreement template",
+];
 
 export function PremiumEditor({
   title,
@@ -103,6 +123,8 @@ export function PremiumEditor({
   drafts = [],
   onOpenDraft,
   onMakeCopy,
+  onAiAssist,
+  isGenerating = false,
 }: PremiumEditorProps) {
   const [zoom, setZoom] = useState(100);
   const [fontFamily, setFontFamily] = useState("Arial");
@@ -112,7 +134,49 @@ export function PremiumEditor({
   const [showOpenDialog, setShowOpenDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [renameValue, setRenameValue] = useState(title);
+  const [showAiDialog, setShowAiDialog] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [currentExampleIndex, setCurrentExampleIndex] = useState(0);
+  const [exampleFading, setExampleFading] = useState(false);
+  const [editorFocused, setEditorFocused] = useState(false);
+  const [localGenerating, setLocalGenerating] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState<number>(0);
+  const lastKnownCursorPosition = useRef<number>(0);
   const editorRef = useRef<HTMLDivElement>(null);
+  const contentEditableRef = useRef<HTMLDivElement>(null);
+
+  const getCursorPositionInEditor = (): number | null => {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount || !contentEditableRef.current) {
+      return null;
+    }
+    const range = selection.getRangeAt(0);
+    if (!contentEditableRef.current.contains(range.startContainer)) {
+      return null;
+    }
+    try {
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(contentEditableRef.current);
+      preCaretRange.setEnd(range.startContainer, range.startOffset);
+      return preCaretRange.toString().length;
+    } catch {
+      return null;
+    }
+  };
+
+  const updateLastKnownCursorPosition = () => {
+    const pos = getCursorPositionInEditor();
+    if (pos !== null) {
+      lastKnownCursorPosition.current = pos;
+    }
+  };
+
+  const openAiDialog = useCallback(() => {
+    const currentPos = getCursorPositionInEditor();
+    const posToUse = currentPos !== null ? currentPos : lastKnownCursorPosition.current;
+    setCursorPosition(posToUse);
+    setShowAiDialog(true);
+  }, []);
 
   useEffect(() => {
     setSelectedLanguage(currentLanguage);
@@ -121,6 +185,32 @@ export function PremiumEditor({
   useEffect(() => {
     setRenameValue(title);
   }, [title]);
+
+  useEffect(() => {
+    if (!showAiDialog) return;
+    
+    const interval = setInterval(() => {
+      setExampleFading(true);
+      setTimeout(() => {
+        setCurrentExampleIndex((prev) => (prev + 1) % legalExamples.length);
+        setExampleFading(false);
+      }, 300);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [showAiDialog]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.altKey && e.key.toLowerCase() === 'w') {
+      e.preventDefault();
+      openAiDialog();
+    }
+  }, [content]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   const canTranslate = selectedLanguage !== currentLanguage && onTranslate;
 
@@ -192,6 +282,49 @@ export function PremiumEditor({
       await onTranslate(selectedLanguage);
     }
   };
+
+  const insertTextAtCursor = (text: string) => {
+    const before = content.slice(0, cursorPosition);
+    const after = content.slice(cursorPosition);
+    const separator = before && !before.endsWith('\n') && !before.endsWith(' ') ? '\n\n' : '';
+    const newContent = before + separator + text + after;
+    onContentChange(newContent);
+  };
+
+  const handleAiCreate = async () => {
+    if (!aiPrompt.trim()) return;
+    
+    if (onAiAssist) {
+      setLocalGenerating(true);
+      try {
+        const generatedText = await onAiAssist(aiPrompt);
+        insertTextAtCursor(generatedText);
+        setShowAiDialog(false);
+        setAiPrompt("");
+      } finally {
+        setLocalGenerating(false);
+      }
+    } else {
+      insertTextAtCursor(`[AI Generated: ${aiPrompt}]`);
+      setShowAiDialog(false);
+      setAiPrompt("");
+    }
+  };
+
+  const handleEditorClick = () => {
+    setEditorFocused(true);
+    if (contentEditableRef.current) {
+      contentEditableRef.current.focus();
+    }
+  };
+
+  const handlePlaceholderClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCursorPosition(0);
+    setShowAiDialog(true);
+  };
+
+  const showPlaceholder = showAiHelper && !content && !editorFocused;
 
   const ToolbarButton = ({ icon: Icon, tooltip, onClick, active }: { icon: any; tooltip: string; onClick?: () => void; active?: boolean }) => (
     <Tooltip>
@@ -341,6 +474,57 @@ export function PremiumEditor({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showAiDialog} onOpenChange={setShowAiDialog}>
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 relative">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute right-2 top-2 text-white hover:bg-white/20 h-6 w-6"
+              onClick={() => setShowAiDialog(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-2 text-white">
+              <Sparkles className="h-5 w-5" />
+              <span className="font-medium">Help me write</span>
+            </div>
+            <div className="mt-3 min-h-[24px]">
+              <p 
+                className={`text-white/90 text-sm transition-opacity duration-300 ${exampleFading ? 'opacity-0' : 'opacity-100'}`}
+              >
+                {legalExamples[currentExampleIndex]}
+              </p>
+            </div>
+          </div>
+          <div className="p-4">
+            <Textarea
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="Describe what you want to write..."
+              className="min-h-[100px] resize-none"
+              data-testid="input-ai-prompt"
+            />
+            <div className="flex justify-end mt-4">
+              <Button 
+                onClick={handleAiCreate}
+                disabled={!aiPrompt.trim() || localGenerating || isGenerating}
+                data-testid="button-ai-create"
+              >
+                {localGenerating || isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-center gap-1 px-3 py-1.5 border-b bg-muted/20 flex-wrap">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -473,6 +657,28 @@ export function PremiumEditor({
         <ToolbarButton icon={ListOrdered} tooltip="Numbered list" />
         <ToolbarButton icon={Outdent} tooltip="Decrease indent" />
         <ToolbarButton icon={Indent} tooltip="Increase indent" />
+
+        <Separator orientation="vertical" className="h-5 mx-1" />
+
+        {showAiHelper && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={openAiDialog}
+                data-testid="button-ai-assistance"
+              >
+                <Sparkles className="h-4 w-4 text-blue-500" />
+                <span className="text-muted-foreground">AI Assistance</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Help me write (Alt+W)
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto bg-muted/20">
@@ -490,26 +696,49 @@ export function PremiumEditor({
           <div className="flex-1 flex justify-center py-8 px-4">
             <div
               ref={editorRef}
-              className="bg-background shadow-lg border min-h-[800px] w-full max-w-[816px] p-16"
+              className="bg-background shadow-lg border min-h-[800px] w-full max-w-[816px] p-16 cursor-text"
               style={{
                 fontFamily: fontFamily,
                 fontSize: `${fontSize}pt`,
                 transform: `scale(${zoom / 100})`,
                 transformOrigin: 'top center',
               }}
+              onClick={handleEditorClick}
             >
-              {showAiHelper && !content && (
-                <div className="flex items-center gap-2 text-muted-foreground mb-4">
-                  <Wand2 className="h-4 w-4" />
+              {showPlaceholder && (
+                <div 
+                  className="flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-muted-foreground/80 transition-colors"
+                  onClick={handlePlaceholderClick}
+                  data-testid="placeholder-help-me-write"
+                >
+                  <span className="w-0.5 h-5 bg-foreground animate-pulse" />
+                  <Sparkles className="h-4 w-4 text-blue-500" />
                   <span className="text-sm">Help me write</span>
-                  <span className="text-xs text-muted-foreground/70">Alt + W</span>
+                  <span className="text-xs text-muted-foreground/60 ml-2">Alt + W</span>
                 </div>
               )}
               <div
+                ref={contentEditableRef}
                 contentEditable
                 suppressContentEditableWarning
                 className="outline-none min-h-[600px] leading-relaxed"
-                onInput={(e) => onContentChange(e.currentTarget.textContent || "")}
+                onInput={(e) => {
+                  onContentChange(e.currentTarget.textContent || "");
+                  updateLastKnownCursorPosition();
+                }}
+                onClick={updateLastKnownCursorPosition}
+                onKeyUp={updateLastKnownCursorPosition}
+                onSelect={updateLastKnownCursorPosition}
+                onFocus={() => {
+                  setEditorFocused(true);
+                  updateLastKnownCursorPosition();
+                }}
+                onBlur={() => {
+                  updateLastKnownCursorPosition();
+                  if (!content) {
+                    setEditorFocused(false);
+                  }
+                }}
                 data-testid="editor-content"
               >
                 {content}
