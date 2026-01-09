@@ -19,6 +19,8 @@ import type {
   InsertComplianceChecklist,
   ResearchQuery,
   InsertResearchQuery,
+  ResearchNote,
+  InsertResearchNote,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -72,6 +74,11 @@ export interface IStorage {
   getResearchQueries(): Promise<ResearchQuery[]>;
   getResearchQuery(id: string): Promise<ResearchQuery | undefined>;
   createResearchQuery(query: InsertResearchQuery): Promise<ResearchQuery>;
+
+  getResearchNotes(): Promise<ResearchNote[]>;
+  getResearchNote(id: string): Promise<ResearchNote | undefined>;
+  createResearchNote(note: InsertResearchNote): Promise<ResearchNote>;
+  deleteResearchNote(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -85,6 +92,7 @@ export class MemStorage implements IStorage {
   private legalMemos: Map<string, LegalMemo>;
   private complianceChecklists: Map<string, ComplianceChecklist>;
   private researchQueries: Map<string, ResearchQuery>;
+  private researchNotes: Map<string, ResearchNote>;
 
   constructor() {
     this.users = new Map();
@@ -97,6 +105,7 @@ export class MemStorage implements IStorage {
     this.legalMemos = new Map();
     this.complianceChecklists = new Map();
     this.researchQueries = new Map();
+    this.researchNotes = new Map();
     this.seedData();
   }
 
@@ -538,6 +547,33 @@ export class MemStorage implements IStorage {
     };
     this.researchQueries.set(id, query);
     return query;
+  }
+
+  async getResearchNotes(): Promise<ResearchNote[]> {
+    return Array.from(this.researchNotes.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getResearchNote(id: string): Promise<ResearchNote | undefined> {
+    return this.researchNotes.get(id);
+  }
+
+  async createResearchNote(insertNote: InsertResearchNote): Promise<ResearchNote> {
+    const id = randomUUID();
+    const note: ResearchNote = {
+      id,
+      name: insertNote.name,
+      content: insertNote.content,
+      draftId: insertNote.draftId ?? null,
+      createdAt: new Date(),
+    };
+    this.researchNotes.set(id, note);
+    return note;
+  }
+
+  async deleteResearchNote(id: string): Promise<void> {
+    this.researchNotes.delete(id);
   }
 }
 

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import OpenAI from "openai";
 import { storage } from "./storage";
-import { insertDocumentSchema, insertDraftSchema, draftTypes } from "@shared/schema";
+import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
 
 const upload = multer({
@@ -291,6 +291,20 @@ When referencing case law or statutes, use proper legal citation format.`;
     } catch (error) {
       console.error("Error fetching draft:", error);
       res.status(500).json({ error: "Failed to fetch draft" });
+    }
+  });
+
+  app.post("/api/drafts", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertDraftSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const draft = await storage.createDraft(parsed.data);
+      res.json(draft);
+    } catch (error) {
+      console.error("Error creating draft:", error);
+      res.status(500).json({ error: "Failed to create draft" });
     }
   });
 
@@ -679,6 +693,42 @@ Generate at least 8-10 relevant compliance items specific to Indian law and regu
     } catch (error) {
       console.error("Compliance generation error:", error);
       res.status(500).json({ error: "Failed to generate checklist" });
+    }
+  });
+
+  app.get("/api/research/notes", async (req: Request, res: Response) => {
+    try {
+      const draftId = req.query.draftId as string | undefined;
+      const notes = await storage.getResearchNotes();
+      const filtered = draftId ? notes.filter(n => n.draftId === draftId) : notes;
+      res.json(filtered);
+    } catch (error) {
+      console.error("Error fetching research notes:", error);
+      res.status(500).json({ error: "Failed to fetch notes" });
+    }
+  });
+
+  app.post("/api/research/notes", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertResearchNoteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const note = await storage.createResearchNote(parsed.data);
+      res.json(note);
+    } catch (error) {
+      console.error("Error creating research note:", error);
+      res.status(500).json({ error: "Failed to create note" });
+    }
+  });
+
+  app.delete("/api/research/notes/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteResearchNote(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting research note:", error);
+      res.status(500).json({ error: "Failed to delete note" });
     }
   });
 

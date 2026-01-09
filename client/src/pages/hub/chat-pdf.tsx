@@ -107,8 +107,7 @@ export default function ChatWithPDFPage() {
           </CardHeader>
           <CardContent>
             <UploadDropzone
-              onFilesSelected={handleFilesSelected}
-              acceptedTypes={[".pdf", ".docx", ".doc", ".txt"]}
+              onUpload={async (files) => handleFilesSelected(files)}
               maxFiles={20}
             />
           </CardContent>

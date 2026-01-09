@@ -80,8 +80,7 @@ export default function TrainDraftsPage() {
         </CardHeader>
         <CardContent>
           <UploadDropzone
-            onFilesSelected={handleFilesSelected}
-            acceptedTypes={[".pdf", ".docx", ".doc", ".txt"]}
+            onUpload={async (files) => handleFilesSelected(files)}
             maxFiles={20}
           />
         </CardContent>

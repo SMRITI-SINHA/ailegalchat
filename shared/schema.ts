@@ -317,3 +317,19 @@ export interface ChecklistItem {
   notes?: string;
   proofUploaded?: boolean;
 }
+
+export const researchNotes = pgTable("research_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  content: text("content").notNull(),
+  draftId: varchar("draft_id"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertResearchNoteSchema = createInsertSchema(researchNotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertResearchNote = z.infer<typeof insertResearchNoteSchema>;
+export type ResearchNote = typeof researchNotes.$inferSelect;

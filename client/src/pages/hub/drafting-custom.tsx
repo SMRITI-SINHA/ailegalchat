@@ -1,11 +1,11 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -15,163 +15,138 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { UploadDropzone } from "@/components/upload-dropzone";
-import {
-  Search,
-  Save,
-  Copy,
-  Download,
-  RefreshCw,
-  Upload,
-  FileEdit,
-} from "lucide-react";
-import type { IndianLanguage } from "@shared/schema";
+import { PremiumEditor } from "@/components/premium-editor";
+import { ResearchSidebar } from "@/components/research-sidebar";
+import { ArrowLeft, FileText, Sparkles } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { IndianLanguage, Draft } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
 
+type ViewMode = "upload" | "editor";
+
 export default function CustomDraftPage() {
-  const [draftContent, setDraftContent] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("upload");
   const [useFirmStyle, setUseFirmStyle] = useState(false);
   const [language, setLanguage] = useState<IndianLanguage>("English");
-  const [researchQuery, setResearchQuery] = useState("");
-  const [hasUploaded, setHasUploaded] = useState(false);
-  const [draftTitle, setDraftTitle] = useState("Custom Draft");
+  const [draftTitle, setDraftTitle] = useState("Uploaded Document");
+  const [draftContent, setDraftContent] = useState("");
+  const [showResearchSidebar, setShowResearchSidebar] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
 
-  const handleFilesSelected = (files: File[]) => {
+  const createDraftMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const response = await apiRequest("POST", "/api/drafts", {
+        title,
+        type: "custom",
+        content: "",
+        status: "draft",
+      });
+      return response.json() as Promise<Draft>;
+    },
+    onSuccess: (draft) => {
+      setDraftId(draft.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
+    },
+  });
+
+  const handleUpload = async (files: File[]) => {
+    console.log("Uploaded files:", files);
     if (files.length > 0) {
       setDraftTitle(files[0].name.replace(/\.[^/.]+$/, ""));
-      setHasUploaded(true);
-      setDraftContent("// Your uploaded document content will appear here\n// Edit as needed with AI assistance");
     }
   };
 
-  if (!hasUploaded) {
+  const handleContinueToEditor = async () => {
+    const draft = await createDraftMutation.mutateAsync(draftTitle);
+    setDraftId(draft.id);
+    setViewMode("editor");
+    setShowResearchSidebar(true);
+  };
+
+  const handleAddToDocument = (text: string) => {
+    setDraftContent((prev) => prev + "\n\n" + text);
+  };
+
+  if (viewMode === "upload") {
     return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Upload Your Draft Format
-            </CardTitle>
-            <CardDescription>
-              Upload a specific draft format to generate drafts matching your structure
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <UploadDropzone
-              onFilesSelected={handleFilesSelected}
-              acceptedTypes={[".pdf", ".docx", ".doc", ".txt"]}
-              maxFiles={1}
-            />
-            <p className="text-sm text-muted-foreground">
-              After uploading, you can edit the draft with AI assistance and use the research panel for legal references.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b flex items-center gap-4">
+          <Link href="/hub">
+            <Button variant="ghost" size="icon" data-testid="button-back-hub">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <h1 className="font-semibold text-lg">Custom Drafting</h1>
+          <Badge variant="outline">
+            <Sparkles className="h-3 w-3 mr-1" />
+            AI Powered
+          </Badge>
+        </div>
+
+        <ScrollArea className="flex-1 p-6">
+          <Card className="max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4" />
+                Upload Your Document
+              </CardTitle>
+              <CardDescription>
+                Upload your own template or draft to edit with AI assistance
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <UploadDropzone
+                onUpload={handleUpload}
+                maxFiles={1}
+              />
+              <Button className="w-full" onClick={handleContinueToEditor} data-testid="button-continue">
+                Open in Editor
+              </Button>
+            </CardContent>
+          </Card>
+        </ScrollArea>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 flex flex-col overflow-hidden border-r">
-          <div className="p-4 border-b flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <FileEdit className="h-5 w-5 text-muted-foreground" />
-              <Input
-                value={draftTitle}
-                onChange={(e) => setDraftTitle(e.target.value)}
-                className="font-semibold border-0 p-0 h-auto text-lg focus-visible:ring-0"
-                data-testid="input-draft-title"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="firm-style"
-                  checked={useFirmStyle}
-                  onCheckedChange={setUseFirmStyle}
-                  data-testid="switch-firm-style"
-                />
-                <Label htmlFor="firm-style" className="text-sm">Use trained firm style</Label>
-              </div>
-              <Select value={language} onValueChange={(v) => setLanguage(v as IndianLanguage)}>
-                <SelectTrigger className="w-32" data-testid="select-language">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {indianLanguages.map((lang) => (
-                    <SelectItem key={lang} value={lang}>{lang}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="p-4 border-b flex items-center gap-2">
-            <Button variant="outline" size="sm" data-testid="button-review">
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Review Draft
-            </Button>
-            <Button variant="outline" size="sm">
-              <Copy className="mr-2 h-4 w-4" />
-              Copy
-            </Button>
-            <Button variant="outline" size="sm">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
-            <Button size="sm" data-testid="button-save">
-              <Save className="mr-2 h-4 w-4" />
-              Save
-            </Button>
-          </div>
-
-          <div className="flex-1 p-4 overflow-hidden">
-            <Textarea
-              value={draftContent}
-              onChange={(e) => setDraftContent(e.target.value)}
-              placeholder="Your document content..."
-              className="h-full resize-none font-mono text-sm leading-relaxed"
-              data-testid="textarea-draft"
+    <div className="h-full flex">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="h-10 border-b flex items-center justify-end gap-4 px-4 bg-background">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="firm-style"
+              checked={useFirmStyle}
+              onCheckedChange={setUseFirmStyle}
+              data-testid="switch-firm-style"
             />
+            <Label htmlFor="firm-style" className="text-xs">Use trained style</Label>
           </div>
+          <Select value={language} onValueChange={(v) => setLanguage(v as IndianLanguage)}>
+            <SelectTrigger className="w-28 h-7 text-xs" data-testid="select-language">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {indianLanguages.map((lang) => (
+                <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-
-        <div className="w-80 flex flex-col overflow-hidden bg-muted/30">
-          <Tabs defaultValue="research" className="flex-1 flex flex-col">
-            <TabsList className="w-full justify-start rounded-none border-b px-4">
-              <TabsTrigger value="research">AI Legal Research</TabsTrigger>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
-            </TabsList>
-            <TabsContent value="research" className="flex-1 flex flex-col p-4 mt-0 overflow-hidden">
-              <div className="flex gap-2 mb-4">
-                <Input
-                  placeholder="Search legal provisions..."
-                  value={researchQuery}
-                  onChange={(e) => setResearchQuery(e.target.value)}
-                  data-testid="input-research"
-                />
-                <Button size="icon">
-                  <Search className="h-4 w-4" />
-                </Button>
-              </div>
-              <ScrollArea className="flex-1">
-                <div className="text-center py-8 text-muted-foreground">
-                  <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Search for legal provisions, case law, or statutes</p>
-                </div>
-              </ScrollArea>
-            </TabsContent>
-            <TabsContent value="notes" className="flex-1 p-4 mt-0">
-              <Textarea
-                placeholder="Your research notes..."
-                className="h-full resize-none"
-              />
-            </TabsContent>
-          </Tabs>
-        </div>
+        <PremiumEditor
+          title={draftTitle}
+          onTitleChange={setDraftTitle}
+          content={draftContent}
+          onContentChange={setDraftContent}
+          onBack={() => setViewMode("upload")}
+          showAiHelper
+        />
       </div>
+      <ResearchSidebar
+        isOpen={showResearchSidebar}
+        onAddToDocument={handleAddToDocument}
+        draftId={draftId || undefined}
+      />
     </div>
   );
 }

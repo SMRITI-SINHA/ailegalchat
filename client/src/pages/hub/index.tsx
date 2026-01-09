@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,102 +19,135 @@ import {
   Brain,
   Swords,
   FlaskConical,
+  MessageSquare,
 } from "lucide-react";
 
 const draftingCards = [
   {
     title: "AI Legal Drafting",
-    description: "Start by drafting and do legal research side by side",
+    description: "Draft with AI research panel integration",
     icon: FileSignature,
     url: "/hub/drafting/ai",
-    tags: ["Research", "Citations"],
   },
   {
     title: "Empty Document",
-    description: "Start with an empty document without a prompt",
+    description: "Start with an empty document",
     icon: File,
     url: "/hub/drafting/empty",
-    tags: ["Quick Start"],
   },
   {
-    title: "Review Your Draft",
-    description: "Upload your own draft and edit with AI assistance",
+    title: "Custom Drafting",
+    description: "Upload your own format/template",
     icon: Palette,
     url: "/hub/drafting/custom",
-    tags: ["Upload", "Edit"],
   },
   {
-    title: "Upload your Draft",
-    description: "Upload your own draft and start using drafting and legal research on Draft Bot Pro",
+    title: "Train Your Drafts",
+    description: "Upload firm SOPs to train AI",
+    icon: GraduationCap,
+    url: "/hub/drafting/train",
+  },
+];
+
+const chatCards = [
+  {
+    title: "CNR Chatbot",
+    description: "Case status lookup",
+    icon: Bot,
+    url: "/hub/chat/cnr",
+  },
+  {
+    title: "Chat with PDF",
+    description: "Upload documents (800+ pages), generate timelines",
     icon: FileText,
-    url: "/hub/drafting/custom",
-    tags: ["Import"],
+    url: "/hub/chat/pdf",
+  },
+  {
+    title: "Nyaya AI",
+    description: "General legal assistant trained on 1000+ documents",
+    icon: Scale,
+    url: "/hub/chat/nyaya",
   },
 ];
 
 const researchCards = [
   {
-    title: "AI Legal Research",
-    description: "Do accurate legal research by talking to our AI. Get sources and cases for each answer",
+    title: "AI Research Assistant",
+    description: "Indian Kanoon API for statute/case law search",
     icon: Search,
     url: "/hub/research/assistant",
-    tags: ["Indian Kanoon", "Citations"],
   },
   {
-    title: "Legal Memo",
-    description: "Prepare comprehensive Legal Memo with citations",
+    title: "Legal Memo Generator",
+    description: "IRAC structured memos with hallucination guard",
     icon: Scroll,
     url: "/hub/research/memo",
-    tags: ["IRAC", "Formal"],
   },
   {
-    title: "Chat with PDF",
-    description: "Upload a PDF and prepare list of dates, summarize it, ask questions about it etc.",
-    icon: FileText,
-    url: "/hub/chat/pdf",
-    tags: ["Documents", "Analysis"],
-  },
-  {
-    title: "Generate Arguments",
-    description: "Tell Draft Bot Pro about the case or upload a PDF and generate arguments for your case",
-    icon: Scale,
-    url: "/hub/chat/nyaya",
-    tags: ["Strategy", "Counter-Args"],
+    title: "Compliance Checklist",
+    description: "Industry-specific checklists with legal references",
+    icon: ClipboardCheck,
+    url: "/hub/research/compliance",
   },
 ];
 
 const studyBuddyCards = [
   {
     title: "Case Predict AI",
-    description: "Predict case outcomes using Advanced AI and get strategic approaches with detailed reasoning",
+    description: "Predict case outcomes with detailed reasoning",
     icon: Brain,
     url: "/hub/study/case-predict",
-    tags: ["Case Analysis", "Predictions", "Risk Assessment"],
     isBeta: true,
   },
   {
-    title: "Counter Argument Generator",
-    description: "Develop opposing viewpoints, rebuttals, and explore multiple angles of legal challenges",
+    title: "Counter Arguments",
+    description: "Develop opposing viewpoints and rebuttals",
     icon: Swords,
     url: "/hub/study/counter-args",
-    tags: ["Counter Arguments", "Strategic Rebuttals", "Factual Analysis"],
     isBeta: true,
   },
   {
     title: "Legal Sandbox",
-    description: "Interactive learning environment for moot courts, entrance prep, and legal simulations",
+    description: "Moot courts, entrance prep, legal simulations",
     icon: FlaskConical,
     url: "/hub/study/sandbox",
-    tags: ["Study Buddy", "Moot Court Simulation"],
     isBeta: true,
   },
 ];
 
 const tutorialVideos = [
-  { title: "Prepare List of Dates and Chat with PDF", description: "Chat with PDF / Document Review", icon: Play },
+  { title: "Prepare List of Dates", description: "Chat with PDF / Document Review", icon: Play },
   { title: "Upload Your Draft", description: "Upload your Draft", icon: Play },
-  { title: "Generate Arguments and Counter-Arguments", description: "Generate Arguments", icon: Play },
+  { title: "Generate Arguments", description: "Generate Arguments", icon: Play },
 ];
+
+function FeatureCard({ card, isBeta = false }: { card: any; isBeta?: boolean }) {
+  return (
+    <Link href={card.url}>
+      <Card
+        className="hover-elevate cursor-pointer h-full relative"
+        data-testid={`card-hub-${card.title.toLowerCase().replace(/\s+/g, "-")}`}
+      >
+        {isBeta && (
+          <Badge variant="secondary" className="absolute top-2 right-2 text-[10px]">
+            Beta
+          </Badge>
+        )}
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-md bg-muted">
+              <card.icon className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-sm">{card.title}</h3>
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{card.description}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
 
 export default function HubPage() {
   return (
@@ -130,47 +163,28 @@ export default function HubPage() {
       </div>
 
       <section>
-        <h2 className="text-lg font-semibold mb-4">Draft</h2>
+        <h2 className="text-lg font-semibold mb-4">Drafting</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {draftingCards.map((card) => (
-            <Link key={card.url + card.title} href={card.url}>
-              <Card className="hover-elevate cursor-pointer h-full" data-testid={`card-hub-${card.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-md bg-muted">
-                      <card.icon className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm">{card.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{card.description}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <FeatureCard key={card.url} card={card} />
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-4">AI Chat</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {chatCards.map((card) => (
+            <FeatureCard key={card.url} card={card} />
           ))}
         </div>
       </section>
 
       <section>
         <h2 className="text-lg font-semibold mb-4">Research</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {researchCards.map((card) => (
-            <Link key={card.url + card.title} href={card.url}>
-              <Card className="hover-elevate cursor-pointer h-full" data-testid={`card-hub-${card.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-md bg-muted">
-                      <card.icon className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm">{card.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{card.description}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <FeatureCard key={card.url} card={card} />
           ))}
         </div>
       </section>
@@ -179,33 +193,7 @@ export default function HubPage() {
         <h2 className="text-lg font-semibold mb-4">Study Buddy</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {studyBuddyCards.map((card) => (
-            <Link key={card.url + card.title} href={card.url}>
-              <Card className="hover-elevate cursor-pointer h-full relative" data-testid={`card-hub-${card.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                {card.isBeta && (
-                  <Badge variant="secondary" className="absolute top-2 right-2 text-[10px]">
-                    Beta: Coming Soon
-                  </Badge>
-                )}
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-md bg-muted">
-                      <card.icon className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm">{card.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{card.description}</p>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {card.tags.slice(0, 2).map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-[10px] py-0">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <FeatureCard key={card.url} card={card} isBeta={card.isBeta} />
           ))}
         </div>
       </section>
@@ -225,28 +213,6 @@ export default function HubPage() {
             </Card>
           ))}
         </div>
-      </section>
-
-      <section className="pt-4">
-        <Card className="bg-muted/30">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div>
-                <h3 className="font-semibold">Train Your Drafts</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Upload your firm's SOPs, playbooks, and past drafts to help Chakshi understand your preferred style
-                </p>
-              </div>
-              <Link href="/hub/drafting/train">
-                <Button data-testid="button-train-drafts">
-                  <GraduationCap className="mr-2 h-4 w-4" />
-                  Setup Training
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
       </section>
     </div>
   );

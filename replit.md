@@ -110,7 +110,8 @@ The platform is organized into three main sections:
 ### Drafting
 - `GET /api/drafts` - List all drafts
 - `GET /api/drafts/:id` - Get single draft
-- `POST /api/drafts/generate` - Generate new draft
+- `POST /api/drafts` - Create new draft
+- `POST /api/drafts/generate` - Generate new draft with AI
 - `PATCH /api/drafts/:id` - Update draft
 - `DELETE /api/drafts/:id` - Delete draft
 
@@ -118,6 +119,9 @@ The platform is organized into three main sections:
 - `POST /api/research/search` - Search Indian Kanoon
 - `POST /api/research/statutes` - Search statutes
 - `GET /api/research/document/:docId` - Get document from Indian Kanoon
+- `GET /api/research/notes?draftId=` - Get research notes (filtered by draftId)
+- `POST /api/research/notes` - Create research note
+- `DELETE /api/research/notes/:id` - Delete research note
 
 ### Memos & Compliance
 - `POST /api/memos/generate` - Generate legal memorandum
@@ -160,3 +164,8 @@ The application runs via `npm run dev` which starts both the Express backend and
 - Added Study Buddy section to hub home page with 3 beta features
 - Added Study Buddy navigation group in sidebar with beta badges
 - Created 3 Study Buddy placeholder pages (Case Predict AI, Counter Arguments, Legal Sandbox) marked as "Beta: Coming Soon"
+- Added persistent research notes storage with backend API (researchNotes table)
+- Research notes are scoped by draftId for context-aware persistence
+- All editor entry paths (generate, upload, custom) create draft records before opening editor
+- Research sidebar uses react-query with proper cache invalidation for notes
+- Custom drafting upload view hides firm style/language controls until editor mode
