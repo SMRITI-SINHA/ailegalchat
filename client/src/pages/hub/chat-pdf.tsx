@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +20,10 @@ import {
 } from "@/components/ui/dialog";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { StreamingIndicator } from "@/components/streaming-text";
+import { ModelBadge } from "@/components/model-badge";
+import { ConfidenceIndicator } from "@/components/confidence-indicator";
+import { CostDisplay } from "@/components/cost-display";
+import { CitationCard } from "@/components/citation-card";
 import {
   FileText,
   Send,
@@ -31,9 +40,12 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { ChatSession } from "@shared/schema";
+import type { ChatSession, ModelTier, Citation } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 interface ChatMessage {
@@ -42,11 +54,28 @@ interface ChatMessage {
   content: string;
 }
 
+interface NyayaMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  selectedText?: string;
+  modelUsed?: ModelTier;
+  confidence?: number;
+  cost?: number;
+  citations?: Citation[];
+}
+
 interface UploadedDoc {
   id: string;
   name: string;
   pages: number;
   status: "processing" | "ready";
+}
+
+interface SelectionPosition {
+  x: number;
+  y: number;
+  text: string;
 }
 
 type ViewMode = "list" | "chat";
@@ -59,6 +88,15 @@ export default function ChatWithPDFPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  
+  const [nyayaMessages, setNyayaMessages] = useState<NyayaMessage[]>([]);
+  const [nyayaInput, setNyayaInput] = useState("");
+  const [nyayaLoading, setNyayaLoading] = useState(false);
+  const [nyayaExpanded, setNyayaExpanded] = useState(false);
+  const [nyayaSessionId, setNyayaSessionId] = useState<string | null>(null);
+  const [selectionPosition, setSelectionPosition] = useState<SelectionPosition | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const nyayaMessagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery<ChatSession[]>({
     queryKey: ["/api/chat/sessions"],
@@ -87,6 +125,243 @@ export default function ChatWithPDFPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
     },
   });
+
+  const createNyayaSessionMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const response = await apiRequest("POST", "/api/chat/sessions", {
+        title,
+        sessionType: "nyaya",
+      });
+      return response.json() as Promise<ChatSession>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
+    },
+  });
+
+  const handleTextSelection = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !chatContainerRef.current) {
+      setSelectionPosition(null);
+      return;
+    }
+
+    const selectedText = selection.toString().trim();
+    if (!selectedText || selectedText.length < 3) {
+      setSelectionPosition(null);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const containerRect = chatContainerRef.current.getBoundingClientRect();
+
+    setSelectionPosition({
+      x: rect.left - containerRect.left + rect.width / 2,
+      y: rect.top - containerRect.top - 40,
+      text: selectedText,
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setTimeout(handleTextSelection, 10);
+    };
+
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => document.removeEventListener("mouseup", handleMouseUp);
+  }, [handleTextSelection]);
+
+  const scrollNyayaToBottom = () => {
+    nyayaMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollNyayaToBottom();
+  }, [nyayaMessages]);
+
+  const handleAskNyayaAI = async (selectedText?: string) => {
+    const query = selectedText || selectionPosition?.text;
+    if (!query) return;
+
+    setNyayaExpanded(true);
+    setSelectionPosition(null);
+    window.getSelection()?.removeAllRanges();
+
+    let sessionId = nyayaSessionId;
+
+    if (!sessionId) {
+      const session = await createNyayaSessionMutation.mutateAsync(
+        `PDF Context: ${query.substring(0, 30)}...`
+      );
+      sessionId = session.id;
+      setNyayaSessionId(session.id);
+    }
+
+    const userMsg: NyayaMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: `Regarding this text from my document: "${query}"\n\nPlease provide legal analysis and explanation.`,
+      selectedText: query,
+    };
+    setNyayaMessages((prev) => [...prev, userMsg]);
+    setNyayaLoading(true);
+
+    try {
+      const response = await fetch("/api/chat/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg.content, sessionId }),
+      });
+
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let metadata: Partial<NyayaMessage> = {};
+
+      const assistantId = (Date.now() + 1).toString();
+      setNyayaMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+                setNyayaMessages((prev) =>
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+                );
+              }
+              if (data.done) {
+                metadata = {
+                  modelUsed: data.modelUsed || "standard",
+                  confidence: data.confidence || 0.85,
+                  cost: data.cost || 0.40,
+                  citations: data.citations || [],
+                };
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
+      setNyayaMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, ...metadata } : m))
+      );
+    } catch (error) {
+      console.error("Nyaya AI error:", error);
+      setNyayaMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "I apologize, but I encountered an error. Please try again.",
+        },
+      ]);
+    } finally {
+      setNyayaLoading(false);
+    }
+  };
+
+  const handleNyayaSend = async () => {
+    if (!nyayaInput.trim() || nyayaLoading) return;
+
+    let sessionId = nyayaSessionId;
+
+    if (!sessionId) {
+      const session = await createNyayaSessionMutation.mutateAsync(
+        `PDF Query: ${nyayaInput.substring(0, 30)}...`
+      );
+      sessionId = session.id;
+      setNyayaSessionId(session.id);
+    }
+
+    const userMsg: NyayaMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: nyayaInput,
+    };
+    setNyayaMessages((prev) => [...prev, userMsg]);
+    setNyayaInput("");
+    setNyayaLoading(true);
+
+    try {
+      const response = await fetch("/api/chat/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: nyayaInput, sessionId }),
+      });
+
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let metadata: Partial<NyayaMessage> = {};
+
+      const assistantId = (Date.now() + 1).toString();
+      setNyayaMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+                setNyayaMessages((prev) =>
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+                );
+              }
+              if (data.done) {
+                metadata = {
+                  modelUsed: data.modelUsed || "standard",
+                  confidence: data.confidence || 0.85,
+                  cost: data.cost || 0.40,
+                  citations: data.citations || [],
+                };
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
+      setNyayaMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, ...metadata } : m))
+      );
+    } catch (error) {
+      console.error("Nyaya AI error:", error);
+      setNyayaMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "I apologize, but I encountered an error. Please try again.",
+        },
+      ]);
+    } finally {
+      setNyayaLoading(false);
+    }
+  };
 
   const handleFilesSelected = async (files: File[]) => {
     const newDocs: UploadedDoc[] = files.map((file, i) => ({
@@ -354,9 +629,15 @@ export default function ChatWithPDFPage() {
             <ArrowRight className="mr-2 h-4 w-4" />
             Send to Drafting
           </Button>
-          <Button variant="outline" size="sm">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setNyayaExpanded(!nyayaExpanded)}
+            data-testid="button-toggle-nyaya"
+          >
             <Scale className="mr-2 h-4 w-4" />
-            Ask Nyaya AI
+            Nyaya AI
+            {nyayaExpanded ? <ChevronDown className="ml-1 h-3 w-3" /> : <ChevronUp className="ml-1 h-3 w-3" />}
           </Button>
         </div>
       </div>
@@ -374,7 +655,28 @@ export default function ChatWithPDFPage() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col relative" ref={chatContainerRef}>
+          {selectionPosition && (
+            <div
+              className="absolute z-50 animate-in fade-in duration-150"
+              style={{
+                left: `${selectionPosition.x}px`,
+                top: `${selectionPosition.y}px`,
+                transform: "translateX(-50%)",
+              }}
+            >
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg gap-1.5"
+                onClick={() => handleAskNyayaAI()}
+                data-testid="button-ask-nyaya-floating"
+              >
+                <Scale className="h-3.5 w-3.5" />
+                Ask Nyaya AI
+              </Button>
+            </div>
+          )}
+
           <ScrollArea className="flex-1 p-4">
             {messages.length === 0 ? (
               <div className="h-full flex items-center justify-center">
@@ -382,7 +684,11 @@ export default function ChatWithPDFPage() {
                   <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                   <h3 className="font-medium mb-2">Start a Conversation</h3>
                   <p className="text-sm text-muted-foreground max-w-sm">
-                    Ask questions about your documents, request summaries, or use quick actions
+                    Ask questions about your documents, request summaries, or use quick actions.
+                    <br /><br />
+                    <span className="text-xs text-muted-foreground/70">
+                      Tip: Select any text in responses and click "Ask Nyaya AI" for legal analysis
+                    </span>
                   </p>
                 </div>
               </div>
@@ -430,6 +736,118 @@ export default function ChatWithPDFPage() {
             </div>
           </div>
         </div>
+
+        <Collapsible open={nyayaExpanded} onOpenChange={setNyayaExpanded}>
+          <CollapsibleContent className="w-80 border-l flex flex-col bg-background">
+            <div className="p-3 border-b flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Scale className="h-4 w-4 text-primary" />
+                <span className="font-medium text-sm">Nyaya AI</span>
+                {nyayaMessages.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {nyayaMessages.length} messages
+                  </Badge>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setNyayaExpanded(false)}
+                data-testid="button-close-nyaya"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
+            <ScrollArea className="flex-1 p-3">
+              {nyayaMessages.length === 0 ? (
+                <div className="h-48 flex flex-col items-center justify-center text-center p-4">
+                  <Scale className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                  <p className="text-xs text-muted-foreground">
+                    Select text from the document chat and click "Ask Nyaya AI" for legal analysis
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {nyayaMessages.map((msg) => (
+                    <div key={msg.id}>
+                      {msg.role === "user" ? (
+                        <div className="bg-primary/10 p-2.5 rounded-md">
+                          {msg.selectedText && (
+                            <div className="text-[10px] text-muted-foreground mb-1.5 pb-1.5 border-b border-muted">
+                              Selected: "{msg.selectedText.substring(0, 60)}..."
+                            </div>
+                          )}
+                          <p className="text-xs">{msg.content}</p>
+                        </div>
+                      ) : (
+                        <Card className="border-0 shadow-sm">
+                          <CardContent className="p-2.5">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <Scale className="h-3 w-3 text-primary" />
+                              <span className="text-[10px] font-medium">Nyaya AI</span>
+                              {msg.modelUsed && <ModelBadge tier={msg.modelUsed} />}
+                              {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
+                            </div>
+                            <p className="text-xs whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                            {msg.citations && msg.citations.length > 0 && (
+                              <div className="mt-2 pt-2 border-t space-y-1">
+                                <h4 className="text-[10px] font-medium text-muted-foreground">Sources</h4>
+                                {msg.citations.map((cite) => (
+                                  <CitationCard key={cite.id} citation={cite} />
+                                ))}
+                              </div>
+                            )}
+                            {msg.cost && (
+                              <div className="mt-2 flex justify-end">
+                                <CostDisplay amount={msg.cost} size="sm" />
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  ))}
+                  {nyayaLoading && (
+                    <Card className="border-0 shadow-sm">
+                      <CardContent className="p-2.5">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-3 w-3 animate-pulse text-primary" />
+                          <span className="text-xs text-muted-foreground">Thinking...</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  <div ref={nyayaMessagesEndRef} />
+                </div>
+              )}
+            </ScrollArea>
+
+            <div className="p-3 border-t">
+              <div className="flex gap-1.5">
+                <Input
+                  placeholder="Ask Nyaya AI..."
+                  value={nyayaInput}
+                  onChange={(e) => setNyayaInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleNyayaSend()}
+                  className="text-xs h-8"
+                  disabled={nyayaLoading}
+                  data-testid="input-nyaya"
+                />
+                <Button
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleNyayaSend}
+                  disabled={nyayaLoading || !nyayaInput.trim()}
+                  data-testid="button-send-nyaya"
+                >
+                  <Send className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
     </div>
   );

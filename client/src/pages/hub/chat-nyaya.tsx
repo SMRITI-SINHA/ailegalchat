@@ -267,7 +267,7 @@ export default function NyayaAIPage() {
                           <Scale className="h-4 w-4 text-primary" />
                           <span className="font-medium text-sm">Nyaya AI</span>
                           {msg.modelUsed && <ModelBadge tier={msg.modelUsed} />}
-                          {msg.confidence && <ConfidenceIndicator score={msg.confidence} size="sm" />}
+                          {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
                           {msg.cost && <CostDisplay amount={msg.cost} size="sm" />}
                         </div>
                         <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
@@ -275,7 +275,7 @@ export default function NyayaAIPage() {
                           <div className="mt-4 pt-4 border-t space-y-2">
                             <h4 className="text-xs font-medium text-muted-foreground">Sources</h4>
                             {msg.citations.map((cite) => (
-                              <CitationCard key={cite.id} citation={cite} compact />
+                              <CitationCard key={cite.id} citation={cite} />
                             ))}
                           </div>
                         )}
