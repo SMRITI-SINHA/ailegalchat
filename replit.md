@@ -23,6 +23,7 @@ The platform is organized into three main sections:
 - AI Research Assistant - Indian Kanoon API integration for statute/case law search
 - Legal Memo Generator - IRAC structured memos with hallucination guard
 - Compliance Checklist Generator - Industry-specific checklists with legal references
+- Saved Notes - View and manage all research notes
 
 **Study Buddy** (Beta: Coming Soon)
 - Case Predict AI - Predict case outcomes using Advanced AI with detailed reasoning
@@ -78,6 +79,7 @@ The platform is organized into three main sections:
 │   │       ├── research-assistant.tsx  # AI Research
 │   │       ├── research-memo.tsx       # Legal Memo
 │   │       ├── research-compliance.tsx # Compliance Checklist
+│   │       ├── research-notes.tsx      # Saved Notes
 │   │       ├── study-case-predict.tsx  # Case Predict AI (Beta)
 │   │       ├── study-counter-args.tsx  # Counter Arguments (Beta)
 │   │       └── study-sandbox.tsx       # Legal Sandbox (Beta)
@@ -173,3 +175,8 @@ The application runs via `npm run dev` which starts both the Express backend and
 - Redesigned Legal Memo Generator with language selection, opens generated memo in editor with research sidebar
 - Backend endpoints (drafts/generate, memos/generate) now include strong language instructions for non-English content generation
 - AI generates content precisely in the selected language (supports all 22 Indian languages)
+- Added document translation API endpoint using OpenAI standard tier with legal terminology preservation
+- PremiumEditor now has language selector in header with Translate button (appears when different language selected)
+- Editor File menu redesigned with: Open (load saved drafts), Make a Copy, Download (txt/doc/pdf), Rename options
+- Added Saved Notes page in Hub Research section to view and manage all research notes
+- Editor properly syncs language selector with draft's actual language when opening saved drafts
