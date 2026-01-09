@@ -153,6 +153,12 @@ export default function ChatWithPDFPage() {
     }
 
     const range = selection.getRangeAt(0);
+    
+    if (!chatContainerRef.current.contains(range.commonAncestorContainer)) {
+      setSelectionPosition(null);
+      return;
+    }
+
     const rect = range.getBoundingClientRect();
     const containerRect = chatContainerRef.current.getBoundingClientRect();
 
@@ -164,13 +170,27 @@ export default function ChatWithPDFPage() {
   }, []);
 
   useEffect(() => {
-    const handleMouseUp = () => {
-      setTimeout(handleTextSelection, 10);
+    if (viewMode !== "chat") return;
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (chatContainerRef.current?.contains(e.target as Node)) {
+        setTimeout(handleTextSelection, 10);
+      } else {
+        setSelectionPosition(null);
+      }
+    };
+
+    const handleMouseDown = () => {
+      setSelectionPosition(null);
     };
 
     document.addEventListener("mouseup", handleMouseUp);
-    return () => document.removeEventListener("mouseup", handleMouseUp);
-  }, [handleTextSelection]);
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => {
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("mousedown", handleMouseDown);
+    };
+  }, [handleTextSelection, viewMode]);
 
   const scrollNyayaToBottom = () => {
     nyayaMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
