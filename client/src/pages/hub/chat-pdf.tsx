@@ -506,7 +506,7 @@ export default function ChatWithPDFPage() {
         setMessages(loadedMessages.map((m: { id: string; role: string; content: string }) => ({
           id: m.id,
           role: m.role as "user" | "assistant",
-          content: m.content,
+          content: m.role === "assistant" ? stripMarkdown(m.content) : m.content,
         })));
       }
     } catch (error) {
@@ -610,11 +610,11 @@ export default function ChatWithPDFPage() {
         }
       }
       
-      if (currentSessionId) {
+      if (currentSessionId && fullContent) {
         fetch("/api/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: currentSessionId, role: "assistant", content: stripMarkdown(fullContent) }),
+          body: JSON.stringify({ sessionId: currentSessionId, role: "assistant", content: fullContent }),
         }).catch(console.error);
       }
     } catch (error) {
