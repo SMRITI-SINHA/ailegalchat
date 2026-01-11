@@ -617,7 +617,7 @@ export default function ChatWithPDFPage() {
               <FileText className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="font-semibold">Chat with PDF</h1>
+              <h1 className="font-semibold">DocuChat</h1>
               <p className="text-xs text-muted-foreground">Upload documents and analyze with AI</p>
             </div>
           </div>
@@ -629,7 +629,7 @@ export default function ChatWithPDFPage() {
             data-testid="button-upload-pdf"
           >
             <Upload className="h-4 w-4 mr-2" />
-            Upload PDF & Chat
+            Upload & Chat
           </Button>
         </div>
 
@@ -660,9 +660,9 @@ export default function ChatWithPDFPage() {
                 <Card className="bg-muted/30">
                   <CardContent className="p-8 text-center">
                     <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                    <h3 className="font-semibold mb-2">No PDF Chats Yet</h3>
+                    <h3 className="font-semibold mb-2">No Document Chats Yet</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Upload your first PDF to start analyzing documents with AI.
+                      Upload your first document to start analyzing with AI.
                     </p>
                     <Button
                       onClick={() => {
@@ -672,13 +672,24 @@ export default function ChatWithPDFPage() {
                       data-testid="button-upload-first"
                     >
                       <Upload className="h-4 w-4 mr-2" />
-                      Upload PDF
+                      Upload Document
                     </Button>
                   </CardContent>
                 </Card>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {pdfSessions.map((session) => (
+                  {pdfSessions.map((session) => {
+                    const getFileType = (title: string) => {
+                      if (title.toLowerCase().includes('.pdf')) return 'PDF';
+                      if (title.toLowerCase().includes('.docx') || title.toLowerCase().includes('.doc')) return 'Word';
+                      if (title.toLowerCase().includes('.txt')) return 'TXT';
+                      return 'Doc';
+                    };
+                    const truncateTitle = (title: string, maxLen = 35) => {
+                      const cleanTitle = title.replace(/^Chat:\s*/, '');
+                      return cleanTitle.length > maxLen ? cleanTitle.slice(0, maxLen) + '...' : cleanTitle;
+                    };
+                    return (
                     <Card
                       key={session.id}
                       className="hover-elevate cursor-pointer group"
@@ -691,11 +702,11 @@ export default function ChatWithPDFPage() {
                             <div className="p-2 rounded-md bg-muted">
                               <MessageSquare className="h-4 w-4 text-muted-foreground" />
                             </div>
-                            <div className="min-w-0">
-                              <h3 className="font-medium text-sm truncate">{session.title}</h3>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-medium text-sm truncate max-w-[180px]" title={session.title}>{truncateTitle(session.title)}</h3>
                               <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" className="text-[10px]">PDF Chat</Badge>
-                                {session.messageCount && session.messageCount > 0 && (
+                                <Badge variant="outline" className="text-[10px]">{getFileType(session.title)}</Badge>
+                                {(session.messageCount ?? 0) > 0 && (
                                   <span className="text-[10px] text-muted-foreground">{session.messageCount} messages</span>
                                 )}
                               </div>
@@ -720,7 +731,8 @@ export default function ChatWithPDFPage() {
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -792,8 +804,8 @@ export default function ChatWithPDFPage() {
             <FileText className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <h1 className="font-semibold text-sm">
-              {currentDocName || "Chat with PDF"}
+            <h1 className="font-semibold text-sm truncate max-w-[200px]" title={currentDocName}>
+              {currentDocName ? (currentDocName.length > 30 ? currentDocName.slice(0, 30) + '...' : currentDocName) : "DocuChat"}
             </h1>
             {uploadedDocs.length > 1 && (
               <p className="text-xs text-muted-foreground">+{uploadedDocs.length - 1} more documents</p>

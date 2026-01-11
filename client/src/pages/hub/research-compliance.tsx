@@ -18,10 +18,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { StreamingIndicator } from "@/components/streaming-text";
 import {
   ClipboardCheck,
@@ -74,6 +76,17 @@ const activities = [
   "Export / Import",
 ];
 
+interface ItemNote {
+  itemId: string;
+  text: string;
+}
+
+interface ItemProof {
+  itemId: string;
+  fileName: string;
+  uploadedAt: Date;
+}
+
 export default function ComplianceChecklistPage() {
   const [industry, setIndustry] = useState("");
   const [jurisdiction, setJurisdiction] = useState("");
@@ -83,6 +96,12 @@ export default function ComplianceChecklistPage() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [activeTab, setActiveTab] = useState("generate");
+  const [itemNotes, setItemNotes] = useState<ItemNote[]>([]);
+  const [itemProofs, setItemProofs] = useState<ItemProof[]>([]);
+  const [showNotesDialog, setShowNotesDialog] = useState(false);
+  const [showProofDialog, setShowProofDialog] = useState(false);
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
   const { toast } = useToast();
 
   const { data: savedChecklists = [], isLoading: isLoadingChecklists } = useQuery<ComplianceChecklist[]>({
@@ -390,13 +409,39 @@ export default function ComplianceChecklistPage() {
                           </div>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <Button variant="ghost" size="sm" className="text-xs h-7">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-xs h-7"
+                            onClick={() => {
+                              setActiveItemId(item.id);
+                              const existingNote = itemNotes.find(n => n.itemId === item.id);
+                              setNoteText(existingNote?.text || "");
+                              setShowNotesDialog(true);
+                            }}
+                            data-testid={`button-notes-${item.id}`}
+                          >
                             <Plus className="h-3 w-3 mr-1" />
                             Notes
+                            {itemNotes.some(n => n.itemId === item.id) && (
+                              <CheckCircle2 className="h-3 w-3 ml-1 text-green-500" />
+                            )}
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-xs h-7">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-xs h-7"
+                            onClick={() => {
+                              setActiveItemId(item.id);
+                              setShowProofDialog(true);
+                            }}
+                            data-testid={`button-proof-${item.id}`}
+                          >
                             <Upload className="h-3 w-3 mr-1" />
                             Proof
+                            {itemProofs.some(p => p.itemId === item.id) && (
+                              <CheckCircle2 className="h-3 w-3 ml-1 text-green-500" />
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -478,6 +523,109 @@ export default function ComplianceChecklistPage() {
             <Button onClick={handleSave} disabled={!saveTitle.trim() || saveMutation.isPending} data-testid="button-confirm-save">
               {saveMutation.isPending ? "Saving..." : "Save"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Notes</DialogTitle>
+            <DialogDescription>
+              Add notes for this compliance item. Notes are saved locally.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder="Enter your notes here..."
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              rows={5}
+              className="resize-none"
+              data-testid="textarea-notes"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNotesDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={() => {
+                if (activeItemId && noteText.trim()) {
+                  setItemNotes(prev => {
+                    const filtered = prev.filter(n => n.itemId !== activeItemId);
+                    return [...filtered, { itemId: activeItemId, text: noteText }];
+                  });
+                  toast({ title: "Notes saved" });
+                }
+                setShowNotesDialog(false);
+                setNoteText("");
+              }}
+              data-testid="button-save-notes"
+            >
+              Save Notes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showProofDialog} onOpenChange={setShowProofDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Proof</DialogTitle>
+            <DialogDescription>
+              Upload documents as proof of compliance. Supported formats: PDF, Word, images.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="border-2 border-dashed rounded-md p-6 text-center">
+              <input
+                type="file"
+                id="proof-upload"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file && activeItemId) {
+                    setItemProofs(prev => [
+                      ...prev.filter(p => p.itemId !== activeItemId),
+                      { itemId: activeItemId, fileName: file.name, uploadedAt: new Date() }
+                    ]);
+                    toast({ title: `Proof uploaded: ${file.name}` });
+                    setShowProofDialog(false);
+                  }
+                }}
+                data-testid="input-proof-upload"
+              />
+              <label htmlFor="proof-upload" className="cursor-pointer">
+                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
+                <p className="text-xs text-muted-foreground mt-1">PDF, Word, or images</p>
+              </label>
+            </div>
+            {activeItemId && itemProofs.filter(p => p.itemId === activeItemId).length > 0 && (
+              <div className="space-y-2">
+                <Label>Uploaded Files</Label>
+                {itemProofs.filter(p => p.itemId === activeItemId).map((proof, idx) => (
+                  <div key={idx} className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                    <FileText className="h-4 w-4" />
+                    <span className="text-sm flex-1">{proof.fileName}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => {
+                        setItemProofs(prev => prev.filter(p => !(p.itemId === activeItemId && p.fileName === proof.fileName)));
+                      }}
+                      data-testid={`button-remove-proof-${idx}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowProofDialog(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

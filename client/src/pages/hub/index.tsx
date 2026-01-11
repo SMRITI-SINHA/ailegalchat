@@ -58,7 +58,7 @@ const chatCards = [
     url: "/hub/chat/cnr",
   },
   {
-    title: "Chat with PDF",
+    title: "DocuChat",
     description: "Upload documents (800+ pages), generate timelines",
     icon: FileText,
     url: "/hub/chat/pdf",
@@ -123,7 +123,7 @@ const studyBuddyCards = [
 ];
 
 const tutorialVideos = [
-  { title: "Prepare List of Dates", description: "Chat with PDF / Document Review", icon: Play },
+  { title: "Prepare List of Dates", description: "DocuChat / Document Review", icon: Play },
   { title: "Upload Your Draft", description: "Upload your Draft", icon: Play },
   { title: "Generate Arguments", description: "Generate Arguments", icon: Play },
 ];

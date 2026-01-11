@@ -9,7 +9,15 @@ import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNote
 import { indianKanoon } from "./indian-kanoon";
 
 const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+const { PDFParse } = require("pdf-parse");
+
+function decodeFilename(rawName: string): string {
+  try {
+    return Buffer.from(rawName, "latin1").toString("utf8");
+  } catch {
+    return rawName;
+  }
+}
 
 async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
   const mimeType = file.mimetype.toLowerCase();
@@ -17,8 +25,10 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
   
   try {
     if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
-      const pdfData = await pdfParse(file.buffer);
-      return pdfData.text || "";
+      const parser = new PDFParse({ data: file.buffer });
+      const result = await parser.getText();
+      await parser.destroy();
+      return result.text || "";
     }
     
     if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || 
@@ -135,9 +145,10 @@ export async function registerRoutes(
         files.map(async (file) => {
           const extractedText = await extractTextFromFile(file);
           const pageCount = Math.max(1, Math.ceil(extractedText.length / 3000));
+          const decodedName = decodeFilename(file.originalname);
           
           const doc = await storage.createDocument({
-            name: file.originalname,
+            name: decodedName,
             type: file.mimetype,
             size: file.size,
             pages: pageCount,
