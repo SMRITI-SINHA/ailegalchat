@@ -127,8 +127,10 @@ export function UploadDropzone({
               className="flex items-center gap-3 p-3 bg-muted/50 rounded-md"
             >
               <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{upload.file.name}</p>
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <p className="text-sm font-medium truncate" title={upload.file.name}>
+                  {upload.file.name.length > 35 ? upload.file.name.slice(0, 35) + "..." : upload.file.name}
+                </p>
                 <Progress value={upload.progress} className="h-1 mt-1" />
               </div>
               {upload.status === "uploading" && (

@@ -313,20 +313,7 @@ When referencing case law or statutes, use proper legal citation format.`;
           }
         }
 
-        const citations = [
-          {
-            id: "cite-1",
-            source: "Indian Contract Act, 1872",
-            text: "Section 23 specifies the conditions under which the consideration or object of an agreement is lawful.",
-            page: 12,
-          },
-          {
-            id: "cite-2",
-            source: "Supreme Court Judgment",
-            text: "The Hon'ble Supreme Court in the matter of XYZ vs ABC held that...",
-            page: 45,
-          },
-        ];
+        const citations: { id: string; source: string; text: string }[] = [];
 
         const confidence = 0.75 + Math.random() * 0.20;
 

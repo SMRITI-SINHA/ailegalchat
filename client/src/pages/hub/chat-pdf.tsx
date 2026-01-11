@@ -115,6 +115,9 @@ export default function ChatWithPDFPage() {
   const [newNote, setNewNote] = useState("");
   const [notesTab, setNotesTab] = useState<"write" | "saved">("write");
   
+  const [showNyayaPromptDialog, setShowNyayaPromptDialog] = useState(false);
+  const [pendingSelectedText, setPendingSelectedText] = useState("");
+  
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const nyayaMessagesEndRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -151,7 +154,8 @@ export default function ChatWithPDFPage() {
 
   const createNyayaSessionMutation = useMutation({
     mutationFn: async () => {
-      const sessionTitle = `Chat with PDF: ${currentDocName}`;
+      const docName = currentDocName.length > 25 ? currentDocName.slice(0, 25) + "..." : currentDocName;
+      const sessionTitle = `DocuChat: ${docName}`;
       const response = await apiRequest("POST", "/api/chat/sessions", {
         title: sessionTitle,
         sessionType: "nyaya",
@@ -248,13 +252,28 @@ export default function ChatWithPDFPage() {
     scrollNyayaToBottom();
   }, [nyayaMessages]);
 
-  const handleAskNyayaAI = async (selectedText?: string) => {
+  const handleAskNyayaAI = (selectedText?: string) => {
     const query = selectedText || selectionPosition?.text;
     if (!query) return;
-
-    setNyayaExpanded(true);
+    
+    setPendingSelectedText(query);
+    setNyayaInput("");
+    setShowNyayaPromptDialog(true);
     setSelectionPosition(null);
     window.getSelection()?.removeAllRanges();
+  };
+  
+  const handleSendNyayaPrompt = async () => {
+    if (!pendingSelectedText) return;
+    
+    const customQuestion = nyayaInput.trim();
+    const fullMessage = customQuestion 
+      ? `Regarding this text from my document: "${pendingSelectedText}"\n\n${customQuestion}`
+      : `Regarding this text from my document: "${pendingSelectedText}"\n\nPlease provide legal analysis and explanation.`;
+    
+    setShowNyayaPromptDialog(false);
+    setNyayaExpanded(true);
+    setNyayaInput("");
 
     let sessionId = nyayaSessionId;
 
@@ -267,11 +286,12 @@ export default function ChatWithPDFPage() {
     const userMsg: NyayaMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: `Regarding this text from my document: "${query}"\n\nPlease provide legal analysis and explanation.`,
-      selectedText: query,
+      content: fullMessage,
+      selectedText: pendingSelectedText,
     };
     setNyayaMessages((prev) => [...prev, userMsg]);
     setNyayaLoading(true);
+    setPendingSelectedText("");
 
     try {
       const response = await fetch("/api/chat/query", {
@@ -862,6 +882,19 @@ export default function ChatWithPDFPage() {
         </div>
         <div className="flex gap-2">
           <Button 
+            variant={nyayaExpanded ? "default" : "outline"}
+            size="sm"
+            onClick={() => setNyayaExpanded(!nyayaExpanded)}
+            data-testid="button-toggle-nyaya"
+            className={nyayaExpanded ? "bg-gradient-to-r from-indigo-500 to-purple-500" : ""}
+          >
+            <Scale className="mr-2 h-4 w-4" />
+            Nyaya AI
+            {nyayaMessages.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-[10px]">{nyayaMessages.length}</Badge>
+            )}
+          </Button>
+          <Button 
             variant="outline" 
             size="sm"
             onClick={() => setShowNotesPanel(!showNotesPanel)}
@@ -1131,11 +1164,6 @@ export default function ChatWithPDFPage() {
                                 ))}
                               </div>
                             )}
-                            {msg.cost && (
-                              <div className="mt-2 flex justify-end">
-                                <CostDisplay amount={msg.cost} size="sm" />
-                              </div>
-                            )}
                           </CardContent>
                         </Card>
                       )}
@@ -1181,6 +1209,53 @@ export default function ChatWithPDFPage() {
           </div>
         )}
       </div>
+      
+      <Dialog open={showNyayaPromptDialog} onOpenChange={setShowNyayaPromptDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scale className="h-5 w-5 text-primary" />
+              Ask Nyaya AI
+            </DialogTitle>
+            <DialogDescription>
+              Ask a question about the selected text from your document
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="p-3 bg-muted rounded-md">
+              <p className="text-xs text-muted-foreground mb-1">Selected text:</p>
+              <p className="text-sm italic">"{pendingSelectedText.length > 200 ? pendingSelectedText.slice(0, 200) + "..." : pendingSelectedText}"</p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Input
+                placeholder="Ask anything..."
+                value={nyayaInput}
+                onChange={(e) => setNyayaInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendNyayaPrompt()}
+                className="flex-1"
+                data-testid="input-nyaya-prompt"
+              />
+            </div>
+            
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowNyayaPromptDialog(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendNyayaPrompt}
+                className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500"
+                data-testid="button-send-nyaya-prompt"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Send
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
