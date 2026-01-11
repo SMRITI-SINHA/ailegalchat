@@ -43,6 +43,7 @@ export const chatSessions = pgTable("chat_sessions", {
   title: text("title").notNull(),
   sessionType: text("session_type").default("general"),
   documentIds: text("document_ids").array(),
+  parentSessionId: varchar("parent_session_id"),
   modelTier: text("model_tier").default("mini"),
   totalCost: real("total_cost").default(0),
   messageCount: integer("message_count").default(0),

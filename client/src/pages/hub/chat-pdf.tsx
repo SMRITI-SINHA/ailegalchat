@@ -153,12 +153,13 @@ export default function ChatWithPDFPage() {
   const currentDocName = uploadedDocs.length > 0 ? uploadedDocs[0].name : "Document";
 
   const createNyayaSessionMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (parentId: string) => {
       const docName = currentDocName.length > 25 ? currentDocName.slice(0, 25) + "..." : currentDocName;
       const sessionTitle = `DocuChat: ${docName}`;
       const response = await apiRequest("POST", "/api/chat/sessions", {
         title: sessionTitle,
         sessionType: "nyaya",
+        parentSessionId: parentId,
       });
       return response.json() as Promise<ChatSession>;
     },
@@ -277,8 +278,8 @@ export default function ChatWithPDFPage() {
 
     let sessionId = nyayaSessionId;
 
-    if (!sessionId) {
-      const session = await createNyayaSessionMutation.mutateAsync();
+    if (!sessionId && currentSessionId) {
+      const session = await createNyayaSessionMutation.mutateAsync(currentSessionId);
       sessionId = session.id;
       setNyayaSessionId(session.id);
     }
@@ -292,6 +293,14 @@ export default function ChatWithPDFPage() {
     setNyayaMessages((prev) => [...prev, userMsg]);
     setNyayaLoading(true);
     setPendingSelectedText("");
+    
+    if (sessionId) {
+      fetch("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, role: "user", content: fullMessage }),
+      }).catch(console.error);
+    }
 
     try {
       const response = await fetch("/api/chat/query", {
@@ -345,6 +354,14 @@ export default function ChatWithPDFPage() {
       setNyayaMessages((prev) =>
         prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent), ...metadata } : m))
       );
+      
+      if (sessionId && fullContent) {
+        fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, role: "assistant", content: fullContent }),
+        }).catch(console.error);
+      }
     } catch (error) {
       console.error("Nyaya AI error:", error);
       setNyayaMessages((prev) => [
@@ -364,9 +381,10 @@ export default function ChatWithPDFPage() {
     if (!nyayaInput.trim() || nyayaLoading) return;
 
     let sessionId = nyayaSessionId;
+    const messageContent = nyayaInput;
 
-    if (!sessionId) {
-      const session = await createNyayaSessionMutation.mutateAsync();
+    if (!sessionId && currentSessionId) {
+      const session = await createNyayaSessionMutation.mutateAsync(currentSessionId);
       sessionId = session.id;
       setNyayaSessionId(session.id);
     }
@@ -374,11 +392,19 @@ export default function ChatWithPDFPage() {
     const userMsg: NyayaMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: nyayaInput,
+      content: messageContent,
     };
     setNyayaMessages((prev) => [...prev, userMsg]);
     setNyayaInput("");
     setNyayaLoading(true);
+    
+    if (sessionId) {
+      fetch("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, role: "user", content: messageContent }),
+      }).catch(console.error);
+    }
 
     try {
       const response = await fetch("/api/chat/query", {
@@ -432,6 +458,14 @@ export default function ChatWithPDFPage() {
       setNyayaMessages((prev) =>
         prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent), ...metadata } : m))
       );
+      
+      if (sessionId && fullContent) {
+        fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, role: "assistant", content: fullContent }),
+        }).catch(console.error);
+      }
     } catch (error) {
       console.error("Nyaya AI error:", error);
       setNyayaMessages((prev) => [
@@ -514,6 +548,8 @@ export default function ChatWithPDFPage() {
   const handleOpenSession = async (session: ChatSession) => {
     setCurrentSessionId(session.id);
     setMessages([]);
+    setNyayaMessages([]);
+    setNyayaSessionId(null);
     setViewMode("chat");
     
     const docIds = session.documentIds || [];
@@ -531,6 +567,26 @@ export default function ChatWithPDFPage() {
       }
     } catch (error) {
       console.error("Error loading session messages:", error);
+    }
+    
+    const nyayaSession = sessions.find(
+      (s) => s.sessionType === "nyaya" && s.parentSessionId === session.id
+    );
+    if (nyayaSession) {
+      setNyayaSessionId(nyayaSession.id);
+      try {
+        const nyayaMessagesResponse = await fetch(`/api/chat/sessions/${nyayaSession.id}/messages`);
+        if (nyayaMessagesResponse.ok) {
+          const loadedNyayaMessages = await nyayaMessagesResponse.json();
+          setNyayaMessages(loadedNyayaMessages.map((m: { id: string; role: string; content: string }) => ({
+            id: m.id,
+            role: m.role as "user" | "assistant",
+            content: m.role === "assistant" ? stripMarkdown(m.content) : m.content,
+          })));
+        }
+      } catch (error) {
+        console.error("Error loading Nyaya AI messages:", error);
+      }
     }
     
     if (docIds.length > 0) {
