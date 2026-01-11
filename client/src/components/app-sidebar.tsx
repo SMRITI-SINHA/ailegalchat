@@ -12,19 +12,13 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
-import { CostDisplay } from "@/components/cost-display";
 import {
   Scale,
   Sparkles,
   Shield,
-  IndianRupee,
 } from "lucide-react";
 
-interface AppSidebarProps {
-  totalSpend?: number;
-}
-
-export function AppSidebar({ totalSpend = 0 }: AppSidebarProps) {
+export function AppSidebar() {
   const [location] = useLocation();
 
   return (
@@ -65,15 +59,6 @@ export function AppSidebar({ totalSpend = 0 }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t">
-        <div className="p-3 rounded-md bg-muted/50 mb-3">
-          <div className="flex items-center gap-2 text-sm">
-            <IndianRupee className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Session spend:</span>
-          </div>
-          <p className="text-xl font-semibold mt-1">
-            <CostDisplay amount={totalSpend} size="lg" />
-          </p>
-        </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Shield className="h-3 w-3" />
           <span>SOC 2 Compliant</span>
