@@ -7,11 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -35,14 +30,12 @@ import {
   Scale,
   Search,
   MessageSquare,
-  ArrowRight,
   Sparkles,
   ArrowLeft,
   Plus,
   Trash2,
-  ChevronDown,
-  ChevronUp,
   X,
+  Save,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ChatSession, ModelTier, Citation } from "@shared/schema";
@@ -70,12 +63,19 @@ interface UploadedDoc {
   name: string;
   pages: number;
   status: "processing" | "ready";
+  content?: string;
 }
 
 interface SelectionPosition {
   x: number;
   y: number;
   text: string;
+}
+
+interface PdfNote {
+  id: string;
+  content: string;
+  createdAt: Date;
 }
 
 type ViewMode = "list" | "chat";
@@ -95,8 +95,15 @@ export default function ChatWithPDFPage() {
   const [nyayaExpanded, setNyayaExpanded] = useState(false);
   const [nyayaSessionId, setNyayaSessionId] = useState<string | null>(null);
   const [selectionPosition, setSelectionPosition] = useState<SelectionPosition | null>(null);
+  
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
+  const [notes, setNotes] = useState<PdfNote[]>([]);
+  const [newNote, setNewNote] = useState("");
+  const [notesTab, setNotesTab] = useState<"write" | "saved">("write");
+  
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const nyayaMessagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery<ChatSession[]>({
     queryKey: ["/api/chat/sessions"],
@@ -126,10 +133,13 @@ export default function ChatWithPDFPage() {
     },
   });
 
+  const currentDocName = uploadedDocs.length > 0 ? uploadedDocs[0].name : "Document";
+
   const createNyayaSessionMutation = useMutation({
-    mutationFn: async (title: string) => {
+    mutationFn: async () => {
+      const sessionTitle = `Chat with PDF: ${currentDocName}`;
       const response = await apiRequest("POST", "/api/chat/sessions", {
-        title,
+        title: sessionTitle,
         sessionType: "nyaya",
       });
       return response.json() as Promise<ChatSession>;
@@ -138,6 +148,30 @@ export default function ChatWithPDFPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
     },
   });
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSaveNote = () => {
+    if (!newNote.trim()) return;
+    const note: PdfNote = {
+      id: Date.now().toString(),
+      content: newNote.trim(),
+      createdAt: new Date(),
+    };
+    setNotes(prev => [note, ...prev]);
+    setNewNote("");
+    setNotesTab("saved");
+  };
+
+  const handleDeleteNote = (id: string) => {
+    setNotes(prev => prev.filter(n => n.id !== id));
+  };
 
   const handleTextSelection = useCallback(() => {
     const selection = window.getSelection();
@@ -211,9 +245,7 @@ export default function ChatWithPDFPage() {
     let sessionId = nyayaSessionId;
 
     if (!sessionId) {
-      const session = await createNyayaSessionMutation.mutateAsync(
-        `PDF Context: ${query.substring(0, 30)}...`
-      );
+      const session = await createNyayaSessionMutation.mutateAsync();
       sessionId = session.id;
       setNyayaSessionId(session.id);
     }
@@ -300,9 +332,7 @@ export default function ChatWithPDFPage() {
     let sessionId = nyayaSessionId;
 
     if (!sessionId) {
-      const session = await createNyayaSessionMutation.mutateAsync(
-        `PDF Query: ${nyayaInput.substring(0, 30)}...`
-      );
+      const session = await createNyayaSessionMutation.mutateAsync();
       sessionId = session.id;
       setNyayaSessionId(session.id);
     }
@@ -425,18 +455,79 @@ export default function ChatWithPDFPage() {
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: input };
     setMessages((prev) => [...prev, userMsg]);
+    const userQuestion = input;
     setInput("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      const response: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `Based on the uploaded documents, I found the following relevant information:\n\n**Key Points:**\n- The contract was executed on January 15, 2024\n- The parties involved are ABC Corp and XYZ Ltd\n- The agreement term is 24 months\n\nWould you like me to analyze any specific aspect in more detail?`,
-      };
-      setMessages((prev) => [...prev, response]);
+    try {
+      const docNames = uploadedDocs.map(d => d.name).join(", ");
+      const docContext = uploadedDocs.map(d => d.content || `[Document: ${d.name} - content being processed]`).join("\n\n");
+      
+      const contextualMessage = `You are analyzing the following uploaded legal documents: ${docNames}
+
+The user is asking about these documents. Please provide helpful, accurate answers based on the document context. If you cannot find specific information in the documents, say so clearly.
+
+Document Context:
+${docContext}
+
+User Question: ${userQuestion}
+
+Please analyze and respond based on the documents provided.`;
+
+      const response = await fetch("/api/chat/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          message: contextualMessage,
+          sessionId: currentSessionId,
+        }),
+      });
+
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+
+      const assistantId = (Date.now() + 1).toString();
+      setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+                );
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "I apologize, but I encountered an error processing your request. Please try again.",
+        },
+      ]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const quickActions = [
@@ -633,48 +724,40 @@ export default function ChatWithPDFPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="p-4 border-b flex items-center justify-between gap-4 flex-wrap">
+      <div className="p-3 border-b flex items-center justify-between gap-4 flex-wrap bg-background">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setViewMode("list")} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <FileText className="h-5 w-5 text-muted-foreground" />
-          <h1 className="font-semibold">Chat with PDF</h1>
+          <div className="p-2 rounded-md bg-primary/10">
+            <FileText className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h1 className="font-semibold text-sm">
+              {currentDocName || "Chat with PDF"}
+            </h1>
+            {uploadedDocs.length > 1 && (
+              <p className="text-xs text-muted-foreground">+{uploadedDocs.length - 1} more documents</p>
+            )}
+          </div>
           {uploadedDocs.length > 0 && (
-            <Badge variant="secondary">{uploadedDocs.length} documents</Badge>
+            <Badge variant="secondary" className="text-[10px]">{uploadedDocs.length} documents</Badge>
           )}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <ArrowRight className="mr-2 h-4 w-4" />
-            Send to Drafting
-          </Button>
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => setNyayaExpanded(!nyayaExpanded)}
-            data-testid="button-toggle-nyaya"
+            onClick={() => setShowNotesPanel(!showNotesPanel)}
+            data-testid="button-toggle-notes"
           >
-            <Scale className="mr-2 h-4 w-4" />
-            Nyaya AI
-            {nyayaExpanded ? <ChevronDown className="ml-1 h-3 w-3" /> : <ChevronUp className="ml-1 h-3 w-3" />}
+            <FileText className="mr-2 h-4 w-4" />
+            Notes
           </Button>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-64 border-r p-4 overflow-auto">
-          <h3 className="font-medium text-sm mb-3">Quick Actions</h3>
-          <div className="space-y-2">
-            {quickActions.map((action) => (
-              <Button key={action.label} variant="ghost" size="sm" className="w-full justify-start">
-                <action.icon className="mr-2 h-4 w-4" />
-                {action.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-
         <div className="flex-1 flex flex-col relative" ref={chatContainerRef}>
           {selectionPosition && (
             <div
@@ -699,21 +782,41 @@ export default function ChatWithPDFPage() {
 
           <ScrollArea className="flex-1 p-4">
             {messages.length === 0 ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center">
+              <div className="h-full flex flex-col items-center justify-center">
+                <div className="text-center mb-8">
                   <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                   <h3 className="font-medium mb-2">Start a Conversation</h3>
                   <p className="text-sm text-muted-foreground max-w-sm">
-                    Ask questions about your documents, request summaries, or use quick actions.
-                    <br /><br />
-                    <span className="text-xs text-muted-foreground/70">
-                      Tip: Select any text in responses and click "Ask Nyaya AI" for legal analysis
-                    </span>
+                    Ask questions about your documents and get instant AI-powered answers.
                   </p>
+                  <p className="text-xs text-muted-foreground/70 mt-2">
+                    Tip: Select any text in responses and click "Ask Nyaya AI" for legal analysis
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 max-w-lg">
+                  {quickActions.map((action) => (
+                    <Button 
+                      key={action.label} 
+                      variant="outline" 
+                      size="sm" 
+                      className="justify-start h-auto py-3 px-4"
+                      onClick={() => {
+                        setInput(action.label);
+                      }}
+                      data-testid={`button-suggestion-${action.label.toLowerCase().replace(/\s+/g, "-")}`}
+                    >
+                      <action.icon className="mr-2 h-4 w-4 text-primary" />
+                      <div className="text-left">
+                        <div className="text-sm">{action.label}</div>
+                        <div className="text-xs text-muted-foreground">{action.description}</div>
+                      </div>
+                    </Button>
+                  ))}
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 max-w-3xl mx-auto">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
@@ -737,12 +840,13 @@ export default function ChatWithPDFPage() {
                     </div>
                   </div>
                 )}
+                <div ref={messagesEndRef} />
               </div>
             )}
           </ScrollArea>
 
-          <div className="p-4 border-t">
-            <div className="flex gap-2">
+          <div className="p-4 border-t bg-background">
+            <div className="flex gap-2 max-w-3xl mx-auto">
               <Input
                 placeholder="Ask about your documents..."
                 value={input}
@@ -757,11 +861,102 @@ export default function ChatWithPDFPage() {
           </div>
         </div>
 
-        <Collapsible open={nyayaExpanded} onOpenChange={setNyayaExpanded}>
-          <CollapsibleContent className="w-80 border-l flex flex-col bg-background">
+        {showNotesPanel && (
+          <div className="w-80 border-l flex flex-col bg-background">
             <div className="p-3 border-b flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Scale className="h-4 w-4 text-primary" />
+                <FileText className="h-4 w-4 text-primary" />
+                <span className="font-medium text-sm">Notes</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setShowNotesPanel(false)}
+                data-testid="button-close-notes"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            
+            <div className="flex border-b">
+              <button
+                className={`flex-1 py-2 text-xs font-medium ${notesTab === "write" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                onClick={() => setNotesTab("write")}
+              >
+                Write
+              </button>
+              <button
+                className={`flex-1 py-2 text-xs font-medium ${notesTab === "saved" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                onClick={() => setNotesTab("saved")}
+              >
+                Saved ({notes.length})
+              </button>
+            </div>
+
+            <ScrollArea className="flex-1 p-3">
+              {notesTab === "write" ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder="Write your notes here..."
+                    className="w-full h-48 p-3 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    data-testid="textarea-note"
+                  />
+                  <Button 
+                    className="w-full" 
+                    size="sm"
+                    onClick={handleSaveNote}
+                    disabled={!newNote.trim()}
+                    data-testid="button-save-note"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Note
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {notes.length === 0 ? (
+                    <div className="text-center py-8">
+                      <FileText className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                      <p className="text-xs text-muted-foreground">No saved notes yet</p>
+                    </div>
+                  ) : (
+                    notes.map((note) => (
+                      <Card key={note.id} className="border-0 shadow-sm">
+                        <CardContent className="p-3">
+                          <p className="text-xs whitespace-pre-wrap mb-2">{note.content}</p>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatDistanceToNow(note.createdAt, { addSuffix: true })}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-destructive"
+                              onClick={() => handleDeleteNote(note.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        )}
+
+        {nyayaExpanded && (
+          <div className="w-80 border-l flex flex-col bg-gradient-to-b from-indigo-50/50 to-background dark:from-indigo-950/20">
+            <div className="p-3 border-b flex items-center justify-between bg-gradient-to-r from-indigo-500/10 to-purple-500/10">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-gradient-to-r from-indigo-500 to-purple-500">
+                  <Scale className="h-3.5 w-3.5 text-white" />
+                </div>
                 <span className="font-medium text-sm">Nyaya AI</span>
                 {nyayaMessages.length > 0 && (
                   <Badge variant="secondary" className="text-[10px]">
@@ -866,8 +1061,8 @@ export default function ChatWithPDFPage() {
                 </Button>
               </div>
             </div>
-          </CollapsibleContent>
-        </Collapsible>
+          </div>
+        )}
       </div>
     </div>
   );

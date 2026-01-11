@@ -103,7 +103,7 @@ export function UploadDropzone({
               {isDragActive ? "Drop files here" : "Drag & drop files here"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              or click to browse. PDF, Word, and images supported (up to 600 pages)
+              or click to browse. PDF, Word, and images supported (up to 800 pages)
             </p>
           </div>
           <Button variant="outline" size="sm" disabled={isUploading}>

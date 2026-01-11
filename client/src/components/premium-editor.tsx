@@ -475,16 +475,8 @@ export function PremiumEditor({
       </Dialog>
 
       <Dialog open={showAiDialog} onOpenChange={setShowAiDialog}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 relative">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="absolute right-2 top-2 text-white hover:bg-white/20 h-6 w-6"
-              onClick={() => setShowAiDialog(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+        <DialogContent className="max-w-lg p-0 overflow-hidden [&>button]:hidden">
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4">
             <div className="flex items-center gap-2 text-white">
               <Sparkles className="h-5 w-5" />
               <span className="font-medium">Help me write</span>
@@ -501,11 +493,21 @@ export function PremiumEditor({
             <Textarea
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Describe what you want to write..."
-              className="min-h-[100px] resize-none"
+              placeholder="Describe what you want to write... AI will generate the complete document based on your prompt."
+              className="min-h-[120px] resize-none"
               data-testid="input-ai-prompt"
             />
-            <div className="flex justify-end mt-4">
+            <p className="text-xs text-muted-foreground mt-2">
+              AI will generate the complete legal document based on your description.
+            </p>
+            <div className="flex justify-end mt-4 gap-2">
+              <Button 
+                variant="outline"
+                onClick={() => setShowAiDialog(false)}
+                data-testid="button-ai-cancel"
+              >
+                Cancel
+              </Button>
               <Button 
                 onClick={handleAiCreate}
                 disabled={!aiPrompt.trim() || localGenerating || isGenerating}
@@ -514,10 +516,13 @@ export function PremiumEditor({
                 {localGenerating || isGenerating ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
+                    Generating...
                   </>
                 ) : (
-                  "Create"
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate Document
+                  </>
                 )}
               </Button>
             </div>
