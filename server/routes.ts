@@ -1,10 +1,47 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { createRequire } from "module";
 import multer from "multer";
 import OpenAI from "openai";
+import mammoth from "mammoth";
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
+
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
+
+async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
+  const mimeType = file.mimetype.toLowerCase();
+  const fileName = file.originalname.toLowerCase();
+  
+  try {
+    if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
+      const pdfData = await pdfParse(file.buffer);
+      return pdfData.text || "";
+    }
+    
+    if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || 
+        fileName.endsWith(".docx")) {
+      const result = await mammoth.extractRawText({ buffer: file.buffer });
+      return result.value || "";
+    }
+    
+    if (mimeType === "application/msword" || fileName.endsWith(".doc")) {
+      const result = await mammoth.extractRawText({ buffer: file.buffer });
+      return result.value || "";
+    }
+    
+    if (mimeType === "text/plain" || fileName.endsWith(".txt")) {
+      return file.buffer.toString("utf-8");
+    }
+    
+    return `[Unsupported file format: ${mimeType}]`;
+  } catch (error) {
+    console.error(`Error extracting text from ${file.originalname}:`, error);
+    return `[Error extracting text from document]`;
+  }
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -96,31 +133,30 @@ export async function registerRoutes(
 
       const documents = await Promise.all(
         files.map(async (file) => {
+          const extractedText = await extractTextFromFile(file);
+          const pageCount = Math.max(1, Math.ceil(extractedText.length / 3000));
+          
           const doc = await storage.createDocument({
             name: file.originalname,
             type: file.mimetype,
             size: file.size,
-            pages: Math.ceil(file.size / 3000),
-            status: "processing",
+            pages: pageCount,
+            status: "completed",
             processingCost: 0,
             summary: null,
+            extractedText: extractedText,
           });
 
-          setTimeout(async () => {
-            const summary = `This document contains legal content related to ${file.originalname}. Key sections include parties involved, terms and conditions, and relevant legal provisions.`;
-            const cost = 0.50 + Math.random() * 0.50;
-            await storage.updateDocument(doc.id, {
-              status: "completed",
-              summary,
-              processingCost: parseFloat(cost.toFixed(2)),
-            });
-            await storage.addCostEntry({
-              type: "document_processing",
-              description: `Processed ${file.originalname}`,
-              amount: cost,
-              modelUsed: "mini",
-            });
-          }, 3000 + Math.random() * 2000);
+          const cost = 0.50 + (pageCount * 0.01);
+          await storage.updateDocument(doc.id, {
+            processingCost: parseFloat(cost.toFixed(2)),
+          });
+          await storage.addCostEntry({
+            type: "document_processing",
+            description: `Processed ${file.originalname}`,
+            amount: cost,
+            modelUsed: "mini",
+          });
 
           return doc;
         })
@@ -157,6 +193,7 @@ export async function registerRoutes(
     try {
       const session = await storage.createChatSession({
         title: req.body.title || "New Chat",
+        sessionType: req.body.sessionType || "general",
         documentIds: req.body.documentIds || [],
         modelTier: "mini",
         totalCost: 0,
@@ -166,6 +203,16 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error creating session:", error);
       res.status(500).json({ error: "Failed to create session" });
+    }
+  });
+
+  app.delete("/api/chat/sessions/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteChatSession(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting session:", error);
+      res.status(500).json({ error: "Failed to delete session" });
     }
   });
 
@@ -185,13 +232,30 @@ export async function registerRoutes(
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      const systemPrompt = `You are Chakshi, an expert legal AI assistant specializing in Indian law. You provide accurate, well-researched legal analysis with proper citations. Always:
+      let documentContext = "";
+      if (documentIds && Array.isArray(documentIds) && documentIds.length > 0) {
+        const docs = await Promise.all(
+          documentIds.map((id: string) => storage.getDocument(id))
+        );
+        const validDocs = docs.filter((d) => d && d.extractedText);
+        if (validDocs.length > 0) {
+          documentContext = validDocs
+            .map((d) => `=== Document: ${d!.name} ===\n${d!.extractedText}`)
+            .join("\n\n");
+        }
+      }
+
+      let systemPrompt = `You are Chakshi, an expert legal AI assistant specializing in Indian law. You provide accurate, well-researched legal analysis with proper citations. Always:
 1. Cite relevant sections of law, acts, and precedents
 2. Explain legal concepts in clear, professional language
 3. Note any limitations or areas of uncertainty
 4. Suggest next steps or considerations when appropriate
 
 When referencing case law or statutes, use proper legal citation format.`;
+
+      if (documentContext) {
+        systemPrompt += `\n\nYou have access to the following uploaded documents. Use this content to answer questions accurately and cite specific sections from the documents:\n\n${documentContext}`;
+      }
 
       try {
         const stream = await openai.chat.completions.create({
@@ -201,7 +265,7 @@ When referencing case law or statutes, use proper legal citation format.`;
             { role: "user", content: message },
           ],
           stream: true,
-          max_completion_tokens: 2048,
+          max_completion_tokens: 4096,
         });
 
         let fullContent = "";

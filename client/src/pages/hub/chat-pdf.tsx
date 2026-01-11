@@ -84,6 +84,7 @@ export default function ChatWithPDFPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
+  const [sessionDocumentIds, setSessionDocumentIds] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -415,18 +416,41 @@ export default function ChatWithPDFPage() {
 
   const handleFilesSelected = async (files: File[]) => {
     const newDocs: UploadedDoc[] = files.map((file, i) => ({
-      id: `doc-${Date.now()}-${i}`,
+      id: `temp-${Date.now()}-${i}`,
       name: file.name,
-      pages: Math.floor(Math.random() * 100) + 20,
+      pages: 0,
       status: "processing" as const,
     }));
     setUploadedDocs(newDocs);
 
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      files.forEach((file) => formData.append("files", file));
+
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Upload failed");
+
+      const uploadedDocuments = await response.json();
+      
+      setUploadedDocs(
+        uploadedDocuments.map((doc: { id: string; name: string; pages: number; extractedText?: string }) => ({
+          id: doc.id,
+          name: doc.name,
+          pages: doc.pages || 0,
+          status: "ready" as const,
+          content: doc.extractedText || "",
+        }))
+      );
+    } catch (error) {
+      console.error("Upload error:", error);
       setUploadedDocs((prev) =>
         prev.map((doc) => ({ ...doc, status: "ready" as const }))
       );
-    }, 2000);
+    }
   };
 
   const handleStartChat = async () => {
@@ -436,7 +460,17 @@ export default function ChatWithPDFPage() {
       ? `Chat: ${uploadedDocs[0].name}` 
       : `Chat: ${uploadedDocs.length} documents`;
     
-    const session = await createSessionMutation.mutateAsync(title);
+    const documentIds = uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
+    
+    const response = await apiRequest("POST", "/api/chat/sessions", {
+      title,
+      sessionType: "chatwithpdf",
+      documentIds,
+    });
+    const session = await response.json() as ChatSession;
+    
+    setSessionDocumentIds(documentIds);
+    queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
     setCurrentSessionId(session.id);
     setShowUploadDialog(false);
     setViewMode("chat");
@@ -444,10 +478,41 @@ export default function ChatWithPDFPage() {
 
   const currentDocs = uploadedDocs;
 
-  const handleOpenSession = (session: ChatSession) => {
+  const handleOpenSession = async (session: ChatSession) => {
     setCurrentSessionId(session.id);
     setMessages([]);
     setViewMode("chat");
+    
+    const docIds = session.documentIds || [];
+    setSessionDocumentIds(docIds);
+    
+    if (docIds.length > 0) {
+      try {
+        const docs = await Promise.all(
+          docIds.map(async (docId) => {
+            const response = await fetch(`/api/documents/${docId}`);
+            if (response.ok) {
+              return response.json();
+            }
+            return null;
+          })
+        );
+        const validDocs = docs.filter((d) => d !== null);
+        setUploadedDocs(
+          validDocs.map((doc: { id: string; name: string; pages: number; extractedText?: string }) => ({
+            id: doc.id,
+            name: doc.name,
+            pages: doc.pages || 0,
+            status: "ready" as const,
+            content: doc.extractedText || "",
+          }))
+        );
+      } catch (error) {
+        console.error("Error loading session documents:", error);
+      }
+    } else {
+      setUploadedDocs([]);
+    }
   };
 
   const handleSend = async () => {
@@ -460,26 +525,20 @@ export default function ChatWithPDFPage() {
     setIsLoading(true);
 
     try {
-      const docNames = uploadedDocs.map(d => d.name).join(", ");
-      const docContext = uploadedDocs.map(d => d.content || `[Document: ${d.name} - content being processed]`).join("\n\n");
-      
-      const contextualMessage = `You are analyzing the following uploaded legal documents: ${docNames}
+      const localDocIds = uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
+      const documentIds = localDocIds.length > 0 ? localDocIds : (sessionDocumentIds.length > 0 ? sessionDocumentIds : []);
 
-The user is asking about these documents. Please provide helpful, accurate answers based on the document context. If you cannot find specific information in the documents, say so clearly.
-
-Document Context:
-${docContext}
-
-User Question: ${userQuestion}
-
-Please analyze and respond based on the documents provided.`;
+      if (documentIds.length === 0) {
+        console.warn("No documents available for query - response may not be grounded in documents");
+      }
 
       const response = await fetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          message: contextualMessage,
+          message: userQuestion,
           sessionId: currentSessionId,
+          documentIds,
         }),
       });
 
@@ -687,13 +746,13 @@ Please analyze and respond based on the documents provided.`;
               />
 
               {uploadedDocs.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-40 overflow-y-auto">
                   <h4 className="text-sm font-medium">Uploaded Documents</h4>
                   {uploadedDocs.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-2 p-2 bg-muted rounded-md">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm flex-1 truncate">{doc.name}</span>
-                      <Badge variant={doc.status === "ready" ? "outline" : "secondary"} className="text-[10px]">
+                    <div key={doc.id} className="flex items-center gap-2 p-2 bg-muted rounded-md min-w-0">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm flex-1 truncate min-w-0">{doc.name}</span>
+                      <Badge variant={doc.status === "ready" ? "outline" : "secondary"} className="text-[10px] shrink-0">
                         {doc.status}
                       </Badge>
                     </div>
@@ -701,14 +760,14 @@ Please analyze and respond based on the documents provided.`;
                 </div>
               )}
 
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setShowUploadDialog(false)} className="flex-1">
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setShowUploadDialog(false)} className="flex-1 shrink-0">
                   Cancel
                 </Button>
                 <Button
                   onClick={handleStartChat}
                   disabled={uploadedDocs.length === 0 || uploadedDocs.some(d => d.status === "processing")}
-                  className="flex-1"
+                  className="flex-1 shrink-0"
                   data-testid="button-start-chat"
                 >
                   <MessageSquare className="h-4 w-4 mr-2" />
@@ -901,7 +960,7 @@ Please analyze and respond based on the documents provided.`;
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
                     placeholder="Write your notes here..."
-                    className="w-full h-48 p-3 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full h-48 p-3 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background text-foreground"
                     data-testid="textarea-note"
                   />
                   <Button 
