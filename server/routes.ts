@@ -227,6 +227,30 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/chat/sessions/:id/messages", async (req: Request, res: Response) => {
+    try {
+      const messages = await storage.getChatMessages(req.params.id);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  app.post("/api/chat/messages", async (req: Request, res: Response) => {
+    try {
+      const { sessionId, role, content } = req.body;
+      if (!sessionId || !role || !content) {
+        return res.status(400).json({ error: "sessionId, role, and content are required" });
+      }
+      const message = await storage.createChatMessage({ sessionId, role, content });
+      res.status(201).json(message);
+    } catch (error) {
+      console.error("Error creating message:", error);
+      res.status(500).json({ error: "Failed to create message" });
+    }
+  });
+
   app.post("/api/chat/query", async (req: Request, res: Response) => {
     try {
       const { message, sessionId, documentIds } = req.body;

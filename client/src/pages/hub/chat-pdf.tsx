@@ -41,6 +41,19 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ChatSession, ModelTier, Citation } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/~~([^~]+)~~/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*[-*+]\s+/gm, "- ")
+    .replace(/^\s*\d+\.\s+/gm, (match) => match);
+}
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -291,7 +304,7 @@ export default function ChatWithPDFPage() {
               if (data.content) {
                 fullContent += data.content;
                 setNyayaMessages((prev) =>
-                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent) } : m))
                 );
               }
               if (data.done) {
@@ -310,7 +323,7 @@ export default function ChatWithPDFPage() {
       }
 
       setNyayaMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, ...metadata } : m))
+        prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent), ...metadata } : m))
       );
     } catch (error) {
       console.error("Nyaya AI error:", error);
@@ -378,7 +391,7 @@ export default function ChatWithPDFPage() {
               if (data.content) {
                 fullContent += data.content;
                 setNyayaMessages((prev) =>
-                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent) } : m))
                 );
               }
               if (data.done) {
@@ -397,7 +410,7 @@ export default function ChatWithPDFPage() {
       }
 
       setNyayaMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, ...metadata } : m))
+        prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent), ...metadata } : m))
       );
     } catch (error) {
       console.error("Nyaya AI error:", error);
@@ -486,6 +499,20 @@ export default function ChatWithPDFPage() {
     const docIds = session.documentIds || [];
     setSessionDocumentIds(docIds);
     
+    try {
+      const messagesResponse = await fetch(`/api/chat/sessions/${session.id}/messages`);
+      if (messagesResponse.ok) {
+        const loadedMessages = await messagesResponse.json();
+        setMessages(loadedMessages.map((m: { id: string; role: string; content: string }) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })));
+      }
+    } catch (error) {
+      console.error("Error loading session messages:", error);
+    }
+    
     if (docIds.length > 0) {
       try {
         const docs = await Promise.all(
@@ -523,6 +550,14 @@ export default function ChatWithPDFPage() {
     const userQuestion = input;
     setInput("");
     setIsLoading(true);
+
+    if (currentSessionId) {
+      fetch("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: currentSessionId, role: "user", content: userQuestion }),
+      }).catch(console.error);
+    }
 
     try {
       const localDocIds = uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
@@ -565,7 +600,7 @@ export default function ChatWithPDFPage() {
               if (data.content) {
                 fullContent += data.content;
                 setMessages((prev) =>
-                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent) } : m))
                 );
               }
             } catch {
@@ -573,6 +608,14 @@ export default function ChatWithPDFPage() {
             }
           }
         }
+      }
+      
+      if (currentSessionId) {
+        fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: currentSessionId, role: "assistant", content: stripMarkdown(fullContent) }),
+        }).catch(console.error);
       }
     } catch (error) {
       console.error("Chat error:", error);
