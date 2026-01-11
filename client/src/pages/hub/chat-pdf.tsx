@@ -804,9 +804,11 @@ export default function ChatWithPDFPage() {
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   <h4 className="text-sm font-medium">Uploaded Documents</h4>
                   {uploadedDocs.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-2 p-2 bg-muted rounded-md min-w-0">
+                    <div key={doc.id} className="flex items-center gap-2 p-2 bg-muted rounded-md overflow-hidden">
                       <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm flex-1 truncate min-w-0">{doc.name}</span>
+                      <span className="text-sm flex-1 truncate" title={doc.name}>
+                        {doc.name.length > 35 ? doc.name.slice(0, 35) + "..." : doc.name}
+                      </span>
                       <Badge variant={doc.status === "ready" ? "outline" : "secondary"} className="text-[10px] shrink-0">
                         {doc.status}
                       </Badge>
@@ -885,7 +887,8 @@ export default function ChatWithPDFPage() {
               <Button
                 size="sm"
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg gap-1.5"
-                onClick={() => handleAskNyayaAI()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => handleAskNyayaAI(selectionPosition.text)}
                 data-testid="button-ask-nyaya-floating"
               >
                 <Scale className="h-3.5 w-3.5" />
