@@ -193,15 +193,30 @@ export default function NyayaAIPage() {
           modelUsed?: string;
           confidence?: number;
           cost?: number;
-          citations?: Citation[];
-        }) => ({
-          id: m.id,
-          role: m.role as "user" | "assistant",
-          content: m.content,
-          modelUsed: m.modelUsed as ModelTier | undefined,
-          confidence: m.confidence,
-          citations: m.citations,
-        })));
+          citations?: string | Citation[];
+        }) => {
+          // Parse citations if stored as JSON string
+          let parsedCitations: Citation[] = [];
+          if (m.citations) {
+            if (typeof m.citations === 'string') {
+              try {
+                parsedCitations = JSON.parse(m.citations);
+              } catch {
+                parsedCitations = [];
+              }
+            } else if (Array.isArray(m.citations)) {
+              parsedCitations = m.citations;
+            }
+          }
+          return {
+            id: m.id,
+            role: m.role as "user" | "assistant",
+            content: m.content,
+            modelUsed: m.modelUsed as ModelTier | undefined,
+            confidence: m.confidence,
+            citations: parsedCitations,
+          };
+        }));
       } else {
         setMessages([]);
       }
@@ -308,7 +323,7 @@ export default function NyayaAIPage() {
                           className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none"
                           dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
                         />
-                        {msg.citations && msg.citations.length > 0 && (
+                        {msg.citations && Array.isArray(msg.citations) && msg.citations.length > 0 && (
                           <div className="mt-4 pt-4 border-t space-y-2">
                             <h4 className="text-xs font-medium text-muted-foreground">Sources</h4>
                             {msg.citations.map((cite) => (

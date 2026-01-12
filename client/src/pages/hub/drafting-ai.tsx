@@ -305,14 +305,36 @@ export default function AIDraftingPage() {
   const handleOpenUploadedDraft = async () => {
     if (!uploadedDraftFile) return;
     const draft = await createDraftMutation.mutateAsync(uploadedDraftFile.name.replace(/\.[^.]+$/, ""));
+    // Preserve original document structure exactly:
+    // 1. Normalize line endings (Windows \r\n -> \n)
+    // 2. Escape HTML entities to prevent injection
+    // 3. Convert line structure: double newlines become paragraph breaks, single newlines become <br/>
+    const escapeHtml = (text: string) => {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    };
+    // Normalize Windows/Mac line endings to Unix
+    const normalizedContent = uploadedDraftFile.content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const escapedContent = escapeHtml(normalizedContent);
+    // Split on double newlines (paragraph breaks), preserving structure
+    const preservedContent = escapedContent
+      .split(/\n\n/)
+      .map(para => {
+        if (para.trim() === '') return '<p>&nbsp;</p>'; // Preserve empty paragraphs
+        return `<p>${para.replace(/\n/g, '<br/>')}</p>`;
+      })
+      .join('\n');
     await updateDraftMutation.mutateAsync({
       id: draft.id,
       title: uploadedDraftFile.name.replace(/\.[^.]+$/, ""),
-      content: uploadedDraftFile.content,
+      content: preservedContent,
     });
     setSelectedDraftId(draft.id);
     setDraftTitle(uploadedDraftFile.name.replace(/\.[^.]+$/, ""));
-    setDraftContent(uploadedDraftFile.content);
+    setDraftContent(preservedContent);
     setViewMode("editor");
     setShowResearchSidebar(true);
   };
@@ -833,7 +855,7 @@ export default function AIDraftingPage() {
                     <Button 
                       className="w-full" 
                       onClick={handleGenerateFromReference}
-                      disabled={isGenerating || uploadedReferenceFiles.length === 0}
+                      disabled={isGenerating || uploadedReferenceFiles.length === 0 || !formData.title || !formData.parties}
                     >
                       {isGenerating ? <StreamingIndicator className="mr-2" /> : <Wand2 className="mr-2 h-4 w-4" />}
                       {isGenerating ? "Generating..." : "Generate Draft with AI"}
