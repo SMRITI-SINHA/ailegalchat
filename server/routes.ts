@@ -5,8 +5,9 @@ import multer from "multer";
 import OpenAI from "openai";
 import mammoth from "mammoth";
 import { storage } from "./storage";
-import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema } from "@shared/schema";
+import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
+import { GoogleCalendarService } from "./google-calendar";
 
 const require = createRequire(import.meta.url);
 const { PDFParse } = require("pdf-parse");
@@ -880,6 +881,206 @@ Generate at least 8-10 relevant compliance items specific to Indian law and regu
     } catch (error) {
       console.error("Error deleting research note:", error);
       res.status(500).json({ error: "Failed to delete note" });
+    }
+  });
+
+  const oauthStates = new Map<string, { userId: string; expiresAt: number }>();
+
+  app.get("/api/calendar/google/auth-url", (req: Request, res: Response) => {
+    try {
+      const userId = (req.query.userId as string) || "default-user";
+      const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      oauthStates.set(state, { userId, expiresAt: Date.now() + 10 * 60 * 1000 });
+      
+      const authUrl = GoogleCalendarService.getAuthUrl(state);
+      res.json({ authUrl, state });
+    } catch (error) {
+      console.error("Error generating auth URL:", error);
+      res.status(500).json({ error: "Failed to generate auth URL" });
+    }
+  });
+
+  app.get("/api/calendar/google/callback", async (req: Request, res: Response) => {
+    try {
+      const { code, state, error: oauthError } = req.query;
+
+      if (oauthError) {
+        return res.redirect(`/hub/calendar?error=${encodeURIComponent(oauthError as string)}`);
+      }
+
+      if (!code || !state) {
+        return res.redirect("/hub/calendar?error=missing_params");
+      }
+
+      const stateData = oauthStates.get(state as string);
+      if (!stateData || stateData.expiresAt < Date.now()) {
+        oauthStates.delete(state as string);
+        return res.redirect("/hub/calendar?error=invalid_state");
+      }
+
+      const { userId } = stateData;
+      oauthStates.delete(state as string);
+
+      const tokens = await GoogleCalendarService.exchangeCodeForTokens(code as string);
+      const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000);
+
+      const existingCreds = await storage.getGoogleCalendarCredentials(userId);
+      if (existingCreds) {
+        await storage.updateGoogleCalendarCredentials(userId, {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token || existingCreds.refreshToken,
+          tokenExpiry,
+        });
+      } else {
+        await storage.createGoogleCalendarCredentials({
+          userId,
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token || "",
+          tokenExpiry,
+          calendarId: "primary",
+        });
+      }
+
+      res.redirect("/hub/calendar?connected=google");
+    } catch (error) {
+      console.error("OAuth callback error:", error);
+      res.redirect("/hub/calendar?error=oauth_failed");
+    }
+  });
+
+  app.get("/api/calendar/google/status", async (req: Request, res: Response) => {
+    try {
+      const userId = (req.query.userId as string) || "default-user";
+      const creds = await storage.getGoogleCalendarCredentials(userId);
+
+      if (!creds) {
+        return res.json({ connected: false });
+      }
+
+      const isExpired = new Date(creds.tokenExpiry) < new Date();
+      res.json({
+        connected: true,
+        isExpired,
+        lastSyncAt: creds.lastSyncAt,
+        calendarId: creds.calendarId,
+      });
+    } catch (error) {
+      console.error("Error checking status:", error);
+      res.status(500).json({ error: "Failed to check status" });
+    }
+  });
+
+  app.post("/api/calendar/google/disconnect", async (req: Request, res: Response) => {
+    try {
+      const userId = req.body.userId || "default-user";
+      await storage.deleteGoogleCalendarCredentials(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error disconnecting:", error);
+      res.status(500).json({ error: "Failed to disconnect" });
+    }
+  });
+
+  app.post("/api/calendar/google/sync", async (req: Request, res: Response) => {
+    try {
+      const userId = req.body.userId || "default-user";
+      const creds = await storage.getGoogleCalendarCredentials(userId);
+
+      if (!creds) {
+        return res.status(400).json({ error: "Google Calendar not connected" });
+      }
+
+      const service = new GoogleCalendarService(userId);
+      const result = await service.fullSync();
+
+      res.json({
+        success: true,
+        fromGoogle: result.fromGoogle,
+        toGoogle: result.toGoogle,
+      });
+    } catch (error) {
+      console.error("Sync error:", error);
+      res.status(500).json({ error: "Sync failed" });
+    }
+  });
+
+  app.get("/api/calendar/events", async (req: Request, res: Response) => {
+    try {
+      const userId = (req.query.userId as string) || "default-user";
+      const events = await storage.getCalendarEvents(userId);
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      res.status(500).json({ error: "Failed to fetch events" });
+    }
+  });
+
+  app.post("/api/calendar/events", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertCalendarEventSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+
+      const event = await storage.createCalendarEvent(parsed.data);
+
+      const creds = await storage.getGoogleCalendarCredentials(parsed.data.userId);
+      if (creds) {
+        const service = new GoogleCalendarService(parsed.data.userId);
+        await service.createGoogleEvent(event);
+      }
+
+      res.json(event);
+    } catch (error) {
+      console.error("Error creating event:", error);
+      res.status(500).json({ error: "Failed to create event" });
+    }
+  });
+
+  app.patch("/api/calendar/events/:id", async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getCalendarEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const updated = await storage.updateCalendarEvent(req.params.id, req.body);
+
+      if (updated && updated.googleEventId) {
+        const creds = await storage.getGoogleCalendarCredentials(updated.userId);
+        if (creds) {
+          const service = new GoogleCalendarService(updated.userId);
+          await service.updateGoogleEvent(updated);
+        }
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating event:", error);
+      res.status(500).json({ error: "Failed to update event" });
+    }
+  });
+
+  app.delete("/api/calendar/events/:id", async (req: Request, res: Response) => {
+    try {
+      const event = await storage.getCalendarEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      if (event.googleEventId) {
+        const creds = await storage.getGoogleCalendarCredentials(event.userId);
+        if (creds) {
+          const service = new GoogleCalendarService(event.userId);
+          await service.deleteGoogleEvent(event.googleEventId);
+        }
+      }
+
+      await storage.deleteCalendarEvent(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting event:", error);
+      res.status(500).json({ error: "Failed to delete event" });
     }
   });
 

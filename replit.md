@@ -133,6 +133,17 @@ The platform is organized into three main sections:
 - `GET /api/stats` - Get dashboard statistics
 - `GET /api/costs` - Get cost ledger
 
+### Calendar (Google Calendar Bidirectional Sync)
+- `GET /api/calendar/google/auth-url` - Get Google OAuth authorization URL
+- `GET /api/calendar/google/callback` - OAuth callback handler
+- `GET /api/calendar/google/status` - Check Google Calendar connection status
+- `POST /api/calendar/google/disconnect` - Disconnect Google Calendar
+- `POST /api/calendar/google/sync` - Trigger manual sync (bidirectional)
+- `GET /api/calendar/events` - List calendar events
+- `POST /api/calendar/events` - Create event (syncs to Google if connected)
+- `PATCH /api/calendar/events/:id` - Update event
+- `DELETE /api/calendar/events/:id` - Delete event
+
 ## Model Tiers
 | Tier | Model | Cost/Query | Use Case |
 |------|-------|------------|----------|
@@ -180,3 +191,10 @@ The application runs via `npm run dev` which starts both the Express backend and
 - Editor File menu redesigned with: Open (load saved drafts), Make a Copy, Download (txt/doc/pdf), Rename options
 - Added Saved Notes page in Hub Research section to view and manage all research notes
 - Editor properly syncs language selector with draft's actual language when opening saved drafts
+- Added Legal Academic Calendar page with bidirectional Google Calendar sync
+- Implemented Google Calendar OAuth flow (connect, disconnect, status endpoints)
+- Created Google Calendar API service with token refresh, event CRUD, and bidirectional sync
+- Calendar events can be created in Chakshi and automatically sync to Google Calendar
+- Events from Google Calendar sync back to Chakshi with conflict handling
+- Calendar UI with month navigation, event type filtering, and upcoming events panel
+- Support for event types: academic, exam, career, court, professional

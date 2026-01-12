@@ -21,6 +21,10 @@ import type {
   InsertResearchQuery,
   ResearchNote,
   InsertResearchNote,
+  GoogleCalendarCredentials,
+  InsertGoogleCalendarCredentials,
+  CalendarEvent,
+  InsertCalendarEvent,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -79,6 +83,18 @@ export interface IStorage {
   getResearchNote(id: string): Promise<ResearchNote | undefined>;
   createResearchNote(note: InsertResearchNote): Promise<ResearchNote>;
   deleteResearchNote(id: string): Promise<void>;
+
+  getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined>;
+  createGoogleCalendarCredentials(creds: InsertGoogleCalendarCredentials): Promise<GoogleCalendarCredentials>;
+  updateGoogleCalendarCredentials(userId: string, updates: Partial<GoogleCalendarCredentials>): Promise<GoogleCalendarCredentials | undefined>;
+  deleteGoogleCalendarCredentials(userId: string): Promise<void>;
+
+  getCalendarEvents(userId: string): Promise<CalendarEvent[]>;
+  getCalendarEvent(id: string): Promise<CalendarEvent | undefined>;
+  getCalendarEventByGoogleId(googleEventId: string): Promise<CalendarEvent | undefined>;
+  createCalendarEvent(event: InsertCalendarEvent): Promise<CalendarEvent>;
+  updateCalendarEvent(id: string, updates: Partial<CalendarEvent>): Promise<CalendarEvent | undefined>;
+  deleteCalendarEvent(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -93,6 +109,8 @@ export class MemStorage implements IStorage {
   private complianceChecklists: Map<string, ComplianceChecklist>;
   private researchQueries: Map<string, ResearchQuery>;
   private researchNotes: Map<string, ResearchNote>;
+  private googleCalendarCredentials: Map<string, GoogleCalendarCredentials>;
+  private calendarEvents: Map<string, CalendarEvent>;
 
   constructor() {
     this.users = new Map();
@@ -106,6 +124,8 @@ export class MemStorage implements IStorage {
     this.complianceChecklists = new Map();
     this.researchQueries = new Map();
     this.researchNotes = new Map();
+    this.googleCalendarCredentials = new Map();
+    this.calendarEvents = new Map();
     this.seedData();
   }
 
@@ -577,6 +597,95 @@ export class MemStorage implements IStorage {
 
   async deleteResearchNote(id: string): Promise<void> {
     this.researchNotes.delete(id);
+  }
+
+  async getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined> {
+    return Array.from(this.googleCalendarCredentials.values()).find(
+      (creds) => creds.userId === userId
+    );
+  }
+
+  async createGoogleCalendarCredentials(insertCreds: InsertGoogleCalendarCredentials): Promise<GoogleCalendarCredentials> {
+    const id = randomUUID();
+    const now = new Date();
+    const creds: GoogleCalendarCredentials = {
+      id,
+      userId: insertCreds.userId,
+      calendarId: insertCreds.calendarId ?? null,
+      accessToken: insertCreds.accessToken,
+      refreshToken: insertCreds.refreshToken,
+      tokenExpiry: insertCreds.tokenExpiry,
+      syncToken: insertCreds.syncToken ?? null,
+      lastSyncAt: insertCreds.lastSyncAt ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.googleCalendarCredentials.set(id, creds);
+    return creds;
+  }
+
+  async updateGoogleCalendarCredentials(userId: string, updates: Partial<GoogleCalendarCredentials>): Promise<GoogleCalendarCredentials | undefined> {
+    const creds = await this.getGoogleCalendarCredentials(userId);
+    if (!creds) return undefined;
+    const updated = { ...creds, ...updates, updatedAt: new Date() };
+    this.googleCalendarCredentials.set(creds.id, updated);
+    return updated;
+  }
+
+  async deleteGoogleCalendarCredentials(userId: string): Promise<void> {
+    const creds = await this.getGoogleCalendarCredentials(userId);
+    if (creds) {
+      this.googleCalendarCredentials.delete(creds.id);
+    }
+  }
+
+  async getCalendarEvents(userId: string): Promise<CalendarEvent[]> {
+    return Array.from(this.calendarEvents.values())
+      .filter((event) => event.userId === userId)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }
+
+  async getCalendarEvent(id: string): Promise<CalendarEvent | undefined> {
+    return this.calendarEvents.get(id);
+  }
+
+  async getCalendarEventByGoogleId(googleEventId: string): Promise<CalendarEvent | undefined> {
+    return Array.from(this.calendarEvents.values()).find(
+      (event) => event.googleEventId === googleEventId
+    );
+  }
+
+  async createCalendarEvent(insertEvent: InsertCalendarEvent): Promise<CalendarEvent> {
+    const id = randomUUID();
+    const now = new Date();
+    const event: CalendarEvent = {
+      id,
+      userId: insertEvent.userId,
+      title: insertEvent.title,
+      description: insertEvent.description ?? null,
+      startTime: insertEvent.startTime,
+      endTime: insertEvent.endTime,
+      type: insertEvent.type ?? "professional",
+      isHighPriority: insertEvent.isHighPriority ?? false,
+      googleEventId: insertEvent.googleEventId ?? null,
+      syncStatus: insertEvent.syncStatus ?? "pending",
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.calendarEvents.set(id, event);
+    return event;
+  }
+
+  async updateCalendarEvent(id: string, updates: Partial<CalendarEvent>): Promise<CalendarEvent | undefined> {
+    const event = this.calendarEvents.get(id);
+    if (!event) return undefined;
+    const updated = { ...event, ...updates, updatedAt: new Date() };
+    this.calendarEvents.set(id, updated);
+    return updated;
+  }
+
+  async deleteCalendarEvent(id: string): Promise<void> {
+    this.calendarEvents.delete(id);
   }
 }
 

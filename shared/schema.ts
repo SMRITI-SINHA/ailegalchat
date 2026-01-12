@@ -334,3 +334,55 @@ export const insertResearchNoteSchema = createInsertSchema(researchNotes).omit({
 
 export type InsertResearchNote = z.infer<typeof insertResearchNoteSchema>;
 export type ResearchNote = typeof researchNotes.$inferSelect;
+
+export const googleCalendarCredentials = pgTable("google_calendar_credentials", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  calendarId: text("calendar_id"),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  tokenExpiry: timestamp("token_expiry").notNull(),
+  syncToken: text("sync_token"),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertGoogleCalendarCredentialsSchema = createInsertSchema(googleCalendarCredentials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertGoogleCalendarCredentials = z.infer<typeof insertGoogleCalendarCredentialsSchema>;
+export type GoogleCalendarCredentials = typeof googleCalendarCredentials.$inferSelect;
+
+export const calendarEvents = pgTable("calendar_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time").notNull(),
+  type: text("type").notNull().default("professional"),
+  isHighPriority: boolean("is_high_priority").default(false),
+  googleEventId: text("google_event_id"),
+  syncStatus: text("sync_status").default("pending"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertCalendarEventSchema = createInsertSchema(calendarEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCalendarEvent = z.infer<typeof insertCalendarEventSchema>;
+export type CalendarEvent = typeof calendarEvents.$inferSelect;
+
+export const calendarEventTypes = ["academic", "exam", "career", "court", "professional"] as const;
+export type CalendarEventType = typeof calendarEventTypes[number];
+
+export const syncStatuses = ["pending", "synced", "failed", "conflict"] as const;
+export type SyncStatus = typeof syncStatuses[number];
