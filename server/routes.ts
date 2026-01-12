@@ -973,6 +973,62 @@ Generate at least 8-10 relevant compliance items specific to Indian law and regu
     }
   });
 
+  app.get("/api/cnr/notes", async (req: Request, res: Response) => {
+    try {
+      const notes = await storage.getCnrNotes();
+      res.json(notes);
+    } catch (error) {
+      console.error("Error fetching CNR notes:", error);
+      res.status(500).json({ error: "Failed to fetch CNR notes" });
+    }
+  });
+
+  app.post("/api/cnr/notes", async (req: Request, res: Response) => {
+    try {
+      const { title, content, cnrNumber } = req.body;
+      if (!title && !content) {
+        return res.status(400).json({ error: "Title or content is required" });
+      }
+      const note = await storage.createCnrNote({
+        title: title || "Untitled Note",
+        content: content || "",
+        cnrNumber: cnrNumber || null,
+      });
+      res.status(201).json(note);
+    } catch (error) {
+      console.error("Error creating CNR note:", error);
+      res.status(500).json({ error: "Failed to create CNR note" });
+    }
+  });
+
+  app.patch("/api/cnr/notes/:id", async (req: Request, res: Response) => {
+    try {
+      const { title, content, cnrNumber } = req.body;
+      const note = await storage.updateCnrNote(req.params.id, {
+        title,
+        content,
+        cnrNumber,
+      });
+      if (!note) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      res.json(note);
+    } catch (error) {
+      console.error("Error updating CNR note:", error);
+      res.status(500).json({ error: "Failed to update CNR note" });
+    }
+  });
+
+  app.delete("/api/cnr/notes/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteCnrNote(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting CNR note:", error);
+      res.status(500).json({ error: "Failed to delete CNR note" });
+    }
+  });
+
   const oauthStates = new Map<string, { userId: string; expiresAt: number; redirectUri: string }>();
 
   app.get("/api/calendar/google/auth-url", (req: Request, res: Response) => {

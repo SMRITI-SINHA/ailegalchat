@@ -1,49 +1,88 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Plus, Save, Trash2, FileText, Clock } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Bot, Plus, Save, Trash2, FileText, Clock, List, Edit3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
-interface CNRNote {
+interface CnrNote {
   id: string;
   title: string;
   content: string;
-  cnrNumber?: string;
+  cnrNumber: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-const CNR_NOTES_KEY = "chakshi_cnr_notes";
-
-function loadNotes(): CNRNote[] {
-  try {
-    const stored = localStorage.getItem(CNR_NOTES_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveNotesToStorage(notes: CNRNote[]) {
-  localStorage.setItem(CNR_NOTES_KEY, JSON.stringify(notes));
-}
-
 export default function CNRChatPage() {
   const { toast } = useToast();
-  const [notes, setNotes] = useState<CNRNote[]>([]);
-  const [selectedNote, setSelectedNote] = useState<CNRNote | null>(null);
+  const [selectedNote, setSelectedNote] = useState<CnrNote | null>(null);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [cnrNumber, setCnrNumber] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [activeTab, setActiveTab] = useState("editor");
 
-  useEffect(() => {
-    setNotes(loadNotes());
-  }, []);
+  const { data: notes = [], isLoading: notesLoading } = useQuery<CnrNote[]>({
+    queryKey: ["/api/cnr/notes"],
+  });
+
+  const createNoteMutation = useMutation({
+    mutationFn: async (data: { title: string; content: string; cnrNumber?: string }) => {
+      const res = await apiRequest("POST", "/api/cnr/notes", data);
+      return res.json();
+    },
+    onSuccess: (newNote) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cnr/notes"] });
+      setSelectedNote(newNote);
+      toast({ title: "Note saved" });
+      setIsEditing(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to save note", variant: "destructive" });
+    },
+  });
+
+  const updateNoteMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<CnrNote> }) => {
+      const res = await apiRequest("PATCH", `/api/cnr/notes/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cnr/notes"] });
+      toast({ title: "Note updated" });
+      setIsEditing(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to update note", variant: "destructive" });
+    },
+  });
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/cnr/notes/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cnr/notes"] });
+      setSelectedNote(null);
+      setNoteTitle("");
+      setNoteContent("");
+      setCnrNumber("");
+      setIsEditing(false);
+      toast({ title: "Note deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete note", variant: "destructive" });
+    },
+  });
 
   const handleNewNote = () => {
     setSelectedNote(null);
@@ -51,6 +90,7 @@ export default function CNRChatPage() {
     setNoteContent("");
     setCnrNumber("");
     setIsEditing(true);
+    setActiveTab("editor");
   };
 
   const handleSaveNote = () => {
@@ -59,55 +99,31 @@ export default function CNRChatPage() {
       return;
     }
 
-    const now = new Date().toISOString();
-    
     if (selectedNote) {
-      const updatedNotes = notes.map(n => 
-        n.id === selectedNote.id 
-          ? { ...n, title: noteTitle, content: noteContent, cnrNumber, updatedAt: now }
-          : n
-      );
-      setNotes(updatedNotes);
-      saveNotesToStorage(updatedNotes);
-      toast({ title: "Note updated" });
+      updateNoteMutation.mutate({
+        id: selectedNote.id,
+        data: { title: noteTitle, content: noteContent, cnrNumber: cnrNumber || null },
+      });
     } else {
-      const newNote: CNRNote = {
-        id: `cnr-note-${Date.now()}`,
+      createNoteMutation.mutate({
         title: noteTitle || "Untitled Note",
         content: noteContent,
         cnrNumber: cnrNumber || undefined,
-        createdAt: now,
-        updatedAt: now,
-      };
-      const updatedNotes = [newNote, ...notes];
-      setNotes(updatedNotes);
-      saveNotesToStorage(updatedNotes);
-      setSelectedNote(newNote);
-      toast({ title: "Note saved" });
+      });
     }
-    setIsEditing(false);
   };
 
-  const handleSelectNote = (note: CNRNote) => {
+  const handleSelectNote = (note: CnrNote) => {
     setSelectedNote(note);
     setNoteTitle(note.title);
     setNoteContent(note.content);
     setCnrNumber(note.cnrNumber || "");
     setIsEditing(false);
+    setActiveTab("editor");
   };
 
   const handleDeleteNote = (noteId: string) => {
-    const updatedNotes = notes.filter(n => n.id !== noteId);
-    setNotes(updatedNotes);
-    saveNotesToStorage(updatedNotes);
-    if (selectedNote?.id === noteId) {
-      setSelectedNote(null);
-      setNoteTitle("");
-      setNoteContent("");
-      setCnrNumber("");
-      setIsEditing(false);
-    }
-    toast({ title: "Note deleted" });
+    deleteNoteMutation.mutate(noteId);
   };
 
   const formatDate = (dateStr: string) => {
@@ -119,6 +135,8 @@ export default function CNRChatPage() {
       minute: "2-digit",
     });
   };
+
+  const isSaving = createNoteMutation.isPending || updateNoteMutation.isPending;
 
   return (
     <div className="p-6 h-full">
@@ -145,14 +163,34 @@ export default function CNRChatPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 h-[calc(100%-80px)]">
-              <div className="flex justify-center p-4 h-full">
+              <div className="flex justify-center p-4 h-full relative">
+                {!iframeLoaded && (
+                  <div className="absolute inset-4 flex items-center justify-center">
+                    <div className="w-full max-w-[500px] space-y-4">
+                      <Skeleton className="h-12 w-full rounded-lg" />
+                      <Skeleton className="h-8 w-3/4" />
+                      <Skeleton className="h-24 w-full rounded-lg" />
+                      <Skeleton className="h-8 w-1/2" />
+                      <Skeleton className="h-32 w-full rounded-lg" />
+                    </div>
+                  </div>
+                )}
                 <iframe 
                   src="https://cnr-chatbot--smritiseema1022.replit.app" 
                   width="100%"
                   height="100%" 
-                  style={{ border: "none", borderRadius: "12px", maxWidth: "500px", minHeight: "550px" }}
+                  style={{ 
+                    border: "none", 
+                    borderRadius: "12px", 
+                    maxWidth: "500px", 
+                    minHeight: "550px",
+                    opacity: iframeLoaded ? 1 : 0,
+                    transition: "opacity 0.3s ease-in-out"
+                  }}
                   title="eCourts CNR Search"
                   data-testid="iframe-cnr-chatbot"
+                  onLoad={() => setIframeLoaded(true)}
+                  loading="eager"
                 />
               </div>
             </CardContent>
@@ -172,88 +210,116 @@ export default function CNRChatPage() {
                   New
                 </Button>
               </div>
-              <CardDescription>
-                Save notes while researching cases
-              </CardDescription>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col overflow-hidden p-4 pt-0">
-              {isEditing || selectedNote ? (
-                <div className="flex flex-col h-full gap-3">
-                  <Input
-                    placeholder="Note title..."
-                    value={noteTitle}
-                    onChange={(e) => { setNoteTitle(e.target.value); setIsEditing(true); }}
-                    className="text-sm"
-                    data-testid="input-note-title"
-                  />
-                  <Input
-                    placeholder="CNR Number (optional)..."
-                    value={cnrNumber}
-                    onChange={(e) => { setCnrNumber(e.target.value); setIsEditing(true); }}
-                    className="text-sm font-mono"
-                    data-testid="input-cnr-number"
-                  />
-                  <Textarea
-                    placeholder="Write your notes here..."
-                    value={noteContent}
-                    onChange={(e) => { setNoteContent(e.target.value); setIsEditing(true); }}
-                    className="flex-1 min-h-[200px] resize-none text-sm"
-                    data-testid="textarea-note-content"
-                  />
-                  <div className="flex gap-2">
-                    <Button onClick={handleSaveNote} className="flex-1" data-testid="button-save-note">
-                      <Save className="h-4 w-4 mr-1" />
-                      Save
-                    </Button>
-                    {selectedNote && (
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+                <TabsList className="grid w-full grid-cols-2 mb-3">
+                  <TabsTrigger value="editor" className="text-xs" data-testid="tab-editor">
+                    <Edit3 className="h-3 w-3 mr-1" />
+                    Editor
+                  </TabsTrigger>
+                  <TabsTrigger value="saved" className="text-xs" data-testid="tab-saved">
+                    <List className="h-3 w-3 mr-1" />
+                    Saved ({notes.length})
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="editor" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden">
+                  <div className="flex flex-col h-full gap-3">
+                    <Input
+                      placeholder="Note title..."
+                      value={noteTitle}
+                      onChange={(e) => { setNoteTitle(e.target.value); setIsEditing(true); }}
+                      className="text-sm"
+                      data-testid="input-note-title"
+                    />
+                    <Input
+                      placeholder="CNR Number (optional)..."
+                      value={cnrNumber}
+                      onChange={(e) => { setCnrNumber(e.target.value); setIsEditing(true); }}
+                      className="text-sm font-mono"
+                      data-testid="input-cnr-number"
+                    />
+                    <Textarea
+                      placeholder="Write your notes here..."
+                      value={noteContent}
+                      onChange={(e) => { setNoteContent(e.target.value); setIsEditing(true); }}
+                      className="flex-1 min-h-[200px] resize-none text-sm"
+                      data-testid="textarea-note-content"
+                    />
+                    <div className="flex gap-2">
                       <Button 
-                        variant="destructive" 
-                        size="icon"
-                        onClick={() => handleDeleteNote(selectedNote.id)}
-                        data-testid="button-delete-note"
+                        onClick={handleSaveNote} 
+                        className="flex-1" 
+                        disabled={isSaving}
+                        data-testid="button-save-note"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Save className="h-4 w-4 mr-1" />
+                        {isSaving ? "Saving..." : "Save"}
                       </Button>
-                    )}
+                      {selectedNote && (
+                        <Button 
+                          variant="destructive" 
+                          size="icon"
+                          onClick={() => handleDeleteNote(selectedNote.id)}
+                          disabled={deleteNoteMutation.isPending}
+                          data-testid="button-delete-note"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ) : notes.length > 0 ? (
-                <ScrollArea className="flex-1">
-                  <div className="space-y-2 pr-2">
-                    {notes.map((note) => (
-                      <div
-                        key={note.id}
-                        onClick={() => handleSelectNote(note)}
-                        className="p-3 rounded-md border hover-elevate cursor-pointer"
-                        data-testid={`note-item-${note.id}`}
-                      >
-                        <div className="font-medium text-sm truncate">{note.title}</div>
-                        {note.cnrNumber && (
-                          <div className="text-xs font-mono text-muted-foreground mt-1">
-                            CNR: {note.cnrNumber}
+                </TabsContent>
+
+                <TabsContent value="saved" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden">
+                  {notesLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-20 w-full" />
+                      <Skeleton className="h-20 w-full" />
+                      <Skeleton className="h-20 w-full" />
+                    </div>
+                  ) : notes.length > 0 ? (
+                    <ScrollArea className="h-full">
+                      <div className="space-y-2 pr-2">
+                        {notes.map((note) => (
+                          <div
+                            key={note.id}
+                            onClick={() => handleSelectNote(note)}
+                            className={`p-3 rounded-md border hover-elevate cursor-pointer ${
+                              selectedNote?.id === note.id ? "border-primary bg-primary/5" : ""
+                            }`}
+                            data-testid={`note-item-${note.id}`}
+                          >
+                            <div className="font-medium text-sm truncate">{note.title}</div>
+                            {note.cnrNumber && (
+                              <div className="text-xs font-mono text-muted-foreground mt-1">
+                                CNR: {note.cnrNumber}
+                              </div>
+                            )}
+                            <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {note.content || "No content"}
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
+                              <Clock className="h-3 w-3" />
+                              {formatDate(note.updatedAt)}
+                            </div>
                           </div>
-                        )}
-                        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {note.content || "No content"}
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-                          <Clock className="h-3 w-3" />
-                          {formatDate(note.updatedAt)}
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-center p-4">
-                  <div>
-                    <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">
-                      No notes yet. Click "New" to create your first note.
-                    </p>
-                  </div>
-                </div>
-              )}
+                    </ScrollArea>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-center p-4 h-full">
+                      <div>
+                        <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground">
+                          No saved notes yet. Click "New" to create your first note.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </div>

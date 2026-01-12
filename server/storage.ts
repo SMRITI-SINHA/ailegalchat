@@ -21,6 +21,8 @@ import type {
   InsertResearchQuery,
   ResearchNote,
   InsertResearchNote,
+  CnrNote,
+  InsertCnrNote,
   GoogleCalendarCredentials,
   InsertGoogleCalendarCredentials,
   CalendarEvent,
@@ -84,6 +86,12 @@ export interface IStorage {
   createResearchNote(note: InsertResearchNote): Promise<ResearchNote>;
   deleteResearchNote(id: string): Promise<void>;
 
+  getCnrNotes(): Promise<CnrNote[]>;
+  getCnrNote(id: string): Promise<CnrNote | undefined>;
+  createCnrNote(note: InsertCnrNote): Promise<CnrNote>;
+  updateCnrNote(id: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined>;
+  deleteCnrNote(id: string): Promise<void>;
+
   getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined>;
   createGoogleCalendarCredentials(creds: InsertGoogleCalendarCredentials): Promise<GoogleCalendarCredentials>;
   updateGoogleCalendarCredentials(userId: string, updates: Partial<GoogleCalendarCredentials>): Promise<GoogleCalendarCredentials | undefined>;
@@ -109,6 +117,7 @@ export class MemStorage implements IStorage {
   private complianceChecklists: Map<string, ComplianceChecklist>;
   private researchQueries: Map<string, ResearchQuery>;
   private researchNotes: Map<string, ResearchNote>;
+  private cnrNotes: Map<string, CnrNote>;
   private googleCalendarCredentials: Map<string, GoogleCalendarCredentials>;
   private calendarEvents: Map<string, CalendarEvent>;
 
@@ -124,6 +133,7 @@ export class MemStorage implements IStorage {
     this.complianceChecklists = new Map();
     this.researchQueries = new Map();
     this.researchNotes = new Map();
+    this.cnrNotes = new Map();
     this.googleCalendarCredentials = new Map();
     this.calendarEvents = new Map();
     this.seedData();
@@ -597,6 +607,43 @@ export class MemStorage implements IStorage {
 
   async deleteResearchNote(id: string): Promise<void> {
     this.researchNotes.delete(id);
+  }
+
+  async getCnrNotes(): Promise<CnrNote[]> {
+    return Array.from(this.cnrNotes.values()).sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
+  async getCnrNote(id: string): Promise<CnrNote | undefined> {
+    return this.cnrNotes.get(id);
+  }
+
+  async createCnrNote(note: InsertCnrNote): Promise<CnrNote> {
+    const id = randomUUID();
+    const now = new Date();
+    const newNote: CnrNote = {
+      id,
+      title: note.title,
+      content: note.content,
+      cnrNumber: note.cnrNumber || null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.cnrNotes.set(id, newNote);
+    return newNote;
+  }
+
+  async updateCnrNote(id: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined> {
+    const note = this.cnrNotes.get(id);
+    if (!note) return undefined;
+    const updatedNote = { ...note, ...updates, updatedAt: new Date() };
+    this.cnrNotes.set(id, updatedNote);
+    return updatedNote;
+  }
+
+  async deleteCnrNote(id: string): Promise<void> {
+    this.cnrNotes.delete(id);
   }
 
   async getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined> {

@@ -335,6 +335,24 @@ export const insertResearchNoteSchema = createInsertSchema(researchNotes).omit({
 export type InsertResearchNote = z.infer<typeof insertResearchNoteSchema>;
 export type ResearchNote = typeof researchNotes.$inferSelect;
 
+export const cnrNotes = pgTable("cnr_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  cnrNumber: text("cnr_number"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertCnrNoteSchema = createInsertSchema(cnrNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCnrNote = z.infer<typeof insertCnrNoteSchema>;
+export type CnrNote = typeof cnrNotes.$inferSelect;
+
 export const googleCalendarCredentials = pgTable("google_calendar_credentials", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
