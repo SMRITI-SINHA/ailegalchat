@@ -4,6 +4,7 @@ import { createRequire } from "module";
 import multer from "multer";
 import OpenAI from "openai";
 import mammoth from "mammoth";
+import sanitizeHtmlLib from "sanitize-html";
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
@@ -21,7 +22,165 @@ function decodeFilename(rawName: string): string {
   }
 }
 
-async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
+// Escape HTML entities
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Sanitize HTML using sanitize-html library for proper XSS protection
+function sanitizeHtml(html: string): string {
+  // Use sanitize-html with whitelist of safe tags for legal documents
+  let sanitized = sanitizeHtmlLib(html, {
+    allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                   'ul', 'ol', 'li', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr'],
+    allowedAttributes: {
+      'p': ['style'],
+      'div': ['style'],
+      'span': ['style'],
+      'td': ['style', 'colspan', 'rowspan'],
+      'th': ['style', 'colspan', 'rowspan'],
+    },
+    allowedStyles: {
+      '*': {
+        'text-align': [/^left$/, /^right$/, /^center$/, /^justify$/],
+        'font-weight': [/^bold$/, /^normal$/],
+      }
+    },
+    disallowedTagsMode: 'discard',
+  });
+  
+  // Remove page markers
+  sanitized = sanitized
+    .replace(/—\s*\d+\s*(of|\/)\s*\d+\s*—/gi, '')
+    .replace(/>Page\s+\d+</gi, '><');
+  
+  return sanitized;
+}
+
+// Convert plain text to structured HTML preserving legal document formatting
+function textToLegalHtml(text: string): string {
+  // Remove page markers like "— 1 of 6 —" or "Page 1" etc.
+  let cleaned = text
+    .replace(/—\s*\d+\s*(of|\/)\s*\d+\s*—/gi, '')
+    .replace(/^\s*Page\s+\d+\s*$/gmi, '')
+    .replace(/^\s*-\s*\d+\s*-\s*$/gm, '')
+    .replace(/^\s*\d+\s*$/gm, ''); // Remove standalone page numbers
+  
+  // Normalize line endings
+  cleaned = cleaned.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  
+  // Split into lines for processing
+  const lines = cleaned.split('\n');
+  const htmlParts: string[] = [];
+  let i = 0;
+  
+  // Detect if a line starts a numbered clause or lettered sub-clause
+  // Covers: 1., 2), (1), 1.1, 1.1.1, 2.3.4, I., II., (i), (a), a., A., bullets, etc.
+  const isNumberedClause = (line: string) => /^\d+[\.\)]\s+/.test(line) || /^\(\d+\)\s+/.test(line);
+  // Multi-level decimal: 1.1, 1.1.1, 2.3.4.5, etc. - uses (?:\d+\.)+ to match any depth
+  const isDecimalNumbered = (line: string) => /^(?:\d+\.)+\d*[\.)]?\s+/.test(line);
+  const isRomanClause = (line: string) => /^[IVXLCDM]+[\.\)]\s+/i.test(line) || /^\([ivxlcdm]+\)\s+/i.test(line);
+  const isLetteredClause = (line: string) => /^\([a-z]\)\s+/i.test(line) || /^[a-z][\.\)]\s+/i.test(line);
+  const isBulletClause = (line: string) => /^[\-\*\•]\s+/.test(line);
+  const isSubClause = (line: string) => 
+    isNumberedClause(line) || 
+    isDecimalNumbered(line) || 
+    isRomanClause(line) || 
+    isLetteredClause(line) ||
+    isBulletClause(line);
+  
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+    
+    // Empty line - preserve as spacing
+    if (trimmedLine === '') {
+      htmlParts.push('<p>&nbsp;</p>');
+      i++;
+      continue;
+    }
+    
+    // Detect centered content (court titles, "Versus", etc.)
+    const isCentered = (
+      /^(IN THE|BEFORE THE|HON'?BLE|COURT OF|VERSUS|Vs\.?|V\/s\.?|SCHEDULE|ANNEXURE)/i.test(trimmedLine) ||
+      /^O\.?S\.?\s*No\.|^W\.?P\.?\s*No\.|^C\.?A\.?\s*No\.|^S\.?L\.?P\.?\s*No\./i.test(trimmedLine) ||
+      /^(JOINT|COMPROMISE|MEMO|PETITION|APPLICATION|AFFIDAVIT|REPLY|WRITTEN STATEMENT|PRAYER|RELIEF)/i.test(trimmedLine)
+    );
+    
+    // Detect headings (ALL CAPS lines that are likely section headers)
+    const isHeading = /^[A-Z][A-Z\s\-:\.]+$/.test(trimmedLine) && 
+                      trimmedLine.length > 8 && 
+                      trimmedLine.length < 80 &&
+                      !isSubClause(trimmedLine);
+    
+    // Detect party alignment markers (…Plaintiff, ...Defendant)
+    const isRightAligned = /^\.{2,}(Plaintiff|Defendant|Petitioner|Respondent|Appellant|Complainant)/i.test(trimmedLine) ||
+                           /^…+(Plaintiff|Defendant|Petitioner|Respondent|Appellant|Complainant)/i.test(trimmedLine);
+    
+    // Build the line with proper formatting
+    let htmlLine = escapeHtml(trimmedLine);
+    
+    if (isHeading) {
+      htmlLine = `<p style="text-align:center"><strong>${htmlLine}</strong></p>`;
+      i++;
+    } else if (isCentered) {
+      htmlLine = `<p style="text-align:center">${htmlLine}</p>`;
+      i++;
+    } else if (isRightAligned) {
+      htmlLine = `<p style="text-align:right">${htmlLine}</p>`;
+      i++;
+    } else if (isSubClause(trimmedLine)) {
+      // Numbered/lettered clauses - each becomes its own paragraph
+      // But continuation lines (non-clause, non-empty) should be grouped with <br/>
+      let blockLines = [htmlLine];
+      while (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        const nextTrimmed = nextLine.trim();
+        // If next line is empty, we've hit a paragraph break
+        if (nextTrimmed === '') break;
+        // If next line is a new clause, break to make it its own paragraph
+        if (isSubClause(nextTrimmed)) break;
+        // If next line looks like a centered section, break
+        if (/^(IN THE|VERSUS|SCHEDULE|Dated|PRAYER|RELIEF)/i.test(nextTrimmed)) break;
+        
+        i++;
+        blockLines.push(escapeHtml(nextTrimmed));
+      }
+      htmlLine = `<p>${blockLines.join('<br/>')}</p>`;
+      i++;
+    } else {
+      // Regular paragraph - group consecutive lines until blank line or new section
+      let blockLines = [htmlLine];
+      while (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        const nextTrimmed = nextLine.trim();
+        // If next line is empty, we've hit a paragraph break
+        if (nextTrimmed === '') break;
+        // If next line is a new clause, break
+        if (isSubClause(nextTrimmed)) break;
+        // If next line looks like a new section, break
+        if (/^(IN THE|BEFORE|VERSUS|SCHEDULE|JOINT|Dated|PRAYER|RELIEF)/i.test(nextTrimmed)) break;
+        // If next line is right-aligned, break
+        if (/^\.{2,}|^…+/.test(nextTrimmed)) break;
+        
+        i++;
+        blockLines.push(escapeHtml(nextTrimmed));
+      }
+      htmlLine = `<p>${blockLines.join('<br/>')}</p>`;
+      i++;
+    }
+    
+    htmlParts.push(htmlLine);
+  }
+  
+  return htmlParts.join('\n');
+}
+
+async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: string; html: string }> {
   const mimeType = file.mimetype.toLowerCase();
   const fileName = file.originalname.toLowerCase();
   
@@ -30,28 +189,37 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
       const parser = new PDFParse({ data: file.buffer });
       const result = await parser.getText();
       await parser.destroy();
-      return result.text || "";
+      const text = result.text || "";
+      return { text, html: textToLegalHtml(text) };
     }
     
     if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || 
         fileName.endsWith(".docx")) {
-      const result = await mammoth.extractRawText({ buffer: file.buffer });
-      return result.value || "";
+      // Use convertToHtml to preserve document structure
+      const htmlResult = await mammoth.convertToHtml({ buffer: file.buffer });
+      const textResult = await mammoth.extractRawText({ buffer: file.buffer });
+      // Sanitize HTML to prevent XSS and remove page markers
+      const html = sanitizeHtml(htmlResult.value || "");
+      return { text: textResult.value || "", html };
     }
     
     if (mimeType === "application/msword" || fileName.endsWith(".doc")) {
-      const result = await mammoth.extractRawText({ buffer: file.buffer });
-      return result.value || "";
+      const htmlResult = await mammoth.convertToHtml({ buffer: file.buffer });
+      const textResult = await mammoth.extractRawText({ buffer: file.buffer });
+      // Sanitize HTML to prevent XSS and remove page markers
+      const html = sanitizeHtml(htmlResult.value || "");
+      return { text: textResult.value || "", html };
     }
     
     if (mimeType === "text/plain" || fileName.endsWith(".txt")) {
-      return file.buffer.toString("utf-8");
+      const text = file.buffer.toString("utf-8");
+      return { text, html: textToLegalHtml(text) };
     }
     
-    return `[Unsupported file format: ${mimeType}]`;
+    return { text: `[Unsupported file format: ${mimeType}]`, html: `<p>[Unsupported file format: ${mimeType}]</p>` };
   } catch (error) {
     console.error(`Error extracting text from ${file.originalname}:`, error);
-    return `[Error extracting text from document]`;
+    return { text: `[Error extracting text from document]`, html: `<p>[Error extracting text from document]</p>` };
   }
 }
 
@@ -144,8 +312,8 @@ export async function registerRoutes(
 
       const documents = await Promise.all(
         files.map(async (file) => {
-          const extractedText = await extractTextFromFile(file);
-          const pageCount = Math.max(1, Math.ceil(extractedText.length / 3000));
+          const extracted = await extractTextFromFile(file);
+          const pageCount = Math.max(1, Math.ceil(extracted.text.length / 3000));
           const decodedName = decodeFilename(file.originalname);
           
           const doc = await storage.createDocument({
@@ -156,7 +324,8 @@ export async function registerRoutes(
             status: "completed",
             processingCost: 0,
             summary: null,
-            extractedText: extractedText,
+            extractedText: extracted.text,
+            extractedHtml: extracted.html,
           });
 
           const cost = 0.50 + (pageCount * 0.01);

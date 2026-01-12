@@ -288,10 +288,13 @@ export default function AIDraftingPage() {
       
       if (response.ok) {
         const docs = await response.json();
-        if (docs.length > 0 && docs[0].extractedText) {
+        if (docs.length > 0) {
+          // Use extractedHtml from server (preserves legal document structure)
+          // Fallback to extractedText if HTML not available
+          const htmlContent = docs[0].extractedHtml || docs[0].extractedText || "";
           setUploadedDraftFile({
             name: file.name,
-            content: docs[0].extractedText,
+            content: htmlContent,
           });
         }
       }
@@ -305,36 +308,15 @@ export default function AIDraftingPage() {
   const handleOpenUploadedDraft = async () => {
     if (!uploadedDraftFile) return;
     const draft = await createDraftMutation.mutateAsync(uploadedDraftFile.name.replace(/\.[^.]+$/, ""));
-    // Preserve original document structure exactly:
-    // 1. Normalize line endings (Windows \r\n -> \n)
-    // 2. Escape HTML entities to prevent injection
-    // 3. Convert line structure: double newlines become paragraph breaks, single newlines become <br/>
-    const escapeHtml = (text: string) => {
-      return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    };
-    // Normalize Windows/Mac line endings to Unix
-    const normalizedContent = uploadedDraftFile.content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const escapedContent = escapeHtml(normalizedContent);
-    // Split on double newlines (paragraph breaks), preserving structure
-    const preservedContent = escapedContent
-      .split(/\n\n/)
-      .map(para => {
-        if (para.trim() === '') return '<p>&nbsp;</p>'; // Preserve empty paragraphs
-        return `<p>${para.replace(/\n/g, '<br/>')}</p>`;
-      })
-      .join('\n');
+    // Content is already HTML from server - use directly
     await updateDraftMutation.mutateAsync({
       id: draft.id,
       title: uploadedDraftFile.name.replace(/\.[^.]+$/, ""),
-      content: preservedContent,
+      content: uploadedDraftFile.content,
     });
     setSelectedDraftId(draft.id);
     setDraftTitle(uploadedDraftFile.name.replace(/\.[^.]+$/, ""));
-    setDraftContent(preservedContent);
+    setDraftContent(uploadedDraftFile.content);
     setViewMode("editor");
     setShowResearchSidebar(true);
   };

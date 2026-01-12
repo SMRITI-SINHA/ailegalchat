@@ -27,6 +27,7 @@ export const documents = pgTable("documents", {
   processingCost: real("processing_cost").default(0),
   summary: text("summary"),
   extractedText: text("extracted_text"),
+  extractedHtml: text("extracted_html"),
   uploadedAt: timestamp("uploaded_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

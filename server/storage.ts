@@ -151,6 +151,7 @@ export class MemStorage implements IStorage {
         processingCost: 0.95,
         summary: "This is a comprehensive service agreement between ABC Corp and XYZ Ltd covering IT consulting services for a 2-year term. Key clauses include payment terms, intellectual property rights, confidentiality obligations, and termination conditions.",
         extractedText: null,
+        extractedHtml: null,
         uploadedAt: new Date(Date.now() - 600000),
       },
       {
@@ -163,6 +164,7 @@ export class MemStorage implements IStorage {
         processingCost: 1.20,
         summary: "Civil suit regarding property boundary dispute in South Delhi. The petitioner claims adverse possession over a 500 sq yard plot. Multiple witness statements and land records are included.",
         extractedText: null,
+        extractedHtml: null,
         uploadedAt: new Date(Date.now() - 3600000),
       },
       {
@@ -175,6 +177,7 @@ export class MemStorage implements IStorage {
         processingCost: 0,
         summary: null,
         extractedText: null,
+        extractedHtml: null,
         uploadedAt: new Date(Date.now() - 120000),
       },
     ];
@@ -285,6 +288,7 @@ export class MemStorage implements IStorage {
       processingCost: insertDoc.processingCost ?? null,
       summary: insertDoc.summary ?? null,
       extractedText: insertDoc.extractedText ?? null,
+      extractedHtml: insertDoc.extractedHtml ?? null,
       uploadedAt: new Date(),
     };
     this.documents.set(id, doc);
