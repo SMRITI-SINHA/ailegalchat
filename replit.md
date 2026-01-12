@@ -198,3 +198,9 @@ The application runs via `npm run dev` which starts both the Express backend and
 - Events from Google Calendar sync back to Chakshi with conflict handling
 - Calendar UI with month navigation, event type filtering, and upcoming events panel
 - Support for event types: academic, exam, career, court, professional
+- Enhanced document structure preservation for uploaded drafts with extractedHtml field
+- Added sanitize-html library for XSS protection on DOCX/DOC uploads
+- textToLegalHtml function detects: numbered clauses (1., 2)), decimal numbering (1.1, 2.3.4.5), Roman numerals (I., (iv)), letters ((a), b.), bullets
+- DOCX extraction uses mammoth.convertToHtml for structure preservation
+- PDF/TXT extraction uses textToLegalHtml for legal formatting detection (court titles, headings, party markers)
+- Page markers removed from extracted content (— 1 of 6 —, Page X, etc.)
