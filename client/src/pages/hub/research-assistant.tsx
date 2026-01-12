@@ -276,7 +276,7 @@ export default function ResearchAssistantPage() {
                     <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Globe className="h-3 w-3" />
-                        {advancedResults.domainCount}+ sources searched
+                        {advancedResults.domainCount}+ Indian legal sources
                       </span>
                       <span className="flex items-center gap-1">
                         <FileText className="h-3 w-3" />

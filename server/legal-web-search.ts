@@ -187,12 +187,14 @@ export class LegalWebSearchService {
           messages: [
             {
               role: "system",
-              content: `You are a legal research assistant specializing in Indian law. Provide accurate, factual information with citations. Focus on:
+              content: `You are a legal research assistant specializing in Indian law. Search across authoritative Indian legal sources including: Indian Kanoon, Live Law, Bar & Bench, SCC Online, Manupatra, government portals (SEBI, RBI, MCA, CBIC), High Court and Supreme Court websites, and regulatory bodies.
+
+Provide accurate, factual information with citations. Focus on:
 - Recent legal developments and amendments
-- Case law and precedents
-- Regulatory updates from SEBI, RBI, MCA, CBIC
-- Legal news from authoritative sources
-Be precise and cite your sources.`
+- Case law and precedents from Indian courts
+- Regulatory updates from SEBI, RBI, MCA, CBIC, IRDAI, CCI, NCLT
+- Legal news from authoritative Indian sources
+Be precise and always cite your sources with proper legal citations.`
             },
             {
               role: "user",
@@ -202,7 +204,7 @@ Be precise and cite your sources.`
           max_tokens: 1024,
           temperature: 0.2,
           top_p: 0.9,
-          search_domain_filter: legalDomains.slice(0, 3),
+          search_domain_filter: [],
           return_images: false,
           return_related_questions: false,
           search_recency_filter: "month",
@@ -392,7 +394,7 @@ Be precise and cite your sources.`
           messages: [
             {
               role: "system",
-              content: `You are an advanced legal research assistant specializing in Indian law with 25+ years of expertise. 
+              content: `You are an advanced legal research assistant specializing in Indian law with 25+ years of expertise. Search across 130+ authoritative Indian legal sources including: Indian Kanoon, Live Law, Bar & Bench, SCC Online, Manupatra, all High Courts and Supreme Court portals, government regulatory bodies (SEBI, RBI, MCA, CBIC, IRDAI, CCI, NCLT, NCLAT, NCDRC, RERA, IBBI), and legal research platforms.
 
 IMPORTANT: You MUST respond with a valid JSON object only, no markdown formatting, no code blocks.
 
@@ -437,7 +439,7 @@ Ensure all extracted paragraphs are VERBATIM quotes with proper citations. Ident
           ],
           max_tokens: 4096,
           temperature: 0.1,
-          search_domain_filter: LEGAL_DOMAINS.slice(0, 3),
+          search_domain_filter: [],
           return_images: false,
           search_recency_filter: "month",
           stream: false,
@@ -474,13 +476,44 @@ Ensure all extracted paragraphs are VERBATIM quotes with proper citations. Ident
         source: this.extractSourceName(url),
       }));
 
+      const extractedParagraphs = Array.isArray(parsed.extractedParagraphs) 
+        ? parsed.extractedParagraphs.map((p: any) => ({
+            text: p.text || "",
+            citation: p.citation || "",
+            sections: Array.isArray(p.sections) ? p.sections : [],
+            acts: Array.isArray(p.acts) ? p.acts : [],
+            court: p.court || "",
+          }))
+        : [];
+
+      const timeline = Array.isArray(parsed.timeline)
+        ? parsed.timeline.map((t: any) => ({
+            date: t.date || "",
+            event: t.event || "",
+            source: t.source || "",
+          }))
+        : [];
+
+      const conflicts = Array.isArray(parsed.conflicts)
+        ? parsed.conflicts.map((c: any) => ({
+            issue: c.issue || "",
+            sources: Array.isArray(c.sources) ? c.sources : [],
+          }))
+        : [];
+
+      const tags = {
+        sections: Array.isArray(parsed.tags?.sections) ? parsed.tags.sections : [],
+        acts: Array.isArray(parsed.tags?.acts) ? parsed.tags.acts : [],
+        courts: Array.isArray(parsed.tags?.courts) ? parsed.tags.courts : [],
+      };
+
       return {
         answer: parsed.analysis || content,
         sources,
-        extractedParagraphs: parsed.extractedParagraphs || [],
-        timeline: parsed.timeline || [],
-        conflicts: parsed.conflicts || [],
-        tags: parsed.tags || { sections: [], acts: [], courts: [] },
+        extractedParagraphs,
+        timeline,
+        conflicts,
+        tags,
       };
     } catch (error) {
       console.error("Advanced search error:", error);
