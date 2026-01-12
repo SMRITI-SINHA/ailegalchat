@@ -1,6 +1,5 @@
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   FileSignature,
@@ -13,15 +12,11 @@ import {
   Search,
   Scroll,
   ClipboardCheck,
-  ArrowRight,
   Sparkles,
-  Play,
   Brain,
   Swords,
   FlaskConical,
-  MessageSquare,
   StickyNote,
-  CalendarDays,
 } from "lucide-react";
 
 const draftingCards = [
@@ -123,11 +118,6 @@ const studyBuddyCards = [
   },
 ];
 
-const tutorialVideos = [
-  { title: "Prepare List of Dates", description: "DocuChat / Document Review", icon: Play },
-  { title: "Upload Your Draft", description: "Upload your Draft", icon: Play },
-  { title: "Generate Arguments", description: "Generate Arguments", icon: Play },
-];
 
 function FeatureCard({ card, isBeta = false }: { card: any; isBeta?: boolean }) {
   return (
@@ -206,43 +196,6 @@ export default function HubPage() {
         </div>
       </section>
 
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Calendar</h2>
-        <Link href="/hub/calendar">
-          <Card className="hover-elevate cursor-pointer" data-testid="card-hub-calendar">
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-md bg-muted">
-                  <CalendarDays className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-sm">Legal Academic Calendar</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Sync your personal, institutional & legal ecosystem timelines with Google or Outlook
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-semibold mb-4">How to use Chakshi</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          {tutorialVideos.map((video, i) => (
-            <Card key={i} className="hover-elevate cursor-pointer bg-gradient-to-br from-primary/5 to-primary/10">
-              <CardContent className="p-6 flex flex-col items-center justify-center text-center h-40">
-                <div className="p-3 rounded-full bg-primary/20 mb-3">
-                  <video.icon className="h-6 w-6 text-primary" />
-                </div>
-                <p className="text-sm font-medium">{video.title}</p>
-                <p className="text-xs text-muted-foreground mt-1">{video.description}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
