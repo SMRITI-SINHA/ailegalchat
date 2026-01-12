@@ -51,7 +51,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { markdownToHtml } from "@/lib/utils";
+import { markdownToHtml, stripHtmlTags } from "@/lib/utils";
 import type { Draft, IndianLanguage } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -545,7 +545,7 @@ export default function AIDraftingPage() {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 line-clamp-2">
-                      {(draft.content || "").substring(0, 100) || "Empty draft"}...
+                      {stripHtmlTags(draft.content || "").substring(0, 100) || "Empty draft"}...
                     </p>
                     <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
                       <Calendar className="h-3 w-3" />
