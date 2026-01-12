@@ -330,8 +330,8 @@ export default function AIDraftingPage() {
                         <div className="p-2 rounded-md bg-muted">
                           <FileText className="h-4 w-4 text-muted-foreground" />
                         </div>
-                        <div className="min-w-0">
-                          <h3 className="font-medium text-sm truncate">{draft.title}</h3>
+                        <div className="min-w-0 flex-1 max-w-[200px]">
+                          <h3 className="font-medium text-sm truncate" title={draft.title}>{draft.title}</h3>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <Badge variant="outline" className="text-[10px]">{getTypeLabel(draft.type)}</Badge>
                             {draft.modelUsed && (

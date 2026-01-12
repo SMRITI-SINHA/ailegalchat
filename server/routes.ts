@@ -678,6 +678,31 @@ Ensure the translation is accurate and uses appropriate legal terminology in ${t
     }
   });
 
+  app.post("/api/research/advanced", async (req: Request, res: Response) => {
+    try {
+      const { query } = req.body;
+      if (!query) {
+        return res.status(400).json({ error: "Query is required" });
+      }
+
+      const [kanoonResults, advancedResults] = await Promise.all([
+        indianKanoon.search(query, 0),
+        legalWebSearch.advancedSearch(query),
+      ]);
+
+      res.json({
+        query,
+        disclaimer: `This research compiles judicial decisions, statutory provisions, and regulatory materials relevant to "${query}". No legal opinion or advice is provided.`,
+        kanoonResults,
+        ...advancedResults,
+        domainCount: legalWebSearch.getDomainList().length,
+      });
+    } catch (error) {
+      console.error("Advanced research error:", error);
+      res.status(500).json({ error: "Failed to perform advanced research" });
+    }
+  });
+
   app.post("/api/research/statutes", async (req: Request, res: Response) => {
     try {
       const { query } = req.body;

@@ -229,9 +229,17 @@ export default function NyayaAIPage() {
             <div className="h-full flex flex-col items-center justify-center">
               <Scale className="h-16 w-16 mb-6 text-muted-foreground/30" />
               <h2 className="text-xl font-semibold mb-2">Welcome to Nyaya AI</h2>
-              <p className="text-muted-foreground text-center max-w-md mb-8">
+              <p className="text-muted-foreground text-center max-w-md mb-4">
                 Ask any legal question and get accurate, citation-backed answers instantly. Trained on Indian law, statutes, and case precedents.
               </p>
+              
+              <Card className="max-w-md mb-8 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground italic text-center">
+                    This AI provides legal research and information. No legal opinion or advice is provided. Always consult a qualified legal professional.
+                  </p>
+                </CardContent>
+              </Card>
 
               <div className="w-full max-w-2xl">
                 <h3 className="text-sm font-medium mb-3 text-muted-foreground">Try These Sample Questions</h3>
@@ -269,6 +277,11 @@ export default function NyayaAIPage() {
                           {msg.modelUsed && <ModelBadge tier={msg.modelUsed} />}
                           {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
                           {msg.cost && <CostDisplay amount={msg.cost} size="sm" />}
+                        </div>
+                        <div className="mb-3 p-2 rounded bg-muted/50 border-l-2 border-primary">
+                          <p className="text-[10px] text-muted-foreground italic">
+                            This research compiles judicial decisions and statutory provisions. No legal opinion or advice is provided.
+                          </p>
                         </div>
                         <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                         {msg.citations && msg.citations.length > 0 && (
