@@ -92,7 +92,7 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Link href="/dashboard">
+            <Link href="/hub">
               <Button data-testid="button-get-started">
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -118,7 +118,7 @@ export default function LandingPage() {
               process documents, conduct research, and draft legal documents with AI precision.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
-              <Link href="/dashboard">
+              <Link href="/hub">
                 <Button size="lg" data-testid="button-start-free">
                   Start Free Now
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -249,7 +249,7 @@ export default function LandingPage() {
                       Start processing documents and asking questions today.
                     </p>
                   </div>
-                  <Link href="/dashboard">
+                  <Link href="/hub">
                     <Button size="lg" data-testid="button-try-free">
                       Try Free Now
                       <ArrowRight className="ml-2 h-4 w-4" />

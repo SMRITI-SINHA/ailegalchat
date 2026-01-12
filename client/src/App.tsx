@@ -9,11 +9,6 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
-import DashboardPage from "@/pages/dashboard";
-import DocumentsPage from "@/pages/documents";
-import ChatPage from "@/pages/chat";
-import DraftingPage from "@/pages/drafting";
-import SettingsPage from "@/pages/settings";
 import HubPage from "@/pages/hub";
 import AIDraftingPage from "@/pages/hub/drafting-ai";
 import EmptyDraftPage from "@/pages/hub/drafting-empty";
@@ -65,11 +60,6 @@ function Router() {
   return (
     <AppLayout>
       <Switch>
-        <Route path="/dashboard" component={DashboardPage} />
-        <Route path="/documents" component={DocumentsPage} />
-        <Route path="/chat" component={ChatPage} />
-        <Route path="/drafting" component={DraftingPage} />
-        <Route path="/settings" component={SettingsPage} />
         <Route path="/hub" component={HubPage} />
         <Route path="/hub/drafting/ai" component={AIDraftingPage} />
         <Route path="/hub/drafting/empty" component={EmptyDraftPage} />
