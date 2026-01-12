@@ -9,13 +9,10 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarHeader,
-  SidebarFooter,
 } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
 import {
   Scale,
   Sparkles,
-  Shield,
   CalendarDays,
 } from "lucide-react";
 
@@ -67,13 +64,6 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Shield className="h-3 w-3" />
-          <span>SOC 2 Compliant</span>
-          <Badge variant="outline" className="text-[10px] py-0">Zero Data Retention</Badge>
-        </div>
-      </SidebarFooter>
     </Sidebar>
   );
 }
