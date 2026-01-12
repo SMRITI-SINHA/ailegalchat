@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Save, Plus, FileText, Trash2, Sparkles, Globe, Clock, AlertTriangle, ChevronDown } from "lucide-react";
+import { Search, Save, Plus, FileText, Trash2, Sparkles, Zap, Clock, AlertTriangle, ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -157,9 +157,9 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
               </Label>
             </div>
             {isAdvancedMode && (
-              <Badge variant="secondary" className="text-[10px]">
-                <Globe className="h-2.5 w-2.5 mr-1" />
-                130+ sources
+              <Badge variant="secondary" className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
+                <Zap className="h-2.5 w-2.5 mr-1" />
+                Live Search
               </Badge>
             )}
           </div>

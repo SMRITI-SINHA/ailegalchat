@@ -144,6 +144,7 @@ export function PremiumEditor({
   const lastKnownCursorPosition = useRef<number>(0);
   const editorRef = useRef<HTMLDivElement>(null);
   const contentEditableRef = useRef<HTMLDivElement>(null);
+  const isInternalUpdate = useRef(false);
 
   const getCursorPositionInEditor = (): number | null => {
     const selection = window.getSelection();
@@ -187,6 +188,15 @@ export function PremiumEditor({
   }, [title]);
 
   useEffect(() => {
+    if (contentEditableRef.current && !isInternalUpdate.current) {
+      if (contentEditableRef.current.innerHTML !== content) {
+        contentEditableRef.current.innerHTML = content;
+      }
+    }
+    isInternalUpdate.current = false;
+  }, [content]);
+
+  useEffect(() => {
     if (!showAiDialog) return;
     
     const interval = setInterval(() => {
@@ -214,9 +224,16 @@ export function PremiumEditor({
 
   const canTranslate = selectedLanguage !== currentLanguage && onTranslate;
 
+  const stripHtml = (html: string) => {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+  };
+
   const handleDownload = (format: "txt" | "docx" | "pdf") => {
     if (format === "txt") {
-      const blob = new Blob([content], { type: "text/plain" });
+      const plainText = stripHtml(content);
+      const blob = new Blob([plainText], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -231,7 +248,7 @@ export function PremiumEditor({
         <head><meta charset='utf-8'><title>${title}</title></head>
         <body style="font-family: ${fontFamily}; font-size: ${fontSize}pt;">
           <h1>${title}</h1>
-          <div style="white-space: pre-wrap;">${content}</div>
+          <div>${content}</div>
         </body>
         </html>`;
       const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
@@ -249,7 +266,7 @@ export function PremiumEditor({
             <head><title>${title}</title></head>
             <body style="font-family: ${fontFamily}; font-size: ${fontSize}pt; padding: 40px;">
               <h1>${title}</h1>
-              <div style="white-space: pre-wrap;">${content}</div>
+              <div>${content}</div>
               <script>window.print(); window.close();</script>
             </body>
           </html>
@@ -325,6 +342,73 @@ export function PremiumEditor({
   };
 
   const showPlaceholder = showAiHelper && !content && !editorFocused;
+
+  const execFormatCommand = (command: string, value?: string) => {
+    if (contentEditableRef.current) {
+      contentEditableRef.current.focus();
+      document.execCommand(command, false, value);
+      isInternalUpdate.current = true;
+      const newContent = contentEditableRef.current.innerHTML || "";
+      onContentChange(newContent);
+    }
+  };
+
+  const handleUndo = () => execFormatCommand('undo');
+  const handleRedo = () => execFormatCommand('redo');
+  const handleBold = () => execFormatCommand('bold');
+  const handleItalic = () => execFormatCommand('italic');
+  const handleUnderline = () => execFormatCommand('underline');
+  const handleStrikethrough = () => execFormatCommand('strikeThrough');
+  const handleHighlight = () => execFormatCommand('backColor', '#ffff00');
+  const handleAlignLeft = () => execFormatCommand('justifyLeft');
+  const handleAlignCenter = () => execFormatCommand('justifyCenter');
+  const handleAlignRight = () => execFormatCommand('justifyRight');
+  const handleAlignJustify = () => execFormatCommand('justifyFull');
+  const handleBulletedList = () => execFormatCommand('insertUnorderedList');
+  const handleNumberedList = () => execFormatCommand('insertOrderedList');
+  const handleIndent = () => execFormatCommand('indent');
+  const handleOutdent = () => execFormatCommand('outdent');
+  
+  const handleInsertLink = () => {
+    const url = prompt('Enter URL:');
+    if (url) {
+      execFormatCommand('createLink', url);
+    }
+  };
+  
+  const handleInsertImage = () => {
+    const url = prompt('Enter image URL:');
+    if (url) {
+      execFormatCommand('insertImage', url);
+    }
+  };
+
+  const handleFontChange = (font: string) => {
+    setFontFamily(font);
+    execFormatCommand('fontName', font);
+  };
+
+  const handleFontSizeChange = (size: number) => {
+    setFontSize(size);
+    if (contentEditableRef.current) {
+      contentEditableRef.current.style.fontSize = `${size}pt`;
+    }
+  };
+
+  const handleHeadingChange = (heading: string) => {
+    setHeadingStyle(heading);
+    if (heading === "Normal text") {
+      execFormatCommand('formatBlock', 'p');
+    } else if (heading === "Heading 1") {
+      execFormatCommand('formatBlock', 'h1');
+    } else if (heading === "Heading 2") {
+      execFormatCommand('formatBlock', 'h2');
+    } else if (heading === "Heading 3") {
+      execFormatCommand('formatBlock', 'h3');
+    } else if (heading === "Heading 4") {
+      execFormatCommand('formatBlock', 'h4');
+    }
+  };
 
   const ToolbarButton = ({ icon: Icon, tooltip, onClick, active }: { icon: any; tooltip: string; onClick?: () => void; active?: boolean }) => (
     <Tooltip>
@@ -575,8 +659,8 @@ export function PremiumEditor({
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <ToolbarButton icon={Undo2} tooltip="Undo" />
-        <ToolbarButton icon={Redo2} tooltip="Redo" />
+        <ToolbarButton icon={Undo2} tooltip="Undo" onClick={handleUndo} />
+        <ToolbarButton icon={Redo2} tooltip="Redo" onClick={handleRedo} />
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
@@ -595,7 +679,7 @@ export function PremiumEditor({
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <Select value={headingStyle} onValueChange={setHeadingStyle}>
+        <Select value={headingStyle} onValueChange={handleHeadingChange}>
           <SelectTrigger className="h-7 w-28 text-xs" data-testid="select-heading">
             <SelectValue />
           </SelectTrigger>
@@ -608,7 +692,7 @@ export function PremiumEditor({
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <Select value={fontFamily} onValueChange={setFontFamily}>
+        <Select value={fontFamily} onValueChange={handleFontChange}>
           <SelectTrigger className="h-7 w-24 text-xs" data-testid="select-font">
             <SelectValue />
           </SelectTrigger>
@@ -622,46 +706,46 @@ export function PremiumEditor({
         <Separator orientation="vertical" className="h-5 mx-1" />
 
         <div className="flex items-center border rounded h-7">
-          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none" onClick={() => setFontSize(Math.max(8, fontSize - 1))}>
+          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none" onClick={() => handleFontSizeChange(Math.max(8, fontSize - 1))}>
             <span className="text-xs">-</span>
           </Button>
           <Input
             value={fontSize}
-            onChange={(e) => setFontSize(Number(e.target.value) || 11)}
+            onChange={(e) => handleFontSizeChange(Number(e.target.value) || 11)}
             className="h-6 w-8 border-0 text-center text-xs p-0 focus-visible:ring-0"
             data-testid="input-font-size"
           />
-          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none" onClick={() => setFontSize(Math.min(72, fontSize + 1))}>
+          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-none" onClick={() => handleFontSizeChange(Math.min(72, fontSize + 1))}>
             <span className="text-xs">+</span>
           </Button>
         </div>
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <ToolbarButton icon={Bold} tooltip="Bold" />
-        <ToolbarButton icon={Italic} tooltip="Italic" />
-        <ToolbarButton icon={Underline} tooltip="Underline" />
-        <ToolbarButton icon={Highlighter} tooltip="Highlight" />
-        <ToolbarButton icon={Strikethrough} tooltip="Strikethrough" />
+        <ToolbarButton icon={Bold} tooltip="Bold" onClick={handleBold} />
+        <ToolbarButton icon={Italic} tooltip="Italic" onClick={handleItalic} />
+        <ToolbarButton icon={Underline} tooltip="Underline" onClick={handleUnderline} />
+        <ToolbarButton icon={Highlighter} tooltip="Highlight" onClick={handleHighlight} />
+        <ToolbarButton icon={Strikethrough} tooltip="Strikethrough" onClick={handleStrikethrough} />
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <ToolbarButton icon={Link} tooltip="Insert link" />
-        <ToolbarButton icon={Image} tooltip="Insert image" />
+        <ToolbarButton icon={Link} tooltip="Insert link" onClick={handleInsertLink} />
+        <ToolbarButton icon={Image} tooltip="Insert image" onClick={handleInsertImage} />
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <ToolbarButton icon={AlignLeft} tooltip="Align left" />
-        <ToolbarButton icon={AlignCenter} tooltip="Align center" />
-        <ToolbarButton icon={AlignRight} tooltip="Align right" />
-        <ToolbarButton icon={AlignJustify} tooltip="Justify" />
+        <ToolbarButton icon={AlignLeft} tooltip="Align left" onClick={handleAlignLeft} />
+        <ToolbarButton icon={AlignCenter} tooltip="Align center" onClick={handleAlignCenter} />
+        <ToolbarButton icon={AlignRight} tooltip="Align right" onClick={handleAlignRight} />
+        <ToolbarButton icon={AlignJustify} tooltip="Justify" onClick={handleAlignJustify} />
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <ToolbarButton icon={List} tooltip="Bulleted list" />
-        <ToolbarButton icon={ListOrdered} tooltip="Numbered list" />
-        <ToolbarButton icon={Outdent} tooltip="Decrease indent" />
-        <ToolbarButton icon={Indent} tooltip="Increase indent" />
+        <ToolbarButton icon={List} tooltip="Bulleted list" onClick={handleBulletedList} />
+        <ToolbarButton icon={ListOrdered} tooltip="Numbered list" onClick={handleNumberedList} />
+        <ToolbarButton icon={Outdent} tooltip="Decrease indent" onClick={handleOutdent} />
+        <ToolbarButton icon={Indent} tooltip="Increase indent" onClick={handleIndent} />
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
@@ -728,7 +812,8 @@ export function PremiumEditor({
                 suppressContentEditableWarning
                 className="outline-none min-h-[600px] leading-relaxed"
                 onInput={(e) => {
-                  onContentChange(e.currentTarget.textContent || "");
+                  isInternalUpdate.current = true;
+                  onContentChange(e.currentTarget.innerHTML || "");
                   updateLastKnownCursorPosition();
                 }}
                 onClick={updateLastKnownCursorPosition}
@@ -745,9 +830,7 @@ export function PremiumEditor({
                   }
                 }}
                 data-testid="editor-content"
-              >
-                {content}
-              </div>
+              />
             </div>
           </div>
         </div>

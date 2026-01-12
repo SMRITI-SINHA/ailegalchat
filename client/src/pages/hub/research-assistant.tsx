@@ -238,7 +238,7 @@ export default function ResearchAssistantPage() {
                 <span className="text-sm font-medium">Advanced Mode Active</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Live web search across 130+ legal domains with extracted paragraphs, chronological timelines, and conflict detection.
+                Live legal research across authoritative Indian law sources with extracted paragraphs, chronological timelines, and conflict detection.
               </p>
             </div>
           )}
