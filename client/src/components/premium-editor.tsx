@@ -790,11 +790,26 @@ export function PremiumEditor({
       <div className="flex-1 overflow-auto bg-muted/20">
         <div className="flex">
           <div className="w-24 flex-shrink-0 flex flex-col items-center py-4 border-r bg-background/50">
-            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-xs text-muted-foreground"
+              onClick={onBack}
+              data-testid="button-sidebar-back"
+            >
               <ArrowLeft className="h-3 w-3 mr-1" />
             </Button>
             <div className="mt-2 text-xs text-muted-foreground">Document tabs</div>
-            <Button variant="ghost" size="icon" className="mt-1 h-6 w-6">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="mt-1 h-6 w-6"
+              onClick={() => {
+                onTitleChange("Untitled document");
+                onContentChange("");
+              }}
+              data-testid="button-new-document"
+            >
               <Plus className="h-3 w-3" />
             </Button>
           </div>
