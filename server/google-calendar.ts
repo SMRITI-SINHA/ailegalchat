@@ -3,12 +3,21 @@ import type { CalendarEvent, InsertCalendarEvent } from "@shared/schema";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
 ];
+
+let dynamicRedirectUri = "";
+
+export function setRedirectUri(uri: string) {
+  dynamicRedirectUri = uri;
+}
+
+export function getRedirectUri(): string {
+  return dynamicRedirectUri;
+}
 
 export interface GoogleTokens {
   access_token: string;
@@ -40,10 +49,10 @@ export class GoogleCalendarService {
     this.userId = userId;
   }
 
-  static getAuthUrl(state: string): string {
+  static getAuthUrl(state: string, redirectUri: string): string {
     const params = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: GOOGLE_REDIRECT_URI,
+      redirect_uri: redirectUri,
       response_type: "code",
       scope: SCOPES.join(" "),
       access_type: "offline",
@@ -53,7 +62,7 @@ export class GoogleCalendarService {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  static async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
+  static async exchangeCodeForTokens(code: string, redirectUri: string): Promise<GoogleTokens> {
     const response = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -62,7 +71,7 @@ export class GoogleCalendarService {
         client_secret: GOOGLE_CLIENT_SECRET,
         code,
         grant_type: "authorization_code",
-        redirect_uri: GOOGLE_REDIRECT_URI,
+        redirect_uri: redirectUri,
       }),
     });
 

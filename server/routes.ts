@@ -884,15 +884,20 @@ Generate at least 8-10 relevant compliance items specific to Indian law and regu
     }
   });
 
-  const oauthStates = new Map<string, { userId: string; expiresAt: number }>();
+  const oauthStates = new Map<string, { userId: string; expiresAt: number; redirectUri: string }>();
 
   app.get("/api/calendar/google/auth-url", (req: Request, res: Response) => {
     try {
       const userId = (req.query.userId as string) || "default-user";
       const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      oauthStates.set(state, { userId, expiresAt: Date.now() + 10 * 60 * 1000 });
       
-      const authUrl = GoogleCalendarService.getAuthUrl(state);
+      const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
+      const host = req.headers["x-forwarded-host"] || req.headers.host || "";
+      const redirectUri = `${protocol}://${host}/api/calendar/google/callback`;
+      
+      oauthStates.set(state, { userId, expiresAt: Date.now() + 10 * 60 * 1000, redirectUri });
+      
+      const authUrl = GoogleCalendarService.getAuthUrl(state, redirectUri);
       res.json({ authUrl, state });
     } catch (error) {
       console.error("Error generating auth URL:", error);
@@ -918,10 +923,10 @@ Generate at least 8-10 relevant compliance items specific to Indian law and regu
         return res.redirect("/hub/calendar?error=invalid_state");
       }
 
-      const { userId } = stateData;
+      const { userId, redirectUri } = stateData;
       oauthStates.delete(state as string);
 
-      const tokens = await GoogleCalendarService.exchangeCodeForTokens(code as string);
+      const tokens = await GoogleCalendarService.exchangeCodeForTokens(code as string, redirectUri);
       const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000);
 
       const existingCreds = await storage.getGoogleCalendarCredentials(userId);
