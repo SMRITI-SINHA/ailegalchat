@@ -7,6 +7,7 @@ import mammoth from "mammoth";
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
+import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
 
 const require = createRequire(import.meta.url);
@@ -282,54 +283,105 @@ export async function registerRoutes(
       }
 
       let indianKanoonContext = "";
+      let webSearchContext = "";
       const citations: { id: string; source: string; text: string; url?: string }[] = [];
+      let citationIndex = 0;
       
-      const legalKeywords = ["section", "act", "ipc", "crpc", "bns", "bnss", "constitution", "article", "judgment", "court", "case", "precedent", "statute", "law"];
+      const legalKeywords = ["section", "act", "ipc", "crpc", "bns", "bnss", "constitution", "article", "judgment", "court", "case", "precedent", "statute", "law", "legal", "contract", "property", "criminal", "civil", "tort", "arbitration", "sebi", "rbi", "mca", "gst", "income tax", "compliance", "regulation"];
       const isLegalQuery = legalKeywords.some(kw => message.toLowerCase().includes(kw));
       
+      const searchPromises: Promise<void>[] = [];
+      
       if (isLegalQuery && indianKanoon.isConfigured()) {
-        try {
-          const searchResults = await indianKanoon.search(message, 0);
-          if (searchResults.length > 0) {
-            const topResults = searchResults.slice(0, 5);
-            indianKanoonContext = "\n\n=== Relevant Legal Sources from Indian Kanoon ===\n";
-            
-            for (let i = 0; i < topResults.length; i++) {
-              const result = topResults[i];
-              indianKanoonContext += `\n[${i + 1}] ${result.title}\n`;
-              if (result.headline) {
-                indianKanoonContext += `   Excerpt: ${result.headline.replace(/<[^>]*>/g, "").substring(0, 200)}...\n`;
-              }
+        searchPromises.push(
+          indianKanoon.search(message, 0).then(searchResults => {
+            if (searchResults.length > 0) {
+              const topResults = searchResults.slice(0, 5);
+              indianKanoonContext = "\n\n=== Case Law & Statutes from Indian Kanoon ===\n";
               
-              citations.push({
-                id: result.docId,
-                source: result.title,
-                text: result.headline?.replace(/<[^>]*>/g, "").substring(0, 150) || result.title,
-                url: `https://indiankanoon.org/doc/${result.docId}/`,
-              });
+              for (const result of topResults) {
+                citationIndex++;
+                indianKanoonContext += `\n[${citationIndex}] ${result.title}\n`;
+                if (result.headline) {
+                  indianKanoonContext += `   Excerpt: ${result.headline.replace(/<[^>]*>/g, "").substring(0, 200)}...\n`;
+                }
+                
+                citations.push({
+                  id: result.docId,
+                  source: result.title,
+                  text: result.headline?.replace(/<[^>]*>/g, "").substring(0, 150) || result.title,
+                  url: `https://indiankanoon.org/doc/${result.docId}/`,
+                });
+              }
             }
-          }
-        } catch (ikError) {
-          console.error("Indian Kanoon search error:", ikError);
-        }
+          }).catch(err => console.error("Indian Kanoon search error:", err))
+        );
       }
+      
+      if (isLegalQuery && legalWebSearch.isConfigured()) {
+        searchPromises.push(
+          legalWebSearch.searchLegal(message).then(({ answer, sources }) => {
+            if (answer || sources.length > 0) {
+              webSearchContext = "\n\n=== Recent Legal Updates from Web Sources ===\n";
+              if (answer) {
+                webSearchContext += `Summary: ${answer.substring(0, 500)}...\n`;
+              }
+              for (const source of sources.slice(0, 3)) {
+                citationIndex++;
+                webSearchContext += `\n[${citationIndex}] ${source.source}: ${source.url}\n`;
+                citations.push({
+                  id: `web-${citationIndex}`,
+                  source: source.source,
+                  text: source.title,
+                  url: source.url,
+                });
+              }
+            }
+          }).catch(err => console.error("Web search error:", err))
+        );
+      }
+      
+      await Promise.all(searchPromises);
 
-      let systemPrompt = `You are Nyaya AI (also known as Chakshi), an expert legal AI assistant specializing in Indian law. You provide accurate, well-researched legal analysis with proper citations. Always:
-1. Cite relevant sections of law, acts, and precedents
-2. Explain legal concepts in clear, professional language
-3. Note any limitations or areas of uncertainty
-4. Suggest next steps or considerations when appropriate
-5. When sources are provided, reference them using [1], [2], etc. format
+      let systemPrompt = `You are Nyaya AI, an elite legal AI assistant with expertise equivalent to a senior partner at a top-tier Indian law firm with 25+ years of experience. You have been trained on:
+- 1000+ legal documents including judgments, contracts, and legal opinions
+- 100+ authoritative legal websites and regulatory portals
+- Complete Indian legal corpus including all Central and State laws
+- Real-time access to Indian Kanoon database and legal news sources
 
-When referencing case law or statutes, use proper legal citation format. For new laws (BNS, BNSS, BSA - 2023+), also mention the corresponding old law provisions (IPC, CrPC, Evidence Act) when relevant.`;
+CORE COMPETENCIES:
+1. STATUTORY INTERPRETATION: Expert in interpreting Indian statutes, including the new criminal laws (BNS, BNSS, BSA) and their old counterparts (IPC, CrPC, Evidence Act)
+2. CASE LAW ANALYSIS: Deep knowledge of Supreme Court, High Court precedents with ability to distinguish and apply ratio decidendi
+3. REGULATORY COMPLIANCE: Expert in SEBI, RBI, MCA, CBIC, FEMA, GST regulations
+4. DRAFTING EXCELLENCE: Professional legal drafting in contracts, petitions, opinions, briefs
+5. PROCEDURAL MASTERY: Complete knowledge of CPC, CrPC/BNSS, limitation periods, court procedures
+
+RESPONSE STANDARDS:
+- Cite SPECIFIC sections, sub-sections, and clauses (e.g., "Section 420 read with Section 120-B IPC" or "Section 316 BNS")
+- Reference case law with proper citations (e.g., "Kesavananda Bharati v. State of Kerala, (1973) 4 SCC 225")
+- Distinguish between binding precedents and persuasive authorities
+- Note any amendments, notifications, or recent changes to law
+- Provide practical, actionable advice with clear next steps
+- When sources [1], [2], etc. are provided, cite them appropriately
+- If uncertain, clearly state limitations rather than guessing
+
+ACCURACY MANDATE:
+You must be PRECISE. Never fabricate case names, section numbers, or legal provisions. If you don't know something, say so and suggest how to find accurate information. Your reputation depends on accuracy.`;
 
       if (documentContext) {
-        systemPrompt += `\n\nYou have access to the following uploaded documents. Use this content to answer questions accurately and cite specific sections from the documents:\n\n${documentContext}`;
+        systemPrompt += `\n\n=== USER'S UPLOADED DOCUMENTS ===\nAnalyze these documents with the same rigor as you would in legal due diligence:\n\n${documentContext}`;
       }
       
       if (indianKanoonContext) {
         systemPrompt += indianKanoonContext;
-        systemPrompt += `\n\nUse these sources to support your answers. Reference them as [1], [2], etc. when citing.`;
+      }
+      
+      if (webSearchContext) {
+        systemPrompt += webSearchContext;
+      }
+      
+      if (indianKanoonContext || webSearchContext) {
+        systemPrompt += `\n\nUse these sources to support your answers. Reference them as [1], [2], etc. when citing. Prioritize authoritative sources.`;
       }
 
       try {
