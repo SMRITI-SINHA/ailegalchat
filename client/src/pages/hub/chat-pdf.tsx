@@ -15,9 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { StreamingIndicator } from "@/components/streaming-text";
-import { ModelBadge } from "@/components/model-badge";
 import { ConfidenceIndicator } from "@/components/confidence-indicator";
-import { CostDisplay } from "@/components/cost-display";
 import { CitationCard } from "@/components/citation-card";
 import {
   FileText,
@@ -1216,7 +1214,6 @@ export default function ChatWithPDFPage() {
                             <div className="flex items-center gap-1.5 mb-2">
                               <Scale className="h-3 w-3 text-primary" />
                               <span className="text-[10px] font-medium">Nyaya AI</span>
-                              {msg.modelUsed && <ModelBadge tier={msg.modelUsed} />}
                               {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
                             </div>
                             <div 

@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
 import {
   FileText,
@@ -9,12 +8,11 @@ import {
   FileEdit,
   TrendingUp,
   Clock,
-  IndianRupee,
   ArrowRight,
   Plus,
   FolderOpen,
+  BookOpen,
 } from "lucide-react";
-import { CostDisplay } from "@/components/cost-display";
 
 const stats = [
   {
@@ -39,12 +37,11 @@ const stats = [
     trend: "+3 this week",
   },
   {
-    title: "Total Spend",
-    value: "156.40",
-    description: "This month",
-    icon: IndianRupee,
-    trend: "Avg. 0.38/query",
-    isCurrency: true,
+    title: "Research Notes",
+    value: "15",
+    description: "Saved notes",
+    icon: BookOpen,
+    trend: "+5 this week",
   },
 ];
 
@@ -54,28 +51,24 @@ const recentActivity = [
     title: "Contract_Agreement_2024.pdf",
     action: "Uploaded and processed",
     time: "10 minutes ago",
-    cost: 0.95,
   },
   {
     type: "chat",
     title: "Analysis of Section 420 IPC",
     action: "15 messages exchanged",
     time: "1 hour ago",
-    cost: 4.20,
   },
   {
     type: "draft",
     title: "Written Statement - Civil Suit",
     action: "Draft completed",
     time: "3 hours ago",
-    cost: 2.80,
   },
   {
     type: "chat",
     title: "Precedent comparison for property dispute",
     action: "Deep analysis completed",
     time: "Yesterday",
-    cost: 8.50,
   },
 ];
 
@@ -103,11 +96,6 @@ const quickActions = [
   },
 ];
 
-const costBreakdown = [
-  { label: "Document Processing", value: 28.50, percentage: 18 },
-  { label: "Chat Queries", value: 89.20, percentage: 57 },
-  { label: "Draft Generation", value: 38.70, percentage: 25 },
-];
 
 export default function DashboardPage() {
   return (
@@ -140,7 +128,6 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-semibold">
-                {stat.isCurrency && <IndianRupee className="inline h-5 w-5" />}
                 {stat.value}
               </div>
               <div className="flex items-center justify-between mt-1">
@@ -183,8 +170,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <CostDisplay amount={activity.cost} size="sm" />
-                    <p className="text-xs text-muted-foreground mt-0.5">{activity.time}</p>
+                    <p className="text-xs text-muted-foreground">{activity.time}</p>
                   </div>
                 </div>
               ))}
@@ -198,35 +184,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <IndianRupee className="h-4 w-4" />
-              Cost Breakdown
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {costBreakdown.map((item) => (
-                <div key={item.label}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm">{item.label}</span>
-                    <CostDisplay amount={item.value} size="sm" />
-                  </div>
-                  <Progress value={item.percentage} className="h-2" />
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 pt-4 border-t">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Total This Month</span>
-                <span className="text-lg font-semibold">
-                  <CostDisplay amount={156.40} size="lg" />
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <Card>

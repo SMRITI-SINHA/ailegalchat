@@ -21,7 +21,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { DocumentStatusBadge } from "@/components/document-status-badge";
-import { CostDisplay } from "@/components/cost-display";
 import {
   Plus,
   Search,
@@ -229,15 +228,12 @@ export default function DocumentsPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">
+                <div className="mt-3 pt-3 border-t flex items-center text-xs text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <FileType className="h-3 w-3" />
                     {formatFileSize(doc.size)}
                     {doc.pages && doc.pages > 0 && ` | ${doc.pages} pages`}
                   </div>
-                  {doc.processingCost && doc.processingCost > 0 && (
-                    <CostDisplay amount={doc.processingCost} size="sm" />
-                  )}
                 </div>
 
                 <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
@@ -276,8 +272,8 @@ export default function DocumentsPage() {
                       <p className="text-sm font-medium mt-1">{selectedDoc.pages || "N/A"}</p>
                     </div>
                     <div className="p-3 rounded-md bg-muted">
-                      <p className="text-xs text-muted-foreground">Processing Cost</p>
-                      <CostDisplay amount={selectedDoc.processingCost || 0} size="sm" className="mt-1" />
+                      <p className="text-xs text-muted-foreground">Type</p>
+                      <p className="text-sm font-medium mt-1">{selectedDoc.type || "Document"}</p>
                     </div>
                   </div>
 

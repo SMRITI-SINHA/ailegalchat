@@ -365,7 +365,10 @@ RESPONSE STANDARDS:
 - If uncertain, clearly state limitations rather than guessing
 
 ACCURACY MANDATE:
-You must be PRECISE. Never fabricate case names, section numbers, or legal provisions. If you don't know something, say so and suggest how to find accurate information. Your reputation depends on accuracy.`;
+You must be PRECISE. Never fabricate case names, section numbers, or legal provisions. If you don't know something, say so and suggest how to find accurate information. Your reputation depends on accuracy.
+
+OUTPUT FORMAT:
+Output your response as clean, readable text. Use proper paragraph breaks for separation. Do NOT use markdown formatting symbols like ** for bold or ## for headers - just use regular text with capitalization for emphasis where needed.`;
 
       if (documentContext) {
         systemPrompt += `\n\n=== USER'S UPLOADED DOCUMENTS ===\nAnalyze these documents with the same rigor as you would in legal due diligence:\n\n${documentContext}`;
@@ -521,11 +524,13 @@ Generate a complete, properly formatted legal document following Indian legal co
 5. Prayer/Relief sought
 6. Verification and signature blocks
 
-Format with proper section numbering and legal terminology.${languageInstruction}`;
+CRITICAL DATE/YEAR REQUIREMENT: The current year is ${new Date().getFullYear()}. For any petition numbers, cause titles, filing years, verification dates, or any other reference requiring a year, use ${new Date().getFullYear()} unless a different year is explicitly provided in the facts. If the exact year cannot be determined, leave it as a blank (e.g., "____") for the user to fill in. Never use outdated years like 2024.
+
+Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${languageInstruction}`;
 
       const systemPrompt = selectedLanguage !== "English"
-        ? `You are an expert legal document drafter specializing in Indian law. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE document in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal arguments must be in ${selectedLanguage}.`
-        : "You are an expert legal document drafter specializing in Indian law. Generate properly formatted legal documents following standard Indian legal conventions.";
+        ? `You are an expert legal document drafter specializing in Indian law. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE document in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal arguments must be in ${selectedLanguage}. Do not use markdown formatting (**, ##, etc.) - output clean plain text only.`
+        : "You are an expert legal document drafter specializing in Indian law. Generate properly formatted legal documents following standard Indian legal conventions. Do not use markdown formatting (**, ##, etc.) - output clean plain text only.";
 
       const response = await openai.chat.completions.create({
         model,
@@ -810,11 +815,12 @@ IMPORTANT GUIDELINES:
 - Maintain a professional, law-firm-style tone
 - Do not fabricate authorities - only cite actual Indian statutes and case law
 - Where the law is unsettled, clearly state the uncertainty
-- Use proper legal citation format (AIR, SCC, etc.)${languageInstruction}`;
+- Use proper legal citation format (AIR, SCC, etc.)
+- Do NOT use markdown formatting symbols (like ** for bold or ## for headers). Output clean, professional legal text. Use CAPS or underlining for emphasis where needed.${languageInstruction}`;
 
       const systemPrompt = selectedLanguage !== "English"
-        ? `You are an expert legal research assistant specializing in Indian law with 25+ years of experience. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE memorandum in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal analysis must be in ${selectedLanguage}. Do not fabricate authorities - if you're uncertain about a citation, state that clearly.`
-        : "You are an expert legal research assistant specializing in Indian law with 25+ years of experience. Generate comprehensive legal memoranda with proper citations to Indian statutes and case law. Do not fabricate authorities - if you're uncertain about a citation, state that clearly. Where the law is unsettled, acknowledge the uncertainty.";
+        ? `You are an expert legal research assistant specializing in Indian law with 25+ years of experience. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE memorandum in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal analysis must be in ${selectedLanguage}. Do not fabricate authorities - if you're uncertain about a citation, state that clearly. Do not use markdown formatting (**, ##, etc.) - output clean professional legal text only.`
+        : "You are an expert legal research assistant specializing in Indian law with 25+ years of experience. Generate comprehensive legal memoranda with proper citations to Indian statutes and case law. Do not fabricate authorities - if you're uncertain about a citation, state that clearly. Where the law is unsettled, acknowledge the uncertainty. Do not use markdown formatting (**, ##, etc.) - output clean professional legal text only.";
 
       const response = await openai.chat.completions.create({
         model: MODEL_TIERS.standard,

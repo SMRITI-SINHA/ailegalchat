@@ -25,7 +25,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ModelBadge } from "@/components/model-badge";
-import { CostDisplay } from "@/components/cost-display";
 import { StreamingIndicator } from "@/components/streaming-text";
 import {
   Plus,

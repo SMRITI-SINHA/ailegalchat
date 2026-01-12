@@ -16,7 +16,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ModelBadge } from "@/components/model-badge";
 import { ConfidenceIndicator } from "@/components/confidence-indicator";
-import { CostDisplay } from "@/components/cost-display";
 import { VoiceRecorder } from "@/components/voice-recorder";
 import { CitationCard, CitationInline } from "@/components/citation-card";
 import { StreamingIndicator } from "@/components/streaming-text";
@@ -327,9 +326,6 @@ export default function ChatPage() {
                             value={message.confidence}
                             className="flex-1 max-w-[200px]"
                           />
-                        )}
-                        {message.cost !== undefined && (
-                          <CostDisplay amount={message.cost} size="sm" />
                         )}
                         <Button
                           variant="ghost"

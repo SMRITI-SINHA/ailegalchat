@@ -13,9 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ModelBadge } from "@/components/model-badge";
 import { ConfidenceIndicator } from "@/components/confidence-indicator";
-import { CostDisplay } from "@/components/cost-display";
 import { CitationCard } from "@/components/citation-card";
 import { StreamingIndicator } from "@/components/streaming-text";
 import {
@@ -179,10 +177,38 @@ export default function NyayaAIPage() {
     }
   };
 
-  const handleOpenSession = (session: ChatSession) => {
+  const handleOpenSession = async (session: ChatSession) => {
     setCurrentSessionId(session.id);
-    setMessages([]);
     setShowHistoryDialog(false);
+    
+    // Load messages from the session
+    try {
+      const response = await fetch(`/api/chat/sessions/${session.id}/messages`);
+      if (response.ok) {
+        const sessionMessages = await response.json();
+        setMessages(sessionMessages.map((m: { 
+          id: string; 
+          role: string; 
+          content: string;
+          modelUsed?: string;
+          confidence?: number;
+          cost?: number;
+          citations?: Citation[];
+        }) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          modelUsed: m.modelUsed as ModelTier | undefined,
+          confidence: m.confidence,
+          citations: m.citations,
+        })));
+      } else {
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error("Error loading session messages:", error);
+      setMessages([]);
+    }
   };
 
   const handleNewChat = () => {
@@ -275,9 +301,7 @@ export default function NyayaAIPage() {
                         <div className="flex items-center gap-2 mb-3">
                           <Scale className="h-4 w-4 text-primary" />
                           <span className="font-medium text-sm">Nyaya AI</span>
-                          {msg.modelUsed && <ModelBadge tier={msg.modelUsed} />}
                           {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
-                          {msg.cost && <CostDisplay amount={msg.cost} size="sm" />}
                         </div>
                         <div className="mb-3 p-2 rounded bg-muted/50 border-l-2 border-primary">
                           <p className="text-[10px] text-muted-foreground italic">
