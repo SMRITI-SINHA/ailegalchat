@@ -416,6 +416,30 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
           modelUsed: tier,
         });
 
+        // Save messages to storage if session exists
+        if (sessionId) {
+          await storage.createChatMessage({
+            sessionId,
+            role: "user",
+            content: message,
+          });
+          await storage.createChatMessage({
+            sessionId,
+            role: "assistant",
+            content: fullContent,
+            modelUsed: tier,
+            confidence: parseFloat(confidence.toFixed(2)),
+            cost,
+            citations: JSON.stringify(citations),
+          });
+          // Update session messageCount
+          const session = await storage.getChatSession(sessionId);
+          if (session) {
+            const messages = await storage.getChatMessages(sessionId);
+            await storage.updateChatSession(sessionId, { messageCount: messages.length });
+          }
+        }
+
         res.write(
           `data: ${JSON.stringify({
             done: true,
@@ -488,7 +512,7 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
 
   app.post("/api/drafts/generate", async (req: Request, res: Response) => {
     try {
-      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference } = req.body;
+      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, useFirmStyle } = req.body;
 
       if (!type || !facts) {
         return res.status(400).json({ error: "Type and facts are required" });
@@ -502,6 +526,21 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
       const languageInstruction = selectedLanguage !== "English" 
         ? `\n\nCRITICAL LANGUAGE REQUIREMENT: You MUST write the ENTIRE document in ${selectedLanguage} language. Every word, every sentence, every section heading must be in ${selectedLanguage}. Do not use English at all except for proper nouns, case citations (like "AIR 2023 SC 456"), or statute names (like "Indian Contract Act, 1872"). The document must be grammatically correct and professionally written in ${selectedLanguage} using appropriate legal terminology in that language.`
         : "";
+
+      // Get trained style documents if enabled (limited to 2 docs, 1500 chars each to stay within token limits)
+      let trainedStyleContext = "";
+      if (useFirmStyle) {
+        const trainingDocs = await storage.getTrainingDocs();
+        if (trainingDocs.length > 0) {
+          trainedStyleContext = "\n\nTRAINED FIRM STYLE REFERENCE:\nMatch the writing style, tone, and formatting from these sample documents:\n\n";
+          for (const doc of trainingDocs.slice(0, 2)) {
+            if (doc.content) {
+              trainedStyleContext += `=== ${doc.name} ===\n${doc.content.substring(0, 1500)}\n\n`;
+            }
+          }
+          trainedStyleContext += "\nAdapt the format and tone from these samples.";
+        }
+      }
 
       const prompt = `Generate a professional legal ${type} with the following details:
 
@@ -526,7 +565,7 @@ Generate a complete, properly formatted legal document following Indian legal co
 
 CRITICAL DATE/YEAR REQUIREMENT: The current year is ${new Date().getFullYear()}. For any petition numbers, cause titles, filing years, verification dates, or any other reference requiring a year, use ${new Date().getFullYear()} unless a different year is explicitly provided in the facts. If the exact year cannot be determined, leave it as a blank (e.g., "____") for the user to fill in. Never use outdated years like 2024.
 
-Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${languageInstruction}`;
+Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${languageInstruction}${trainedStyleContext}`;
 
       const systemPrompt = selectedLanguage !== "English"
         ? `You are an expert legal document drafter specializing in Indian law. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE document in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal arguments must be in ${selectedLanguage}. Do not use markdown formatting (**, ##, etc.) - output clean plain text only.`

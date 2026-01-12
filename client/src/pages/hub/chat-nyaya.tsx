@@ -234,10 +234,6 @@ export default function NyayaAIPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="gap-1">
-            <Sparkles className="h-3 w-3" />
-            Trained on 1000+ legal documents
-          </Badge>
           <Button
             variant="outline"
             size="sm"
@@ -257,7 +253,7 @@ export default function NyayaAIPage() {
               <Scale className="h-16 w-16 mb-6 text-muted-foreground/30" />
               <h2 className="text-xl font-semibold mb-2">Welcome to Nyaya AI</h2>
               <p className="text-muted-foreground text-center max-w-md mb-4">
-                Ask any legal question and get accurate, citation-backed answers instantly. Trained on Indian law, statutes, and case precedents.
+                Ask any legal question and get accurate, citation-backed answers instantly. Trained on Indian law, statutes, case precedents and live trusted legal sources.
               </p>
               
               <Card className="max-w-md mb-8 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
@@ -403,7 +399,7 @@ export default function NyayaAIPage() {
                               <span className="text-xs text-muted-foreground">
                                 {formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true })}
                               </span>
-                              {session.messageCount && session.messageCount > 0 && (
+                              {session.messageCount != null && session.messageCount > 0 && (
                                 <span className="text-xs text-muted-foreground">
                                   {session.messageCount} messages
                                 </span>

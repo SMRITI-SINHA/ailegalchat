@@ -60,6 +60,23 @@ type StartOption = "upload_reference" | "type_facts" | "upload_draft" | null;
 type ViewMode = "list" | "input_form" | "editor";
 type FilterType = "all" | "custom" | "ai" | "user";
 
+// Truncate filename helper
+function truncateFilename(name: string, maxLength: number = 25): string {
+  if (name.length <= maxLength) return name;
+  const ext = name.lastIndexOf('.') > 0 ? name.slice(name.lastIndexOf('.')) : '';
+  const baseName = name.slice(0, name.lastIndexOf('.') > 0 ? name.lastIndexOf('.') : name.length);
+  const truncatedBase = baseName.slice(0, maxLength - ext.length - 2);
+  return `${truncatedBase}..${ext}`;
+}
+
+// Accept only documents, no images
+const documentAcceptTypes = {
+  "application/pdf": [".pdf"],
+  "application/msword": [".doc"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+  "text/plain": [".txt"],
+};
+
 export default function AIDraftingPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [startOption, setStartOption] = useState<StartOption>(null);
@@ -75,6 +92,13 @@ export default function AIDraftingPage() {
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [currentLanguage, setCurrentLanguage] = useState<IndianLanguage>("English");
   const [filter, setFilter] = useState<FilterType>("all");
+  
+  // Upload states
+  const [uploadedReferenceFiles, setUploadedReferenceFiles] = useState<{ name: string; content: string }[]>([]);
+  const [uploadedDraftFile, setUploadedDraftFile] = useState<{ name: string; content: string } | null>(null);
+  const [isUploadingRef, setIsUploadingRef] = useState(false);
+  const [isUploadingDraft, setIsUploadingDraft] = useState(false);
+  
   const [formData, setFormData] = useState({
     title: "",
     facts: "",
@@ -202,6 +226,125 @@ export default function AIDraftingPage() {
     setDraftContent("");
     setDraftTitle("Untitled Draft");
     setSelectedDraftId(null);
+    setUploadedReferenceFiles([]);
+    setUploadedDraftFile(null);
+    setFormData({
+      title: "",
+      facts: "",
+      parties: "",
+      jurisdiction: "Delhi High Court",
+      documentType: "petition",
+    });
+  };
+
+  const handleReferenceFilesUpload = async (files: File[]) => {
+    setIsUploadingRef(true);
+    try {
+      const uploadedFiles: { name: string; content: string }[] = [];
+      
+      // Upload all files together
+      const formData = new FormData();
+      files.forEach(file => formData.append("files", file));
+      
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (response.ok) {
+        const docs = await response.json();
+        // Handle all returned documents
+        for (let i = 0; i < docs.length; i++) {
+          const doc = docs[i];
+          if (doc.extractedText) {
+            uploadedFiles.push({
+              name: files[i]?.name || doc.name || `Document ${i + 1}`,
+              content: doc.extractedText,
+            });
+          }
+        }
+      }
+      
+      setUploadedReferenceFiles(prev => [...prev, ...uploadedFiles]);
+    } catch (error) {
+      console.error("Reference upload error:", error);
+    } finally {
+      setIsUploadingRef(false);
+    }
+  };
+
+  const handleDraftFileUpload = async (files: File[]) => {
+    if (files.length === 0) return;
+    setIsUploadingDraft(true);
+    try {
+      const file = files[0];
+      const formData = new FormData();
+      formData.append("files", file);
+      
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (response.ok) {
+        const docs = await response.json();
+        if (docs.length > 0 && docs[0].extractedText) {
+          setUploadedDraftFile({
+            name: file.name,
+            content: docs[0].extractedText,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Draft upload error:", error);
+    } finally {
+      setIsUploadingDraft(false);
+    }
+  };
+
+  const handleOpenUploadedDraft = async () => {
+    if (!uploadedDraftFile) return;
+    const draft = await createDraftMutation.mutateAsync(uploadedDraftFile.name.replace(/\.[^.]+$/, ""));
+    await updateDraftMutation.mutateAsync({
+      id: draft.id,
+      title: uploadedDraftFile.name.replace(/\.[^.]+$/, ""),
+      content: uploadedDraftFile.content,
+    });
+    setSelectedDraftId(draft.id);
+    setDraftTitle(uploadedDraftFile.name.replace(/\.[^.]+$/, ""));
+    setDraftContent(uploadedDraftFile.content);
+    setViewMode("editor");
+    setShowResearchSidebar(true);
+  };
+
+  const handleGenerateFromReference = async () => {
+    setIsGenerating(true);
+    try {
+      const referenceContext = uploadedReferenceFiles
+        .map(f => `=== ${f.name} ===\n${f.content}`)
+        .join("\n\n");
+      
+      const response = await apiRequest("POST", "/api/drafts/generate", {
+        type: formData.documentType,
+        title: formData.title || `${formData.documentType} - Draft`,
+        facts: `REFERENCE DOCUMENTS:\n${referenceContext}\n\nADDITIONAL CONTEXT:\n${formData.facts || "Use the reference documents to understand the case."}`,
+        parties: formData.parties,
+        jurisdiction: formData.jurisdiction,
+        language,
+        useFirmStyle,
+      });
+      const draft = await response.json();
+      setSelectedDraftId(draft.id);
+      setDraftTitle(draft.title || "Generated Draft");
+      setDraftContent(markdownToHtml(draft.content || ""));
+      setViewMode("editor");
+      setShowResearchSidebar(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
+    } catch (error) {
+      console.error("Draft generation error:", error);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleTranslate = async (targetLanguage: IndianLanguage) => {
@@ -564,6 +707,13 @@ export default function AIDraftingPage() {
                     data-testid="textarea-facts"
                   />
                 </div>
+                <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                    <Label className="cursor-pointer">Use trained style</Label>
+                  </div>
+                  <Switch checked={useFirmStyle} onCheckedChange={setUseFirmStyle} />
+                </div>
                 <Button
                   onClick={handleGenerate}
                   disabled={!formData.facts || isGenerating}
@@ -581,20 +731,115 @@ export default function AIDraftingPage() {
             <Card className="max-w-2xl mx-auto">
               <CardHeader>
                 <CardTitle className="text-base">Upload Reference Documents</CardTitle>
-                <CardDescription>Upload documents to use as reference for your draft</CardDescription>
+                <CardDescription>Upload documents to use as reference. AI will analyze them to understand the case details.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <UploadDropzone
-                  onUpload={async (files) => console.log("Files:", files)}
+                  onUpload={handleReferenceFilesUpload}
+                  accept={documentAcceptTypes}
                   maxFiles={10}
                 />
-                <Button 
-                  className="w-full" 
-                  onClick={() => handleContinueToEditorWithDraft("New Draft from Reference")}
-                  disabled={createDraftMutation.isPending}
-                >
-                  {createDraftMutation.isPending ? "Creating..." : "Continue to Editor"}
-                </Button>
+                
+                {isUploadingRef && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <StreamingIndicator />
+                    <span>Processing documents...</span>
+                  </div>
+                )}
+                
+                {uploadedReferenceFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">Uploaded files:</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {uploadedReferenceFiles.map((file, i) => (
+                        <Badge key={i} variant="secondary" className="gap-1">
+                          <FileText className="h-3 w-3" />
+                          <span title={file.name}>{truncateFilename(file.name)}</span>
+                          <button 
+                            onClick={() => setUploadedReferenceFiles(prev => prev.filter((_, idx) => idx !== i))}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {uploadedReferenceFiles.length > 0 && (
+                  <>
+                    <div className="border-t pt-4 space-y-4">
+                      <div>
+                        <Label>Document Type</Label>
+                        <Select value={formData.documentType} onValueChange={(v) => setFormData((p) => ({ ...p, documentType: v }))}>
+                          <SelectTrigger data-testid="select-ref-doc-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="petition">Petition</SelectItem>
+                            <SelectItem value="written_statement">Written Statement</SelectItem>
+                            <SelectItem value="notice">Legal Notice</SelectItem>
+                            <SelectItem value="contract">Contract</SelectItem>
+                            <SelectItem value="affidavit">Affidavit</SelectItem>
+                            <SelectItem value="application">Application</SelectItem>
+                            <SelectItem value="reply">Reply/Rejoinder</SelectItem>
+                            <SelectItem value="brief">Legal Brief</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Title</Label>
+                        <Input
+                          placeholder="e.g., Petition for..."
+                          value={formData.title}
+                          onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
+                          data-testid="input-ref-title"
+                        />
+                      </div>
+                      <div>
+                        <Label>Parties</Label>
+                        <Input
+                          placeholder="e.g., ABC Pvt Ltd vs XYZ Corp"
+                          value={formData.parties}
+                          onChange={(e) => setFormData((p) => ({ ...p, parties: e.target.value }))}
+                          data-testid="input-ref-parties"
+                        />
+                      </div>
+                      <div>
+                        <Label>Jurisdiction</Label>
+                        <Select value={formData.jurisdiction} onValueChange={(v) => setFormData((p) => ({ ...p, jurisdiction: v }))}>
+                          <SelectTrigger data-testid="select-ref-jurisdiction">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Supreme Court of India">Supreme Court of India</SelectItem>
+                            <SelectItem value="Delhi High Court">Delhi High Court</SelectItem>
+                            <SelectItem value="Bombay High Court">Bombay High Court</SelectItem>
+                            <SelectItem value="Madras High Court">Madras High Court</SelectItem>
+                            <SelectItem value="Calcutta High Court">Calcutta High Court</SelectItem>
+                            <SelectItem value="District Court">District Court</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                          <Label className="cursor-pointer">Use trained style</Label>
+                        </div>
+                        <Switch checked={useFirmStyle} onCheckedChange={setUseFirmStyle} />
+                      </div>
+                    </div>
+                    <Button 
+                      className="w-full" 
+                      onClick={handleGenerateFromReference}
+                      disabled={isGenerating || uploadedReferenceFiles.length === 0}
+                    >
+                      {isGenerating ? <StreamingIndicator className="mr-2" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                      {isGenerating ? "Generating..." : "Generate Draft with AI"}
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -607,15 +852,39 @@ export default function AIDraftingPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <UploadDropzone
-                  onUpload={async (files) => console.log("Files:", files)}
+                  onUpload={handleDraftFileUpload}
+                  accept={documentAcceptTypes}
                   maxFiles={1}
                 />
+                
+                {isUploadingDraft && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <StreamingIndicator />
+                    <span>Processing document...</span>
+                  </div>
+                )}
+                
+                {uploadedDraftFile && (
+                  <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm flex-1" title={uploadedDraftFile.name}>
+                      {truncateFilename(uploadedDraftFile.name)}
+                    </span>
+                    <button 
+                      onClick={() => setUploadedDraftFile(null)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+                
                 <Button 
                   className="w-full" 
-                  onClick={() => handleContinueToEditorWithDraft("Uploaded Draft")}
-                  disabled={createDraftMutation.isPending}
+                  onClick={handleOpenUploadedDraft}
+                  disabled={!uploadedDraftFile || createDraftMutation.isPending}
                 >
-                  {createDraftMutation.isPending ? "Creating..." : "Open in Editor"}
+                  {createDraftMutation.isPending ? "Opening..." : "Open in Editor"}
                 </Button>
               </CardContent>
             </Card>
