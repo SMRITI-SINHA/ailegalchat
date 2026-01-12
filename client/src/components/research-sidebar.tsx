@@ -13,7 +13,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Save, Plus, FileText, Trash2 } from "lucide-react";
+import { Search, Save, Plus, FileText, Trash2, Sparkles, Globe, Clock, AlertTriangle, ChevronDown } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { stripHtmlTags, isNewLaw } from "@/lib/utils";
 import type { ResearchNote } from "@shared/schema";
@@ -25,6 +29,17 @@ interface SearchResult {
   docId?: string;
 }
 
+interface AdvancedSearchResult {
+  answer: string;
+  sources: { title: string; url: string; source: string }[];
+  extractedParagraphs: { text: string; citation: string; sections: string[]; acts: string[]; court: string }[];
+  timeline: { date: string; event: string; source: string }[];
+  conflicts: { issue: string; sources: string[] }[];
+  tags: { sections: string[]; acts: string[]; courts: string[] };
+  domainCount: number;
+  disclaimer: string;
+}
+
 interface ResearchSidebarProps {
   isOpen: boolean;
   onAddToDocument?: (text: string) => void;
@@ -34,6 +49,8 @@ interface ResearchSidebarProps {
 export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [advancedResults, setAdvancedResults] = useState<AdvancedSearchResult | null>(null);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [lawFilter, setLawFilter] = useState<"new" | "old">("new");
   const [notes, setNotes] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -57,6 +74,18 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
     },
     onSuccess: (data) => {
       setSearchResults(data.results || []);
+      setAdvancedResults(null);
+    },
+  });
+
+  const advancedSearchMutation = useMutation({
+    mutationFn: async (query: string) => {
+      const response = await apiRequest("POST", "/api/research/advanced", { query });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setAdvancedResults(data);
+      setSearchResults([]);
     },
   });
 
@@ -84,7 +113,11 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
-      searchMutation.mutate(searchQuery);
+      if (isAdvancedMode) {
+        advancedSearchMutation.mutate(searchQuery);
+      } else {
+        searchMutation.mutate(searchQuery);
+      }
     }
   };
 
@@ -110,9 +143,30 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
         </TabsList>
         
         <TabsContent value="research" className="flex-1 flex flex-col p-4 mt-0 overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="advanced-mode"
+                checked={isAdvancedMode}
+                onCheckedChange={setIsAdvancedMode}
+                data-testid="switch-advanced-mode"
+              />
+              <Label htmlFor="advanced-mode" className="text-xs flex items-center gap-1">
+                {isAdvancedMode && <Sparkles className="h-3 w-3 text-primary" />}
+                Advanced
+              </Label>
+            </div>
+            {isAdvancedMode && (
+              <Badge variant="secondary" className="text-[10px]">
+                <Globe className="h-2.5 w-2.5 mr-1" />
+                130+ sources
+              </Badge>
+            )}
+          </div>
+          
           <div className="flex gap-2 mb-4">
             <Input
-              placeholder="Search legal provisions..."
+              placeholder={isAdvancedMode ? "Advanced legal search..." : "Search legal provisions..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -121,7 +175,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
             <Button
               size="icon"
               onClick={handleSearch}
-              disabled={searchMutation.isPending}
+              disabled={searchMutation.isPending || advancedSearchMutation.isPending}
               data-testid="button-search"
             >
               <Search className="h-4 w-4" />
@@ -129,11 +183,109 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
           </div>
 
           <ScrollArea className="flex-1">
-            {searchMutation.isPending ? (
+            {(searchMutation.isPending || advancedSearchMutation.isPending) ? (
               <div className="space-y-3">
                 <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-20 w-full" />
+              </div>
+            ) : advancedResults ? (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground italic mb-2">
+                  {advancedResults.disclaimer}
+                </p>
+                
+                <div className="p-3 border rounded-md bg-background">
+                  <p className="text-sm">{advancedResults.answer}</p>
+                </div>
+
+                {advancedResults.extractedParagraphs.length > 0 && (
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium w-full p-2 rounded hover-elevate">
+                      <ChevronDown className="h-3 w-3" />
+                      Extracted Paragraphs ({advancedResults.extractedParagraphs.length})
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 mt-2">
+                      {advancedResults.extractedParagraphs.map((p, i) => (
+                        <div key={i} className="p-2 border rounded text-xs bg-muted/30">
+                          <p className="italic">"{p.text}"</p>
+                          <p className="text-muted-foreground mt-1">— {p.citation}</p>
+                          {p.acts.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {p.acts.map((act, j) => (
+                                <Badge key={j} variant="outline" className="text-[9px]">{act}</Badge>
+                              ))}
+                            </div>
+                          )}
+                          {onAddToDocument && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-[10px] h-6 mt-1"
+                              onClick={() => onAddToDocument(`"${p.text}" — ${p.citation}`)}
+                            >
+                              <Plus className="h-2.5 w-2.5 mr-1" />
+                              Add
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {advancedResults.timeline.length > 0 && (
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium w-full p-2 rounded hover-elevate">
+                      <Clock className="h-3 w-3" />
+                      Timeline ({advancedResults.timeline.length})
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 mt-2">
+                      {advancedResults.timeline.map((t, i) => (
+                        <div key={i} className="flex gap-2 text-xs p-1">
+                          <span className="font-mono text-muted-foreground">{t.date}</span>
+                          <span>{t.event}</span>
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {advancedResults.conflicts.length > 0 && (
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-2 text-xs font-medium w-full p-2 rounded hover-elevate text-amber-600">
+                      <AlertTriangle className="h-3 w-3" />
+                      Conflicts ({advancedResults.conflicts.length})
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 mt-2">
+                      {advancedResults.conflicts.map((c, i) => (
+                        <div key={i} className="p-2 border border-amber-500/30 rounded text-xs bg-amber-500/5">
+                          <p className="font-medium">{c.issue}</p>
+                          <p className="text-muted-foreground mt-1">Sources: {c.sources.join(", ")}</p>
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {advancedResults.sources.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium mb-2">Sources ({advancedResults.sources.length})</p>
+                    <div className="space-y-1">
+                      {advancedResults.sources.slice(0, 5).map((s, i) => (
+                        <a
+                          key={i}
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block text-xs text-primary hover:underline truncate"
+                        >
+                          {s.title}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : searchResults.length > 0 ? (
               <div className="space-y-3">
