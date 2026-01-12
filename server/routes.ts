@@ -732,19 +732,63 @@ Ensure the translation is accurate and uses appropriate legal terminology in ${t
 
   app.post("/api/memos/generate", async (req: Request, res: Response) => {
     try {
-      const { facts, issues, documentIds, language, jurisdiction, parties, title } = req.body;
+      const { facts, issues, documentIds, language, structure, jurisdiction, parties, title } = req.body;
       if (!facts) {
         return res.status(400).json({ error: "Facts are required" });
       }
 
       const selectedLanguage = language || "English";
+      const selectedStructure = structure || "IRAC";
       const memoTitle = title || "Legal Memorandum";
+
+      let kanoonContext = "";
+      try {
+        const searchTerms = (issues || facts).substring(0, 200);
+        const kanoonResults = await indianKanoon.search(searchTerms);
+        if (kanoonResults.length > 0) {
+          kanoonContext = `\n\nRELEVANT CASE LAW FROM INDIAN KANOON DATABASE:\n${kanoonResults.slice(0, 5).map((r: any) => 
+            `- ${r.title} (${r.citation || "No citation"}): ${r.snippet?.substring(0, 200) || ""}`
+          ).join("\n")}`;
+        }
+      } catch (e) {
+        console.log("Indian Kanoon search optional - continuing without it");
+      }
 
       const languageInstruction = selectedLanguage !== "English" 
         ? `\n\nCRITICAL LANGUAGE REQUIREMENT: You MUST write the ENTIRE memorandum in ${selectedLanguage} language. Every word, every sentence, every section heading must be in ${selectedLanguage}. Do not use English at all except for proper nouns, case citations (like "AIR 2023 SC 456"), or statute names (like "Indian Contract Act, 1872"). The memorandum must be grammatically correct and professionally written in ${selectedLanguage} using appropriate legal terminology in that language.`
         : "";
 
-      const prompt = `Generate a comprehensive legal memorandum using the IRAC format based on the following:
+      let structureInstruction = "";
+      let sectionFormat = "";
+      
+      if (selectedStructure === "IRAC") {
+        structureInstruction = "Use the IRAC structure (Issue → Rule → Application → Conclusion). This is the standard legal analysis format.";
+        sectionFormat = `1. QUESTIONS PRESENTED - Clear statement of legal questions
+2. BRIEF ANSWERS - Concise answers to each question
+3. FACTUAL BACKGROUND - Summary of relevant facts
+4. APPLICABLE LAW - Relevant statutes and case law (cite Indian law)
+5. ANALYSIS - Apply law to facts using IRAC methodology (Issue, Rule, Application, Conclusion for each issue)
+6. CONCLUSION - Final recommendations`;
+      } else if (selectedStructure === "CRAC") {
+        structureInstruction = "Use the CRAC structure (Conclusion → Rule → Application → Conclusion). Begin with a concise conclusion upfront, followed by the legal rule, application to facts, and a final expanded conclusion. This is preferred when the partner/client wants the answer fast.";
+        sectionFormat = `1. CONCLUSION (SHORT ANSWER) - Provide the key conclusion upfront immediately
+2. QUESTIONS PRESENTED - Clear statement of legal questions  
+3. FACTUAL BACKGROUND - Summary of relevant facts
+4. RULE - State the applicable legal rules, statutes and precedents
+5. APPLICATION - Apply the rules to the present facts
+6. CONCLUSION (EXPANDED) - Final detailed conclusion with recommendations`;
+      } else if (selectedStructure === "CREAC") {
+        structureInstruction = "Use the CREAC structure (Conclusion → Rule → Explanation → Application → Conclusion). This is the gold standard for senior/complex memos. Begin with conclusion, state the rule, EXPLAIN the rule with case law interpretation and statutory context, then apply to facts, and conclude.";
+        sectionFormat = `1. CONCLUSION (SHORT ANSWER) - Provide the key conclusion upfront immediately
+2. QUESTIONS PRESENTED - Clear statement of legal questions
+3. FACTUAL BACKGROUND - Summary of relevant facts
+4. RULE - State the applicable legal rules and statutes
+5. EXPLANATION - Detailed case law interpretation and statutory context explaining how courts have interpreted these rules
+6. APPLICATION - Apply the explained rules to the present facts
+7. CONCLUSION (EXPANDED) - Final detailed conclusion with recommendations`;
+      }
+
+      const prompt = `Generate a comprehensive legal memorandum based on the following:
 
 ${memoTitle !== "Legal Memorandum" ? `SUBJECT: ${memoTitle}` : ""}
 ${parties ? `PARTIES: ${parties}` : ""}
@@ -754,20 +798,24 @@ FACTS:
 ${facts}
 
 ${issues ? `ISSUES TO ANALYZE:\n${issues}` : "Identify the key legal issues from the facts."}
+${kanoonContext}
 
-Generate a complete legal memo with:
-1. QUESTIONS PRESENTED - Clear statement of legal questions
-2. BRIEF ANSWERS - Concise answers to each question
-3. FACTUAL BACKGROUND - Summary of relevant facts
-4. APPLICABLE LAW - Relevant statutes and case law (cite Indian law)
-5. ANALYSIS - Apply law to facts using IRAC methodology
-6. CONCLUSION - Final recommendations
+MEMO STRUCTURE: ${selectedStructure}
+${structureInstruction}
 
-Ensure all citations are to actual Indian statutes and case law. Use proper legal citation format.${languageInstruction}`;
+Generate a complete legal memo with these sections:
+${sectionFormat}
+
+IMPORTANT GUIDELINES:
+- Cite relevant statutes, sections, and case law where applicable
+- Maintain a professional, law-firm-style tone
+- Do not fabricate authorities - only cite actual Indian statutes and case law
+- Where the law is unsettled, clearly state the uncertainty
+- Use proper legal citation format (AIR, SCC, etc.)${languageInstruction}`;
 
       const systemPrompt = selectedLanguage !== "English"
-        ? `You are an expert legal research assistant specializing in Indian law. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE memorandum in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal analysis must be in ${selectedLanguage}.`
-        : "You are an expert legal research assistant specializing in Indian law. Generate comprehensive legal memoranda with proper citations to Indian statutes and case law.";
+        ? `You are an expert legal research assistant specializing in Indian law with 25+ years of experience. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE memorandum in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal analysis must be in ${selectedLanguage}. Do not fabricate authorities - if you're uncertain about a citation, state that clearly.`
+        : "You are an expert legal research assistant specializing in Indian law with 25+ years of experience. Generate comprehensive legal memoranda with proper citations to Indian statutes and case law. Do not fabricate authorities - if you're uncertain about a citation, state that clearly. Where the law is unsettled, acknowledge the uncertainty.";
 
       const response = await openai.chat.completions.create({
         model: MODEL_TIERS.standard,

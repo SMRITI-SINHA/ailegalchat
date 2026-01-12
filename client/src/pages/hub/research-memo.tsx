@@ -45,11 +45,19 @@ import { indianLanguages } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 type ViewMode = "list" | "editor";
+type MemoStructure = "IRAC" | "CRAC" | "CREAC";
+
+const memoStructures: { value: MemoStructure; label: string; description: string }[] = [
+  { value: "IRAC", label: "IRAC (Standard)", description: "Issue → Rule → Application → Conclusion" },
+  { value: "CRAC", label: "CRAC (Partner-first)", description: "Conclusion → Rule → Application → Conclusion" },
+  { value: "CREAC", label: "CREAC (Senior Counsel)", description: "Conclusion → Rule → Explanation → Application → Conclusion" },
+];
 
 export default function LegalMemoPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [language, setLanguage] = useState<IndianLanguage>("English");
+  const [structure, setStructure] = useState<MemoStructure>("IRAC");
   const [facts, setFacts] = useState("");
   const [issues, setIssues] = useState("");
   const [memoTitle, setMemoTitle] = useState("Legal Memorandum");
@@ -114,6 +122,7 @@ export default function LegalMemoPage() {
         facts,
         issues,
         language,
+        structure,
         jurisdiction,
         parties,
         title: memoTitle,
@@ -219,6 +228,7 @@ export default function LegalMemoPage() {
 
   const resetForm = () => {
     setLanguage("English");
+    setStructure("IRAC");
     setFacts("");
     setIssues("");
     setMemoTitle("Legal Memorandum");
@@ -355,7 +365,7 @@ export default function LegalMemoPage() {
                 Generate Legal Memo
               </DialogTitle>
               <DialogDescription>
-                Provide case details to generate an IRAC-structured legal memorandum
+                Provide case details to generate a structured legal memorandum
               </DialogDescription>
             </DialogHeader>
 
@@ -378,6 +388,32 @@ export default function LegalMemoPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Scroll className="h-4 w-4" />
+                    Memo Structure <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={structure} onValueChange={(v) => setStructure(v as MemoStructure)}>
+                    <SelectTrigger data-testid="select-structure">
+                      <SelectValue placeholder="Select structure" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {memoStructures.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          <div className="flex flex-col">
+                            <span>{s.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {memoStructures.find(s => s.value === structure)?.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Label>Memo Title</Label>
                   <Input
                     placeholder="e.g., Analysis of Contract Dispute"
@@ -386,9 +422,6 @@ export default function LegalMemoPage() {
                     data-testid="input-title"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Parties Involved (Optional)</Label>
                   <Input
@@ -398,15 +431,16 @@ export default function LegalMemoPage() {
                     data-testid="input-parties"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Jurisdiction (Optional)</Label>
-                  <Input
-                    placeholder="e.g., Delhi High Court"
-                    value={jurisdiction}
-                    onChange={(e) => setJurisdiction(e.target.value)}
-                    data-testid="input-jurisdiction"
-                  />
-                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Jurisdiction (Optional)</Label>
+                <Input
+                  placeholder="e.g., Delhi High Court"
+                  value={jurisdiction}
+                  onChange={(e) => setJurisdiction(e.target.value)}
+                  data-testid="input-jurisdiction"
+                />
               </div>
 
               <div className="space-y-2">
@@ -434,23 +468,9 @@ export default function LegalMemoPage() {
               <Alert className="bg-blue-500/10 border-blue-500/30">
                 <Sparkles className="h-4 w-4 text-blue-500" />
                 <AlertDescription className="text-sm">
-                  The memo will be generated entirely in <strong>{language}</strong> using the IRAC structure.
+                  The memo will be generated entirely in <strong>{language}</strong> using the <strong>{structure}</strong> structure.
                 </AlertDescription>
               </Alert>
-
-              <Card className="bg-muted/30">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium">Hallucination Control</p>
-                      <p className="text-muted-foreground mt-1">
-                        Citations are cross-referenced with verified Indian statutes and case law.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
 
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setShowGenerateDialog(false)} className="flex-1">
