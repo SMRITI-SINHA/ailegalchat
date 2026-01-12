@@ -48,6 +48,7 @@ import {
   FileSignature,
   Calendar,
   Edit,
+  GraduationCap,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Draft, IndianLanguage } from "@shared/schema";
@@ -277,6 +278,10 @@ export default function AIDraftingPage() {
               <Sparkles className="h-3 w-3 mr-1" />
               AI Powered
             </Badge>
+            <Badge variant="secondary" className="text-[10px]">
+              <GraduationCap className="h-3 w-3 mr-1" />
+              Trained on 1000+ legal drafts
+            </Badge>
           </div>
           <div className="flex items-center gap-2">
             <DropdownMenu>
@@ -325,49 +330,49 @@ export default function AIDraftingPage() {
                   data-testid={`card-draft-${draft.id}`}
                 >
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-md bg-muted">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div className="min-w-0 flex-1 max-w-[200px]">
-                          <h3 className="font-medium text-sm truncate" title={draft.title}>{draft.title}</h3>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <Badge variant="outline" className="text-[10px]">{getTypeLabel(draft.type)}</Badge>
-                            {draft.modelUsed && (
-                              <Badge variant="secondary" className="text-[10px]">AI</Badge>
-                            )}
-                            {draft.language && draft.language !== "English" && (
-                              <Badge variant="secondary" className="text-[10px]">{draft.language}</Badge>
-                            )}
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-md bg-muted shrink-0">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-medium text-sm truncate flex-1" title={draft.title}>{draft.title}</h3>
+                          <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenDraft(draft);
+                              }}
+                              data-testid={`button-edit-${draft.id}`}
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteDraftMutation.mutate(draft.id);
+                              }}
+                              data-testid={`button-delete-${draft.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenDraft(draft);
-                          }}
-                          data-testid={`button-edit-${draft.id}`}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteDraftMutation.mutate(draft.id);
-                          }}
-                          data-testid={`button-delete-${draft.id}`}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Badge variant="outline" className="text-[10px]">{getTypeLabel(draft.type)}</Badge>
+                          {draft.modelUsed && (
+                            <Badge variant="secondary" className="text-[10px]">AI</Badge>
+                          )}
+                          {draft.language && draft.language !== "English" && (
+                            <Badge variant="secondary" className="text-[10px]">{draft.language}</Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 line-clamp-2">
