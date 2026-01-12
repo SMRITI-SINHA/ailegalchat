@@ -40,6 +40,7 @@ import {
   FileText,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { markdownToHtml } from "@/lib/utils";
 import type { IndianLanguage, Draft } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -128,7 +129,8 @@ export default function LegalMemoPage() {
         title: memoTitle,
       });
       const data = await response.json();
-      const generatedMemo = data.fullMemo || generateLocalizedMemo();
+      const rawMemo = data.fullMemo || generateLocalizedMemo();
+      const generatedMemo = markdownToHtml(rawMemo);
       
       const draftResponse = await apiRequest("POST", "/api/drafts", {
         title: memoTitle,
@@ -147,7 +149,8 @@ export default function LegalMemoPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
     } catch (error) {
       console.error("Memo generation error:", error);
-      const fallbackMemo = generateLocalizedMemo();
+      const rawFallback = generateLocalizedMemo();
+      const fallbackMemo = markdownToHtml(rawFallback);
       const draftResponse = await apiRequest("POST", "/api/drafts", {
         title: memoTitle,
         type: "memo",
@@ -186,7 +189,8 @@ export default function LegalMemoPage() {
   };
 
   const handleAddToDocument = (text: string) => {
-    setMemoContent((prev) => prev + "\n\n" + text);
+    const formattedText = markdownToHtml(text);
+    setMemoContent((prev) => prev + "<br><br>" + formattedText);
   };
 
   const handleOpenMemoFromEditor = (draft: Draft) => {
@@ -204,7 +208,8 @@ export default function LegalMemoPage() {
         targetLanguage,
       });
       const result = await response.json();
-      setMemoContent(result.translatedContent || memoContent);
+      // Convert translated content to HTML
+      setMemoContent(markdownToHtml(result.translatedContent || memoContent));
       setCurrentLanguage(targetLanguage);
     } catch (error) {
       console.error("Translation error:", error);

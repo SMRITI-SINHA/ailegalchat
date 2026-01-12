@@ -51,6 +51,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { markdownToHtml } from "@/lib/utils";
 import type { Draft, IndianLanguage } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -174,7 +175,8 @@ export default function AIDraftingPage() {
       const draft = await response.json();
       setSelectedDraftId(draft.id);
       setDraftTitle(draft.title || "Generated Draft");
-      setDraftContent(draft.content || "");
+      // Convert markdown from AI to properly formatted HTML
+      setDraftContent(markdownToHtml(draft.content || ""));
       setViewMode("editor");
       setShowResearchSidebar(true);
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
@@ -210,7 +212,8 @@ export default function AIDraftingPage() {
         targetLanguage,
       });
       const result = await response.json();
-      setDraftContent(result.translatedContent || draftContent);
+      // Convert translated content (may contain markdown) to HTML
+      setDraftContent(markdownToHtml(result.translatedContent || draftContent));
       setCurrentLanguage(targetLanguage);
     } catch (error) {
       console.error("Translation error:", error);
@@ -238,7 +241,8 @@ export default function AIDraftingPage() {
   };
 
   const handleAddToDocument = (text: string) => {
-    setDraftContent((prev) => prev + "\n\n" + text);
+    const formattedText = markdownToHtml(text);
+    setDraftContent((prev) => prev + "<br><br>" + formattedText);
   };
 
   const getTypeLabel = (type: string) => {

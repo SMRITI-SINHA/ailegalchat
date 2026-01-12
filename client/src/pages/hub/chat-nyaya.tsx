@@ -30,6 +30,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { markdownToHtml } from "@/lib/utils";
 import type { ModelTier, Citation, ChatSession } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
@@ -283,7 +284,10 @@ export default function NyayaAIPage() {
                             This research compiles judicial decisions and statutory provisions. No legal opinion or advice is provided.
                           </p>
                         </div>
-                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                        <div 
+                          className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                          dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
+                        />
                         {msg.citations && msg.citations.length > 0 && (
                           <div className="mt-4 pt-4 border-t space-y-2">
                             <h4 className="text-xs font-medium text-muted-foreground">Sources</h4>

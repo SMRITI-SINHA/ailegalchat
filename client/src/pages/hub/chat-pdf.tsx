@@ -38,6 +38,7 @@ import {
   Save,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { markdownToHtml } from "@/lib/utils";
 import type { ChatSession, ModelTier, Citation } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
@@ -1035,7 +1036,14 @@ export default function ChatWithPDFPage() {
                           : "bg-muted"
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      {msg.role === "user" ? (
+                        <p className="text-sm">{msg.content}</p>
+                      ) : (
+                        <div 
+                          className="text-sm prose prose-sm dark:prose-invert max-w-none"
+                          dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
+                        />
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1211,7 +1219,10 @@ export default function ChatWithPDFPage() {
                               {msg.modelUsed && <ModelBadge tier={msg.modelUsed} />}
                               {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
                             </div>
-                            <p className="text-xs whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                            <div 
+                              className="text-xs leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                              dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
+                            />
                             {msg.citations && msg.citations.length > 0 && (
                               <div className="mt-2 pt-2 border-t space-y-1">
                                 <h4 className="text-[10px] font-medium text-muted-foreground">Sources</h4>

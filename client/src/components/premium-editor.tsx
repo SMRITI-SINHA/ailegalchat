@@ -40,8 +40,6 @@ import {
   Italic,
   Underline,
   Highlighter,
-  Link,
-  Image,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -51,7 +49,6 @@ import {
   Indent,
   Outdent,
   Strikethrough,
-  Wand2,
   ArrowLeft,
   Plus,
   Save,
@@ -63,10 +60,10 @@ import {
   Edit3,
   Languages,
   Sparkles,
-  X,
 } from "lucide-react";
 import { indianLanguages, type IndianLanguage } from "@shared/schema";
 import type { Draft } from "@shared/schema";
+import { markdownToHtml } from "@/lib/utils";
 
 interface PremiumEditorProps {
   title: string;
@@ -303,8 +300,10 @@ export function PremiumEditor({
   const insertTextAtCursor = (text: string) => {
     const before = content.slice(0, cursorPosition);
     const after = content.slice(cursorPosition);
-    const separator = before && !before.endsWith('\n') && !before.endsWith(' ') ? '\n\n' : '';
-    const newContent = before + separator + text + after;
+    const separator = before && !before.endsWith('\n') && !before.endsWith(' ') ? '<br><br>' : '';
+    // Convert markdown to properly formatted HTML
+    const formattedText = markdownToHtml(text);
+    const newContent = before + separator + formattedText + after;
     onContentChange(newContent);
   };
 
@@ -359,7 +358,42 @@ export function PremiumEditor({
   const handleItalic = () => execFormatCommand('italic');
   const handleUnderline = () => execFormatCommand('underline');
   const handleStrikethrough = () => execFormatCommand('strikeThrough');
-  const handleHighlight = () => execFormatCommand('backColor', '#ffff00');
+  const handleHighlight = () => {
+    if (contentEditableRef.current) {
+      contentEditableRef.current.focus();
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const parentEl = range.commonAncestorContainer.parentElement;
+        
+        // Check if already highlighted using computed style (handles rgb format too)
+        if (parentEl) {
+          const computedBg = window.getComputedStyle(parentEl).backgroundColor;
+          const isYellow = computedBg === 'yellow' || 
+                          computedBg === 'rgb(255, 255, 0)' || 
+                          computedBg === '#ffff00' ||
+                          parentEl.style.backgroundColor === 'yellow';
+          
+          if (isYellow && parentEl.tagName.toLowerCase() === 'span') {
+            // Remove highlight by unwrapping the span
+            const parent = parentEl.parentNode;
+            while (parentEl.firstChild) {
+              parent?.insertBefore(parentEl.firstChild, parentEl);
+            }
+            parent?.removeChild(parentEl);
+          } else {
+            // Apply highlight
+            document.execCommand('backColor', false, 'yellow');
+          }
+        } else {
+          // Apply highlight
+          document.execCommand('backColor', false, 'yellow');
+        }
+        isInternalUpdate.current = true;
+        onContentChange(contentEditableRef.current.innerHTML || "");
+      }
+    }
+  };
   const handleAlignLeft = () => execFormatCommand('justifyLeft');
   const handleAlignCenter = () => execFormatCommand('justifyCenter');
   const handleAlignRight = () => execFormatCommand('justifyRight');
@@ -368,20 +402,6 @@ export function PremiumEditor({
   const handleNumberedList = () => execFormatCommand('insertOrderedList');
   const handleIndent = () => execFormatCommand('indent');
   const handleOutdent = () => execFormatCommand('outdent');
-  
-  const handleInsertLink = () => {
-    const url = prompt('Enter URL:');
-    if (url) {
-      execFormatCommand('createLink', url);
-    }
-  };
-  
-  const handleInsertImage = () => {
-    const url = prompt('Enter image URL:');
-    if (url) {
-      execFormatCommand('insertImage', url);
-    }
-  };
 
   const handleFontChange = (font: string) => {
     setFontFamily(font);
@@ -397,16 +417,17 @@ export function PremiumEditor({
 
   const handleHeadingChange = (heading: string) => {
     setHeadingStyle(heading);
-    if (heading === "Normal text") {
-      execFormatCommand('formatBlock', 'p');
-    } else if (heading === "Heading 1") {
-      execFormatCommand('formatBlock', 'h1');
-    } else if (heading === "Heading 2") {
-      execFormatCommand('formatBlock', 'h2');
-    } else if (heading === "Heading 3") {
-      execFormatCommand('formatBlock', 'h3');
-    } else if (heading === "Heading 4") {
-      execFormatCommand('formatBlock', 'h4');
+    if (contentEditableRef.current) {
+      contentEditableRef.current.focus();
+      let tag = 'p';
+      if (heading === "Heading 1") tag = 'h1';
+      else if (heading === "Heading 2") tag = 'h2';
+      else if (heading === "Heading 3") tag = 'h3';
+      else if (heading === "Heading 4") tag = 'h4';
+      
+      document.execCommand('formatBlock', false, `<${tag}>`);
+      isInternalUpdate.current = true;
+      onContentChange(contentEditableRef.current.innerHTML || "");
     }
   };
 
@@ -730,10 +751,6 @@ export function PremiumEditor({
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <ToolbarButton icon={Link} tooltip="Insert link" onClick={handleInsertLink} />
-        <ToolbarButton icon={Image} tooltip="Insert image" onClick={handleInsertImage} />
-
-        <Separator orientation="vertical" className="h-5 mx-1" />
 
         <ToolbarButton icon={AlignLeft} tooltip="Align left" onClick={handleAlignLeft} />
         <ToolbarButton icon={AlignCenter} tooltip="Align center" onClick={handleAlignCenter} />
