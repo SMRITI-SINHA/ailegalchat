@@ -16,6 +16,7 @@ import {
   Scale,
   Sparkles,
   Shield,
+  CalendarDays,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -46,10 +47,18 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/hub" || location.startsWith("/hub/")}>
+                <SidebarMenuButton asChild isActive={location === "/hub" || (location.startsWith("/hub/") && !location.startsWith("/hub/calendar"))}>
                   <Link href="/hub" data-testid="nav-hub">
                     <Sparkles className="h-4 w-4" />
                     <span>AI Hub</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/hub/calendar"}>
+                  <Link href="/hub/calendar" data-testid="nav-calendar">
+                    <CalendarDays className="h-4 w-4" />
+                    <span>Calendar</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

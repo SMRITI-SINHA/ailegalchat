@@ -21,6 +21,7 @@ import {
   FlaskConical,
   MessageSquare,
   StickyNote,
+  CalendarDays,
 } from "lucide-react";
 
 const draftingCards = [
@@ -203,6 +204,27 @@ export default function HubPage() {
             <FeatureCard key={card.url} card={card} isBeta={card.isBeta} />
           ))}
         </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-4">Calendar</h2>
+        <Link href="/hub/calendar">
+          <Card className="hover-elevate cursor-pointer" data-testid="card-hub-calendar">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-md bg-muted">
+                  <CalendarDays className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-sm">Legal Academic Calendar</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sync your personal, institutional & legal ecosystem timelines with Google or Outlook
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </section>
 
       <section>

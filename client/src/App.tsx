@@ -29,6 +29,7 @@ import ResearchNotesPage from "@/pages/hub/research-notes";
 import CasePredictPage from "@/pages/hub/study-case-predict";
 import CounterArgsPage from "@/pages/hub/study-counter-args";
 import LegalSandboxPage from "@/pages/hub/study-sandbox";
+import LegalCalendarPage from "@/pages/hub/calendar";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const style = {
@@ -84,6 +85,7 @@ function Router() {
         <Route path="/hub/study/case-predict" component={CasePredictPage} />
         <Route path="/hub/study/counter-args" component={CounterArgsPage} />
         <Route path="/hub/study/sandbox" component={LegalSandboxPage} />
+        <Route path="/hub/calendar" component={LegalCalendarPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
