@@ -5,7 +5,7 @@ import multer from "multer";
 import OpenAI from "openai";
 import mammoth from "mammoth";
 import { storage } from "./storage";
-import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema } from "@shared/schema";
+import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
@@ -985,15 +985,11 @@ Generate at least 8-10 relevant compliance items specific to Indian law and regu
 
   app.post("/api/cnr/notes", async (req: Request, res: Response) => {
     try {
-      const { title, content, cnrNumber } = req.body;
-      if (!title && !content) {
-        return res.status(400).json({ error: "Title or content is required" });
+      const parsed = insertCnrNoteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
       }
-      const note = await storage.createCnrNote({
-        title: title || "Untitled Note",
-        content: content || "",
-        cnrNumber: cnrNumber || null,
-      });
+      const note = await storage.createCnrNote(parsed.data);
       res.status(201).json(note);
     } catch (error) {
       console.error("Error creating CNR note:", error);
@@ -1003,12 +999,12 @@ Generate at least 8-10 relevant compliance items specific to Indian law and regu
 
   app.patch("/api/cnr/notes/:id", async (req: Request, res: Response) => {
     try {
-      const { title, content, cnrNumber } = req.body;
-      const note = await storage.updateCnrNote(req.params.id, {
-        title,
-        content,
-        cnrNumber,
-      });
+      const partialSchema = insertCnrNoteSchema.partial();
+      const parsed = partialSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const note = await storage.updateCnrNote(req.params.id, parsed.data);
       if (!note) {
         return res.status(404).json({ error: "Note not found" });
       }
