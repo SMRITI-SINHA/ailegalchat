@@ -64,7 +64,6 @@ const chatCards = [
     description: "General legal assistant trained on 1000+ documents",
     icon: Scale,
     url: "/hub/chat/nyaya",
-    isPremium: true,
   },
 ];
 
