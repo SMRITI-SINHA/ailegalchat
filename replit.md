@@ -213,3 +213,7 @@ The application runs via `npm run dev` which starts both the Express backend and
 - Toast notifications when files can't be processed, guiding users to convert to .docx format
 - Train Your Drafts uses PostgreSQL with per-user isolation (userId field)
 - Training docs store extractedHtml for structure preservation when useFirmStyle is enabled
+- Enhanced AI Legal Drafting with expert-level Indian legal formatting (section order, heading hierarchy, numbering, verification clauses, proper terminology)
+- Enhanced Legal Memo Generator with professional formatting (header template, IRAC/CRAC/CREAC section structure, citation format, anti-fabrication safeguards)
+- Both generators now use placeholder markers ([BLANK], [TO BE FILLED]) instead of fabricating missing information
+- Expert prompts include 30+ years senior advocate/law firm partner experience context for authentic drafting style
