@@ -56,8 +56,9 @@ import { Progress } from "@/components/ui/progress";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { markdownToHtml, stripHtmlTags } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { Draft, IndianLanguage } from "@shared/schema";
+import type { Draft, IndianLanguage, DocumentTypeSelection } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
+import { DocumentTypeSelector, getDocumentTypeForPrompt, getDocumentTypeString } from "@/components/document-type-selector";
 import { formatDistanceToNow } from "date-fns";
 
 type StartOption = "upload_reference" | "type_facts" | "upload_draft" | null;
@@ -192,9 +193,11 @@ export default function AIDraftingPage() {
     facts: "",
     parties: "",
     jurisdiction: "Delhi High Court",
-    documentType: "petition",
     additionalInstructions: "",
   });
+  
+  // Hierarchical document type selection
+  const [documentTypeSelection, setDocumentTypeSelection] = useState<DocumentTypeSelection | null>(null);
   
   // Additional prompt for reference docs
   const [referencePrompt, setReferencePrompt] = useState("");
@@ -283,19 +286,22 @@ export default function AIDraftingPage() {
         ? `${formData.facts}\n\nADDITIONAL INSTRUCTIONS:\n${formData.additionalInstructions}`
         : formData.facts;
       
+      const documentTypeStr = getDocumentTypeForPrompt(documentTypeSelection);
+      const documentTypeFullStr = getDocumentTypeString(documentTypeSelection);
+      
       const response = await apiRequest("POST", "/api/drafts/generate", {
-        type: formData.documentType,
-        title: formData.title || `${formData.documentType} - Draft`,
+        type: documentTypeStr,
+        title: formData.title || `${documentTypeFullStr || "Draft"}`,
         facts: factsWithInstructions,
         parties: formData.parties,
         jurisdiction: formData.jurisdiction,
         language,
         useFirmStyle,
+        documentTypeDetails: documentTypeSelection,
       });
       const draft = await response.json();
       setSelectedDraftId(draft.id);
       setDraftTitle(draft.title || "Generated Draft");
-      // Convert markdown from AI to properly formatted HTML
       setDraftContent(markdownToHtml(draft.content || ""));
       setViewMode("editor");
       setShowResearchSidebar(true);
@@ -329,9 +335,9 @@ export default function AIDraftingPage() {
       facts: "",
       parties: "",
       jurisdiction: "Delhi High Court",
-      documentType: "petition",
       additionalInstructions: "",
     });
+    setDocumentTypeSelection(null);
     setReferencePrompt("");
   };
 
@@ -478,14 +484,18 @@ export default function AIDraftingPage() {
         .map(f => `=== ${f.name} ===\n${f.content}`)
         .join("\n\n");
       
+      const documentTypeStr = getDocumentTypeForPrompt(documentTypeSelection);
+      const documentTypeFullStr = getDocumentTypeString(documentTypeSelection);
+      
       const response = await apiRequest("POST", "/api/drafts/generate", {
-        type: formData.documentType,
-        title: formData.title || `${formData.documentType} - Draft`,
+        type: documentTypeStr,
+        title: formData.title || `${documentTypeFullStr || "Draft"}`,
         facts: `REFERENCE DOCUMENTS:\n${referenceContext}\n\nADDITIONAL CONTEXT / INSTRUCTIONS:\n${referencePrompt || "Use the reference documents to understand the case details."}`,
         parties: formData.parties,
         jurisdiction: formData.jurisdiction,
         language,
         useFirmStyle,
+        documentTypeDetails: documentTypeSelection,
       });
       const draft = await response.json();
       setSelectedDraftId(draft.id);
@@ -798,23 +808,12 @@ export default function AIDraftingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div>
+                <div className="space-y-2">
                   <Label>Document Type</Label>
-                  <Select value={formData.documentType} onValueChange={(v) => setFormData((p) => ({ ...p, documentType: v }))}>
-                    <SelectTrigger data-testid="select-doc-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="petition">Petition</SelectItem>
-                      <SelectItem value="written_statement">Written Statement</SelectItem>
-                      <SelectItem value="notice">Legal Notice</SelectItem>
-                      <SelectItem value="contract">Contract</SelectItem>
-                      <SelectItem value="affidavit">Affidavit</SelectItem>
-                      <SelectItem value="application">Application</SelectItem>
-                      <SelectItem value="reply">Reply/Rejoinder</SelectItem>
-                      <SelectItem value="brief">Legal Brief</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <DocumentTypeSelector 
+                    value={documentTypeSelection} 
+                    onChange={setDocumentTypeSelection} 
+                  />
                 </div>
                 <div>
                   <Label>Title</Label>
@@ -885,7 +884,7 @@ export default function AIDraftingPage() {
                 </div>
                 <Button
                   onClick={handleGenerate}
-                  disabled={!formData.facts || isGenerating}
+                  disabled={!formData.facts || !documentTypeSelection || isGenerating}
                   className="w-full"
                   data-testid="button-generate"
                 >
@@ -954,23 +953,12 @@ export default function AIDraftingPage() {
                       <DetailQualityMeter text={referencePrompt} label="Instructions Detail Level" />
                     </div>
                     <div className="border-t pt-4 space-y-4">
-                      <div>
+                      <div className="space-y-2">
                         <Label>Document Type</Label>
-                        <Select value={formData.documentType} onValueChange={(v) => setFormData((p) => ({ ...p, documentType: v }))}>
-                          <SelectTrigger data-testid="select-ref-doc-type">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="petition">Petition</SelectItem>
-                            <SelectItem value="written_statement">Written Statement</SelectItem>
-                            <SelectItem value="notice">Legal Notice</SelectItem>
-                            <SelectItem value="contract">Contract</SelectItem>
-                            <SelectItem value="affidavit">Affidavit</SelectItem>
-                            <SelectItem value="application">Application</SelectItem>
-                            <SelectItem value="reply">Reply/Rejoinder</SelectItem>
-                            <SelectItem value="brief">Legal Brief</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <DocumentTypeSelector 
+                          value={documentTypeSelection} 
+                          onChange={setDocumentTypeSelection} 
+                        />
                       </div>
                       <div>
                         <Label>Title</Label>
@@ -1017,7 +1005,7 @@ export default function AIDraftingPage() {
                     <Button 
                       className="w-full" 
                       onClick={handleGenerateFromReference}
-                      disabled={isGenerating || uploadedReferenceFiles.length === 0 || !formData.title || !formData.parties}
+                      disabled={isGenerating || uploadedReferenceFiles.length === 0 || !formData.title || !formData.parties || !documentTypeSelection}
                     >
                       {isGenerating ? <StreamingIndicator className="mr-2" /> : <Wand2 className="mr-2 h-4 w-4" />}
                       {isGenerating ? "Generating..." : "Generate Draft with AI"}
