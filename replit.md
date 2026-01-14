@@ -41,3 +41,27 @@ The user interface is structured around a central "Chakshi AI Hub" with distinct
 - **Google Calendar API:** Utilized for bidirectional synchronization of legal events, enabling users to manage their academic and professional schedules within the platform and externally.
 - **`mammoth.js`:** Library used for converting `.docx` files to HTML, preserving document structure during upload and processing.
 - **`sanitize-html`:** Library used for HTML sanitization to prevent XSS vulnerabilities, particularly with uploaded document content.
+- **Perplexity API:** Used for currency and risk signals - recent amendments, notifications, and judicial developments (advisory layer, not primary authority).
+
+### Legal Research Layer (Mandatory Pipeline)
+The drafting and memo generation endpoints implement a two-layer research pipeline:
+
+**Layer 1: Indian Kanoon (Primary Authority)**
+- Searches for relevant statutes and case law BEFORE drafting
+- Returns verified sources with DocID, title, and excerpt
+- AI is instructed to ONLY cite from this verified list
+- Non-verified citations must be marked as "[CITATION NEEDED - VERIFY]"
+
+**Layer 2: Perplexity (Currency & Risk Signals - Advisory Only)**
+- Searches for recent amendments, notifications, and judicial developments
+- Results are marked as advisory only - not to be cited as authority
+- Warns user to verify from official gazettes
+
+Both layers fail safely - if a search fails, the pipeline continues without that context.
+
+### Pipeline Flow
+```
+User Input → Pre-Draft Validation (types) → Legal Research Layer (Indian Kanoon + Perplexity)
+           → Document DNA Engine (prompts) → Drafting Engine (LLM) → Self-Validation Quality Gate
+           → Final Output
+```
