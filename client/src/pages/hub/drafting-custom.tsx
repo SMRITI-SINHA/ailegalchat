@@ -40,6 +40,7 @@ import {
   Calendar,
   Edit,
   Trash2,
+  CheckCircle2,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { IndianLanguage, Draft } from "@shared/schema";
@@ -54,6 +55,8 @@ export default function CustomDraftPage() {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [language, setLanguage] = useState<IndianLanguage>("English");
   const [uploadedFormat, setUploadedFormat] = useState<File | null>(null);
+  const [extractedFormatHtml, setExtractedFormatHtml] = useState<string | null>(null);
+  const [isExtractingFormat, setIsExtractingFormat] = useState(false);
   const [caseFacts, setCaseFacts] = useState("");
   const [additionalPrompts, setAdditionalPrompts] = useState("");
   const [draftTitle, setDraftTitle] = useState("Custom Draft");
@@ -109,7 +112,29 @@ export default function CustomDraftPage() {
 
   const handleUpload = async (files: File[]) => {
     if (files.length > 0) {
-      setUploadedFormat(files[0]);
+      const file = files[0];
+      setUploadedFormat(file);
+      setExtractedFormatHtml(null);
+      setIsExtractingFormat(true);
+      
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        const response = await fetch("/api/format/extract", {
+          method: "POST",
+          body: formData,
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          setExtractedFormatHtml(result.extractedHtml);
+        }
+      } catch (error) {
+        console.error("Format extraction error:", error);
+      } finally {
+        setIsExtractingFormat(false);
+      }
     }
   };
 
@@ -125,6 +150,7 @@ export default function CustomDraftPage() {
         additionalPrompts,
         language,
         formatReference: uploadedFormat.name,
+        formatHtml: extractedFormatHtml,
       });
       const draft = await response.json();
       setDraftId(draft.id);
@@ -194,12 +220,13 @@ export default function CustomDraftPage() {
   const resetForm = () => {
     setLanguage("English");
     setUploadedFormat(null);
+    setExtractedFormatHtml(null);
     setCaseFacts("");
     setAdditionalPrompts("");
     setDraftTitle("Custom Draft");
   };
 
-  const canGenerate = caseFacts.trim().length > 0 && uploadedFormat !== null;
+  const canGenerate = caseFacts.trim().length > 0 && uploadedFormat !== null && !isExtractingFormat && extractedFormatHtml !== null;
 
   if (viewMode === "list") {
     return (
@@ -367,8 +394,20 @@ export default function CustomDraftPage() {
                 {uploadedFormat && (
                   <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
                     <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{uploadedFormat.name}</span>
-                    <Badge variant="secondary" className="ml-auto">Format Reference</Badge>
+                    <span className="text-sm truncate flex-1">{uploadedFormat.name}</span>
+                    {isExtractingFormat ? (
+                      <Badge variant="secondary" className="gap-1">
+                        <Sparkles className="h-3 w-3 animate-pulse" />
+                        Extracting...
+                      </Badge>
+                    ) : extractedFormatHtml ? (
+                      <Badge variant="outline" className="text-green-600 dark:text-green-400 gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Structure Extracted
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">Format Reference</Badge>
+                    )}
                   </div>
                 )}
               </div>

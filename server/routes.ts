@@ -681,7 +681,7 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
 
   app.post("/api/drafts/generate", async (req: Request, res: Response) => {
     try {
-      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, useFirmStyle } = req.body;
+      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle } = req.body;
 
       if (!type || !facts) {
         return res.status(400).json({ error: "Type and facts are required" });
@@ -715,6 +715,27 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
         }
       }
 
+      // One-time format template from uploaded file (custom drafts)
+      let formatTemplateContext = "";
+      if (formatHtml) {
+        formatTemplateContext = `\n\nFORMAT TEMPLATE (ONE-TIME REFERENCE):
+The user has uploaded a format template document. Match the EXACT structure, formatting, and style from this template. Do NOT copy the content - only the format and structure.
+
+Pay special attention to:
+- Document layout and section ordering
+- Numbering systems (Roman numerals, decimals, letters)
+- Heading styles and hierarchy
+- Clause formatting and indentation
+- Legal terminology patterns
+- Spacing and structure
+
+=== FORMAT TEMPLATE STRUCTURE ===
+${formatHtml.substring(0, 3000)}
+===
+
+Generate new content using the facts provided, but formatted EXACTLY like the template above.`;
+      }
+
       const prompt = `Generate a professional legal ${type} with the following details:
 
 Title: ${draftTitle}
@@ -726,7 +747,7 @@ ${facts}
 
 ${additionalInfo ? `Additional Instructions: ${additionalInfo}` : ""}
 ${additionalPrompts ? `User's Additional Prompts: ${additionalPrompts}` : ""}
-${formatReference ? `Note: User has provided a format reference document named "${formatReference}" - maintain a professional legal document structure.` : ""}
+${formatReference && !formatHtml ? `Note: User has provided a format reference document named "${formatReference}" - maintain a professional legal document structure.` : ""}
 
 Generate a complete, properly formatted legal document following Indian legal conventions. Include:
 1. Proper heading and court details
@@ -738,7 +759,7 @@ Generate a complete, properly formatted legal document following Indian legal co
 
 CRITICAL DATE/YEAR REQUIREMENT: The current year is ${new Date().getFullYear()}. For any petition numbers, cause titles, filing years, verification dates, or any other reference requiring a year, use ${new Date().getFullYear()} unless a different year is explicitly provided in the facts. If the exact year cannot be determined, leave it as a blank (e.g., "____") for the user to fill in. Never use outdated years like 2024.
 
-Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${languageInstruction}${trainedStyleContext}`;
+Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${languageInstruction}${trainedStyleContext}${formatTemplateContext}`;
 
       const systemPrompt = selectedLanguage !== "English"
         ? `You are an expert legal document drafter specializing in Indian law. You are completely fluent in ${selectedLanguage} and must generate the ENTIRE document in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations, or official statute names. All section headings, content, and legal arguments must be in ${selectedLanguage}. Do not use markdown formatting (**, ##, etc.) - output clean plain text only.`
@@ -900,6 +921,32 @@ Ensure the translation is accurate and uses appropriate legal terminology in ${t
     } catch (error) {
       console.error("Error deleting training doc:", error);
       res.status(500).json({ error: "Failed to delete training document" });
+    }
+  });
+
+  // Extract format structure from uploaded file (one-time use, not saved)
+  app.post("/api/format/extract", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const file = req.file as Express.Multer.File;
+      
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Extract text and HTML structure using the same technique as document upload
+      const extracted = await extractTextFromFile(file);
+      const decodedName = decodeFilename(file.originalname);
+      
+      res.json({
+        name: decodedName,
+        content: extracted.text,
+        extractedHtml: extracted.html,
+        size: file.size,
+        type: file.mimetype,
+      });
+    } catch (error) {
+      console.error("Error extracting format:", error);
+      res.status(500).json({ error: "Failed to extract format from document" });
     }
   });
 
