@@ -60,7 +60,7 @@ export interface IStorage {
   addCostEntry(entry: InsertCostLedger): Promise<CostLedger>;
   getTotalCost(): Promise<number>;
 
-  getTrainingDocs(): Promise<TrainingDoc[]>;
+  getTrainingDocs(userId?: string): Promise<TrainingDoc[]>;
   getTrainingDoc(id: string): Promise<TrainingDoc | undefined>;
   createTrainingDoc(doc: InsertTrainingDoc): Promise<TrainingDoc>;
   deleteTrainingDoc(id: string): Promise<void>;
@@ -445,8 +445,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.costLedger.values()).reduce((sum, entry) => sum + entry.amount, 0);
   }
 
-  async getTrainingDocs(): Promise<TrainingDoc[]> {
-    return Array.from(this.trainingDocs.values()).sort(
+  async getTrainingDocs(userId?: string): Promise<TrainingDoc[]> {
+    const docs = Array.from(this.trainingDocs.values());
+    const filtered = userId ? docs.filter(d => d.userId === userId) : docs;
+    return filtered.sort(
       (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
     );
   }
@@ -459,10 +461,12 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const doc: TrainingDoc = {
       id,
+      userId: insertDoc.userId ?? "default-user",
       name: insertDoc.name,
       type: insertDoc.type,
       size: insertDoc.size,
       content: insertDoc.content ?? null,
+      extractedHtml: insertDoc.extractedHtml ?? null,
       status: insertDoc.status ?? "pending",
       uploadedAt: new Date(),
     };

@@ -109,10 +109,12 @@ export type Draft = typeof drafts.$inferSelect;
 
 export const trainingDocs = pgTable("training_docs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().default("default-user"),
   name: text("name").notNull(),
   type: text("type").notNull(),
   size: integer("size").notNull(),
   content: text("content"),
+  extractedHtml: text("extracted_html"),
   status: text("status").notNull().default("pending"),
   uploadedAt: timestamp("uploaded_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
