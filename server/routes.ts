@@ -717,12 +717,14 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
       // Build detailed document type context from hierarchical selection
       let documentTypeContext = "";
       if (documentTypeDetails) {
-        const { category, subType, subSubType, customText } = documentTypeDetails;
+        // Use labels for clearer prompts (frontend sends categoryLabel, subtypeLabel, subSubtypeLabel)
+        const { categoryLabel, subtypeLabel, subSubtypeLabel, subSubtype, customText } = documentTypeDetails;
         documentTypeContext = `\nDOCUMENT TYPE SPECIFICATION:`;
-        if (category) documentTypeContext += `\n- Procedural Category: ${category}`;
-        if (subType) documentTypeContext += `\n- Document Nature: ${subType}`;
-        if (subSubType && subSubType !== "not_applicable") {
-          documentTypeContext += `\n- Statutory/Contextual Type: ${subSubType}`;
+        if (categoryLabel) documentTypeContext += `\n- Procedural Category: ${categoryLabel}`;
+        if (subtypeLabel) documentTypeContext += `\n- Document Nature: ${subtypeLabel}`;
+        // Filter out "not_applicable" and "none" sentinel values
+        if (subSubtypeLabel && subSubtype && subSubtype !== "not_applicable" && subSubtype !== "none") {
+          documentTypeContext += `\n- Statutory/Contextual Type: ${subSubtypeLabel}`;
         }
         if (customText) documentTypeContext += `\n- Custom Specification: ${customText}`;
         documentTypeContext += `\n\nGenerate the document following the exact legal requirements, statutory framework, and formatting conventions for this specific document type under Indian law.\n`;

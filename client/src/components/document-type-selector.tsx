@@ -4,6 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { documentTypeHierarchy, type DocumentTypeSelection, type DocumentCategory, type DocumentSubtype } from "@shared/schema";
 
+export type { DocumentTypeSelection } from "@shared/schema";
+
 interface DocumentTypeSelectorProps {
   value: DocumentTypeSelection | null;
   onChange: (selection: DocumentTypeSelection | null) => void;
