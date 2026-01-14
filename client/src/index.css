@@ -37,8 +37,8 @@
   --popover-foreground: 25 20% 15%;
   --popover-border: 30 15% 88%;
   
-  /* Primary - Orange/Amber (active navigation buttons) */
-  --primary: 30 90% 50%;
+  /* Primary - Warm Brown/Terracotta (matches header from reference) */
+  --primary: 25 35% 45%;
   --primary-foreground: 0 0% 100%;
   
   /* Secondary - Light warm gray */
@@ -60,11 +60,11 @@
   /* Input borders */
   --input: 30 15% 75%;
   
-  /* Focus ring - Orange */
-  --ring: 30 90% 50%;
+  /* Focus ring - Warm Brown */
+  --ring: 25 35% 45%;
   
   /* Chart colors - Legal platform palette */
-  --chart-1: 30 90% 50%;
+  --chart-1: 25 35% 45%;
   --chart-2: 142 71% 45%;
   --chart-3: 187 70% 45%;
   --chart-4: 45 93% 47%;
