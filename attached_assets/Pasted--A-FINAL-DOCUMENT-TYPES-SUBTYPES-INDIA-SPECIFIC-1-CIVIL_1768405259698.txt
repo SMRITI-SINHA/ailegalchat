@@ -1,0 +1,272 @@
+✅ A. FINAL DOCUMENT TYPES & SUBTYPES (INDIA-SPECIFIC)
+1️⃣ CIVIL LITIGATION (CPC-centric)
+
+Subtypes (mandatory selection):
+
+Plaint (Civil Suit)
+
+Written Statement
+
+Replication / Rejoinder
+
+Interim Application (CPC)
+
+Affidavit
+
+Execution Petition
+
+Review / Revision Petition
+
+Caveat
+
+Miscellaneous Application
+
+Other (user-defined)
+
+Optional Sub-Subtype (conditional):
+
+Order VII Rule 11
+
+Order XXXIX Rules 1 & 2
+
+Order VI Rule 17
+
+Order XXI (Execution)
+
+Section 151 CPC
+
+User-defined (free text)
+
+2️⃣ CRIMINAL LITIGATION (CrPC / IPC / Special Acts)
+
+Subtypes (mandatory):
+
+Bail Application
+
+Anticipatory Bail Application
+
+Criminal Complaint
+
+Petition (CrPC)
+
+Application (CrPC)
+
+Affidavit
+
+Reply / Objection
+
+Quashing Petition (Section 482)
+
+Revision / Appeal
+
+Other
+
+Optional Sub-Subtype:
+
+Section 156(3) CrPC
+
+Section 41A CrPC
+
+Section 438 / 439
+
+Section 482 CrPC
+
+NI Act Section 138
+
+User-defined
+
+3️⃣ CONSTITUTIONAL / WRIT JURISDICTION
+
+Subtypes (mandatory):
+
+Writ Petition
+
+Writ Appeal
+
+Special Leave Petition (SLP)
+
+Review Petition
+
+Contempt Petition
+
+Other
+
+Optional Sub-Subtype:
+
+Article 226
+
+Article 32
+
+Article 136
+
+Service Matter
+
+Tax Matter
+
+User-defined
+
+4️⃣ NOTICES & REPLIES
+
+Subtypes (mandatory):
+
+Legal Notice (General)
+
+Legal Notice – Cheque Bounce
+
+Demand Notice
+
+Reply to Legal Notice
+
+Show Cause Reply
+
+Termination Notice
+
+Arbitration Notice (Section 21)
+
+Other
+
+Optional Sub-Subtype:
+
+Section 138 NI Act
+
+Contractual Breach
+
+Employment Dispute
+
+Property Dispute
+
+User-defined
+
+5️⃣ CONTRACTS & COMMERCIAL DOCUMENTS
+
+Subtypes (mandatory):
+
+Employment Agreement
+
+Service Agreement
+
+NDA
+
+Vendor / Supply Agreement
+
+Shareholders’ Agreement
+
+Partnership Deed
+
+Lease / License Agreement
+
+Addendum / Amendment
+
+Termination Agreement
+
+Other
+
+Optional Sub-Subtype:
+
+Fixed-term / Consultancy
+
+Exclusivity Clause
+
+Arbitration Clause
+
+Governing Law Clause
+
+User-defined
+
+6️⃣ ARBITRATION (Arbitration & Conciliation Act)
+
+Subtypes (mandatory):
+
+Notice of Arbitration
+
+Statement of Claim
+
+Statement of Defence
+
+Section 9 Application
+
+Section 11 Petition
+
+Section 34 Petition
+
+Section 36 Application
+
+Other
+
+Optional Sub-Subtype:
+
+Domestic Arbitration
+
+International Commercial Arbitration
+
+Emergency Relief
+
+User-defined
+
+7️⃣ FAMILY LAW
+
+Subtypes (mandatory):
+
+Divorce Petition
+
+Maintenance Application
+
+Domestic Violence Complaint
+
+Child Custody Petition
+
+Mutual Consent Petition
+
+Other
+
+Optional Sub-Subtype:
+
+Section 125 CrPC
+
+Hindu Marriage Act
+
+DV Act
+
+User-defined
+
+8️⃣ CORPORATE / REGULATORY / COMPLIANCE
+
+Subtypes (mandatory):
+
+Legal Opinion
+
+Board Resolution
+
+Share Transfer Documents
+
+Due Diligence Report
+
+ROC Filings Draft
+
+SEBI / RBI Reply
+
+Other
+
+9️⃣ LEGAL RESEARCH & OPINIONS
+
+Subtypes (mandatory):
+
+Legal Memo
+
+Case Law Research
+
+Opinion Note
+
+Brief Note
+
+Comparative Analysis
+
+Other
+
+🔟 MISCELLANEOUS / CUSTOM
+
+Subtypes:
+
+User-defined only (free text)
+
+⚠️ Rule: If a subtype is “Other”, a custom input field becomes mandatory.

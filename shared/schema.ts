@@ -407,3 +407,230 @@ export type CalendarEventType = typeof calendarEventTypes[number];
 
 export const syncStatuses = ["pending", "synced", "failed", "conflict"] as const;
 export type SyncStatus = typeof syncStatuses[number];
+
+// Document Type Hierarchy for Indian Legal Practice
+export interface DocumentSubSubtype {
+  id: string;
+  label: string;
+}
+
+export interface DocumentSubtype {
+  id: string;
+  label: string;
+  subSubtypes?: DocumentSubSubtype[];
+}
+
+export interface DocumentCategory {
+  id: string;
+  label: string;
+  subtypes: DocumentSubtype[];
+}
+
+export const documentTypeHierarchy: DocumentCategory[] = [
+  {
+    id: "civil_litigation",
+    label: "Civil Litigation (CPC)",
+    subtypes: [
+      { id: "plaint", label: "Plaint (Civil Suit)" },
+      { id: "written_statement", label: "Written Statement" },
+      { id: "replication", label: "Replication / Rejoinder" },
+      { id: "interim_application", label: "Interim Application (CPC)" },
+      { id: "affidavit_civil", label: "Affidavit" },
+      { id: "execution_petition", label: "Execution Petition" },
+      { id: "review_revision_civil", label: "Review / Revision Petition" },
+      { id: "caveat", label: "Caveat" },
+      { id: "misc_application_civil", label: "Miscellaneous Application" },
+      { id: "other_civil", label: "Other" },
+    ].map(s => ({
+      ...s,
+      subSubtypes: [
+        { id: "order_vii_rule_11", label: "Order VII Rule 11" },
+        { id: "order_xxxix_rules_1_2", label: "Order XXXIX Rules 1 & 2" },
+        { id: "order_vi_rule_17", label: "Order VI Rule 17" },
+        { id: "order_xxi_execution", label: "Order XXI (Execution)" },
+        { id: "section_151_cpc", label: "Section 151 CPC" },
+        { id: "other_cpc", label: "Other (specify)" },
+      ]
+    }))
+  },
+  {
+    id: "criminal_litigation",
+    label: "Criminal Litigation (CrPC/BNS)",
+    subtypes: [
+      { id: "bail_application", label: "Bail Application" },
+      { id: "anticipatory_bail", label: "Anticipatory Bail Application" },
+      { id: "criminal_complaint", label: "Criminal Complaint" },
+      { id: "petition_crpc", label: "Petition (CrPC)" },
+      { id: "application_crpc", label: "Application (CrPC)" },
+      { id: "affidavit_criminal", label: "Affidavit" },
+      { id: "reply_objection_criminal", label: "Reply / Objection" },
+      { id: "quashing_petition", label: "Quashing Petition (Section 482)" },
+      { id: "revision_appeal_criminal", label: "Revision / Appeal" },
+      { id: "other_criminal", label: "Other" },
+    ].map(s => ({
+      ...s,
+      subSubtypes: [
+        { id: "section_156_3", label: "Section 156(3) CrPC" },
+        { id: "section_41a", label: "Section 41A CrPC" },
+        { id: "section_438_439", label: "Section 438 / 439" },
+        { id: "section_482_crpc", label: "Section 482 CrPC" },
+        { id: "ni_act_138", label: "NI Act Section 138" },
+        { id: "other_crpc", label: "Other (specify)" },
+      ]
+    }))
+  },
+  {
+    id: "constitutional_writ",
+    label: "Constitutional / Writ Jurisdiction",
+    subtypes: [
+      { id: "writ_petition", label: "Writ Petition" },
+      { id: "writ_appeal", label: "Writ Appeal" },
+      { id: "slp", label: "Special Leave Petition (SLP)" },
+      { id: "review_petition_const", label: "Review Petition" },
+      { id: "contempt_petition", label: "Contempt Petition" },
+      { id: "other_constitutional", label: "Other" },
+    ].map(s => ({
+      ...s,
+      subSubtypes: [
+        { id: "article_226", label: "Article 226" },
+        { id: "article_32", label: "Article 32" },
+        { id: "article_136", label: "Article 136" },
+        { id: "service_matter", label: "Service Matter" },
+        { id: "tax_matter", label: "Tax Matter" },
+        { id: "other_const", label: "Other (specify)" },
+      ]
+    }))
+  },
+  {
+    id: "notices_replies",
+    label: "Notices & Replies",
+    subtypes: [
+      { id: "legal_notice_general", label: "Legal Notice (General)" },
+      { id: "legal_notice_cheque", label: "Legal Notice – Cheque Bounce" },
+      { id: "demand_notice", label: "Demand Notice" },
+      { id: "reply_to_notice", label: "Reply to Legal Notice" },
+      { id: "show_cause_reply", label: "Show Cause Reply" },
+      { id: "termination_notice", label: "Termination Notice" },
+      { id: "arbitration_notice", label: "Arbitration Notice (Section 21)" },
+      { id: "other_notice", label: "Other" },
+    ].map(s => ({
+      ...s,
+      subSubtypes: [
+        { id: "section_138_ni", label: "Section 138 NI Act" },
+        { id: "contractual_breach", label: "Contractual Breach" },
+        { id: "employment_dispute", label: "Employment Dispute" },
+        { id: "property_dispute", label: "Property Dispute" },
+        { id: "other_notice_type", label: "Other (specify)" },
+      ]
+    }))
+  },
+  {
+    id: "contracts_commercial",
+    label: "Contracts & Commercial",
+    subtypes: [
+      { id: "employment_agreement", label: "Employment Agreement" },
+      { id: "service_agreement", label: "Service Agreement" },
+      { id: "nda", label: "NDA" },
+      { id: "vendor_supply_agreement", label: "Vendor / Supply Agreement" },
+      { id: "shareholders_agreement", label: "Shareholders' Agreement" },
+      { id: "partnership_deed", label: "Partnership Deed" },
+      { id: "lease_license", label: "Lease / License Agreement" },
+      { id: "addendum_amendment", label: "Addendum / Amendment" },
+      { id: "termination_agreement", label: "Termination Agreement" },
+      { id: "other_contract", label: "Other" },
+    ].map(s => ({
+      ...s,
+      subSubtypes: [
+        { id: "fixed_term_consultancy", label: "Fixed-term / Consultancy" },
+        { id: "exclusivity_clause", label: "Exclusivity Clause" },
+        { id: "arbitration_clause", label: "Arbitration Clause" },
+        { id: "governing_law_clause", label: "Governing Law Clause" },
+        { id: "other_contract_type", label: "Other (specify)" },
+      ]
+    }))
+  },
+  {
+    id: "arbitration",
+    label: "Arbitration (A&C Act)",
+    subtypes: [
+      { id: "notice_arbitration", label: "Notice of Arbitration" },
+      { id: "statement_claim", label: "Statement of Claim" },
+      { id: "statement_defence", label: "Statement of Defence" },
+      { id: "section_9_application", label: "Section 9 Application" },
+      { id: "section_11_petition", label: "Section 11 Petition" },
+      { id: "section_34_petition", label: "Section 34 Petition" },
+      { id: "section_36_application", label: "Section 36 Application" },
+      { id: "other_arbitration", label: "Other" },
+    ].map(s => ({
+      ...s,
+      subSubtypes: [
+        { id: "domestic_arbitration", label: "Domestic Arbitration" },
+        { id: "international_commercial", label: "International Commercial Arbitration" },
+        { id: "emergency_relief", label: "Emergency Relief" },
+        { id: "other_arb_type", label: "Other (specify)" },
+      ]
+    }))
+  },
+  {
+    id: "family_law",
+    label: "Family Law",
+    subtypes: [
+      { id: "divorce_petition", label: "Divorce Petition" },
+      { id: "maintenance_application", label: "Maintenance Application" },
+      { id: "domestic_violence", label: "Domestic Violence Complaint" },
+      { id: "child_custody", label: "Child Custody Petition" },
+      { id: "mutual_consent", label: "Mutual Consent Petition" },
+      { id: "other_family", label: "Other" },
+    ].map(s => ({
+      ...s,
+      subSubtypes: [
+        { id: "section_125_crpc", label: "Section 125 CrPC" },
+        { id: "hindu_marriage_act", label: "Hindu Marriage Act" },
+        { id: "dv_act", label: "DV Act" },
+        { id: "other_family_type", label: "Other (specify)" },
+      ]
+    }))
+  },
+  {
+    id: "corporate_regulatory",
+    label: "Corporate / Regulatory",
+    subtypes: [
+      { id: "legal_opinion", label: "Legal Opinion" },
+      { id: "board_resolution", label: "Board Resolution" },
+      { id: "share_transfer", label: "Share Transfer Documents" },
+      { id: "due_diligence", label: "Due Diligence Report" },
+      { id: "roc_filings", label: "ROC Filings Draft" },
+      { id: "sebi_rbi_reply", label: "SEBI / RBI Reply" },
+      { id: "other_corporate", label: "Other" },
+    ].map(s => ({ ...s, subSubtypes: [] }))
+  },
+  {
+    id: "legal_research",
+    label: "Legal Research & Opinions",
+    subtypes: [
+      { id: "legal_memo", label: "Legal Memo" },
+      { id: "case_law_research", label: "Case Law Research" },
+      { id: "opinion_note", label: "Opinion Note" },
+      { id: "brief_note", label: "Brief Note" },
+      { id: "comparative_analysis", label: "Comparative Analysis" },
+      { id: "other_research", label: "Other" },
+    ].map(s => ({ ...s, subSubtypes: [] }))
+  },
+  {
+    id: "miscellaneous",
+    label: "Miscellaneous / Custom",
+    subtypes: [
+      { id: "custom_document", label: "Custom Document (specify)" },
+    ].map(s => ({ ...s, subSubtypes: [] }))
+  },
+];
+
+export type DocumentTypeSelection = {
+  category: string;
+  categoryLabel: string;
+  subtype: string;
+  subtypeLabel: string;
+  subSubtype?: string;
+  subSubtypeLabel?: string;
+  customText?: string;
+};
