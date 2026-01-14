@@ -864,6 +864,69 @@ If any defect found - FLAG IT explicitly at the end of the document.
 
 OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
 
+      // ============================================
+      // LEGAL RESEARCH LAYER (MANDATORY PIPELINE)
+      // ============================================
+      // Layer 1: Indian Kanoon (Primary Authority - Binding case law & statutes)
+      // Layer 2: Perplexity (Advisory - Currency & Risk signals only)
+      
+      let indianKanoonContext = "";
+      let perplexityRiskContext = "";
+      
+      // Extract search terms from facts and document type for research
+      const searchTerms = `${type} ${facts.substring(0, 300)} ${jurisdiction || ""} ${documentTypeDetails?.subtypeLabel || ""}`.trim();
+      
+      // Layer 1: Indian Kanoon - Primary Authority Search
+      if (indianKanoon.isConfigured()) {
+        try {
+          console.log("[DRAFTING PIPELINE] Searching Indian Kanoon for primary authority...");
+          const kanoonResults = await indianKanoon.search(searchTerms, 0);
+          if (kanoonResults && kanoonResults.length > 0) {
+            indianKanoonContext = `\n\n=== PRIMARY LEGAL AUTHORITY (Indian Kanoon - Verified Sources) ===
+USE THESE CITATIONS ONLY. Do not invent or modify these references.
+
+`;
+            kanoonResults.slice(0, 8).forEach((result: any, index: number) => {
+              const cleanSnippet = result.headline?.replace(/<[^>]*>/g, "").substring(0, 250) || "";
+              indianKanoonContext += `[${index + 1}] ${result.title}
+   Source: Indian Kanoon DocID ${result.docId}
+   Excerpt: ${cleanSnippet}...
+   URL: https://indiankanoon.org/doc/${result.docId}/
+
+`;
+            });
+            indianKanoonContext += `\nIMPORTANT: Only cite cases/statutes from the above list. If a case is not listed here, mark it as "[CITATION NEEDED - VERIFY]".`;
+          }
+        } catch (e) {
+          console.log("[DRAFTING PIPELINE] Indian Kanoon search failed, continuing without primary authority context");
+        }
+      }
+      
+      // Layer 2: Perplexity - Currency & Risk Signals (Advisory Only)
+      if (legalWebSearch.isConfigured()) {
+        try {
+          console.log("[DRAFTING PIPELINE] Searching Perplexity for currency/risk signals...");
+          const riskQuery = `Recent amendments, notifications, or judicial developments affecting ${type} in India ${jurisdiction || ""} ${new Date().getFullYear()}`;
+          const { answer, sources } = await legalWebSearch.searchLegal(riskQuery);
+          if (answer) {
+            perplexityRiskContext = `\n\n=== CURRENCY & RISK SIGNALS (Advisory - Verify Independently) ===
+The following are recent developments that MAY affect this document. These are for awareness only - do NOT cite as authority.
+
+${answer.substring(0, 1500)}
+
+Sources checked: ${sources.slice(0, 3).map((s: any) => s.source).join(", ")}
+
+NOTE: This is advisory information only. Recent amendments/notifications should be verified from official gazettes before relying on them.
+===`;
+          }
+        } catch (e) {
+          console.log("[DRAFTING PIPELINE] Perplexity risk scan failed, continuing without currency signals");
+        }
+      }
+      
+      // Combine research context into prompt
+      const researchContext = indianKanoonContext + perplexityRiskContext;
+      
       const systemPrompt = selectedLanguage !== "English"
         ? `${expertDraftingPrompt}\n\nCRITICAL LANGUAGE REQUIREMENT: You are completely fluent in ${selectedLanguage} and must generate the ENTIRE document in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations (like "AIR 2023 SC 456"), or official statute names. All section headings, content, and legal arguments must be in ${selectedLanguage}.`
         : expertDraftingPrompt;
@@ -875,7 +938,7 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
             role: "system",
             content: systemPrompt,
           },
-          { role: "user", content: prompt },
+          { role: "user", content: prompt + researchContext },
         ],
         max_completion_tokens: 4096,
       });
@@ -1165,18 +1228,67 @@ Ensure the translation is accurate and uses appropriate legal terminology in ${t
       const selectedStructure = structure || "IRAC";
       const memoTitle = title || "Legal Memorandum";
 
-      let kanoonContext = "";
-      try {
-        const searchTerms = (issues || facts).substring(0, 200);
-        const kanoonResults = await indianKanoon.search(searchTerms);
-        if (kanoonResults.length > 0) {
-          kanoonContext = `\n\nRELEVANT CASE LAW FROM INDIAN KANOON DATABASE:\n${kanoonResults.slice(0, 5).map((r: any) => 
-            `- ${r.title} (${r.citation || "No citation"}): ${r.snippet?.substring(0, 200) || ""}`
-          ).join("\n")}`;
+      // ============================================
+      // LEGAL RESEARCH LAYER (MANDATORY PIPELINE)
+      // ============================================
+      // Layer 1: Indian Kanoon (Primary Authority - Binding case law & statutes)
+      // Layer 2: Perplexity (Advisory - Currency & Risk signals only)
+      
+      let indianKanoonContext = "";
+      let perplexityRiskContext = "";
+      
+      const searchTerms = (issues || facts).substring(0, 300);
+      
+      // Layer 1: Indian Kanoon - Primary Authority Search
+      if (indianKanoon.isConfigured()) {
+        try {
+          console.log("[MEMO PIPELINE] Searching Indian Kanoon for primary authority...");
+          const kanoonResults = await indianKanoon.search(searchTerms, 0);
+          if (kanoonResults && kanoonResults.length > 0) {
+            indianKanoonContext = `\n\n=== PRIMARY LEGAL AUTHORITY (Indian Kanoon - Verified Sources) ===
+USE THESE CITATIONS ONLY. Do not invent or modify these references.
+
+`;
+            kanoonResults.slice(0, 8).forEach((result: any, index: number) => {
+              const cleanSnippet = result.headline?.replace(/<[^>]*>/g, "").substring(0, 250) || "";
+              indianKanoonContext += `[${index + 1}] ${result.title}
+   Source: Indian Kanoon DocID ${result.docId}
+   Excerpt: ${cleanSnippet}...
+   URL: https://indiankanoon.org/doc/${result.docId}/
+
+`;
+            });
+            indianKanoonContext += `\nIMPORTANT: Only cite cases/statutes from the above list. If a case is not listed here, mark it as "[CITATION NEEDED - VERIFY]".`;
+          }
+        } catch (e) {
+          console.log("[MEMO PIPELINE] Indian Kanoon search failed, continuing without primary authority context");
         }
-      } catch (e) {
-        console.log("Indian Kanoon search optional - continuing without it");
       }
+      
+      // Layer 2: Perplexity - Currency & Risk Signals (Advisory Only)
+      if (legalWebSearch.isConfigured()) {
+        try {
+          console.log("[MEMO PIPELINE] Searching Perplexity for currency/risk signals...");
+          const riskQuery = `Recent amendments, notifications, or judicial developments in India ${jurisdiction || ""} ${new Date().getFullYear()} ${issues?.substring(0, 100) || ""}`;
+          const { answer, sources } = await legalWebSearch.searchLegal(riskQuery);
+          if (answer) {
+            perplexityRiskContext = `\n\n=== CURRENCY & RISK SIGNALS (Advisory - Verify Independently) ===
+The following are recent developments that MAY affect this analysis. These are for awareness only - do NOT cite as authority.
+
+${answer.substring(0, 1500)}
+
+Sources checked: ${sources.slice(0, 3).map((s: any) => s.source).join(", ")}
+
+NOTE: This is advisory information only. Recent amendments/notifications should be verified from official gazettes before relying on them.
+===`;
+          }
+        } catch (e) {
+          console.log("[MEMO PIPELINE] Perplexity risk scan failed, continuing without currency signals");
+        }
+      }
+      
+      // Combine research context
+      const researchContext = indianKanoonContext + perplexityRiskContext;
 
       const languageInstruction = selectedLanguage !== "English" 
         ? `\n\nCRITICAL LANGUAGE REQUIREMENT: You MUST write the ENTIRE memorandum in ${selectedLanguage} language. Every word, every sentence, every section heading must be in ${selectedLanguage}. Do not use English at all except for proper nouns, case citations (like "AIR 2023 SC 456"), or statute names (like "Indian Contract Act, 1872"). The memorandum must be grammatically correct and professionally written in ${selectedLanguage} using appropriate legal terminology in that language.`
@@ -1222,7 +1334,7 @@ FACTS:
 ${facts}
 
 ${issues ? `ISSUES TO ANALYZE:\n${issues}` : "Identify the key legal issues from the facts."}
-${kanoonContext}
+${researchContext}
 
 MEMO STRUCTURE: ${selectedStructure}
 ${structureInstruction}
