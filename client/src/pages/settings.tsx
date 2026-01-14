@@ -10,74 +10,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { useTheme } from "@/components/theme-provider";
 import {
   Settings,
   Bell,
   Shield,
   CreditCard,
   Brain,
-  Palette,
   Download,
   Trash2,
-  Moon,
-  Sun,
-  Monitor,
 } from "lucide-react";
 
 export default function SettingsPage() {
-  const { theme, setTheme } = useTheme();
-
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="text-muted-foreground">Manage your preferences and account settings</p>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Palette className="h-4 w-4" />
-            Appearance
-          </CardTitle>
-          <CardDescription>Customize how Chakshi looks on your device</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="theme">Theme</Label>
-              <p className="text-sm text-muted-foreground">Select your preferred theme</p>
-            </div>
-            <Select value={theme} onValueChange={(value: "light" | "dark" | "system") => setTheme(value)}>
-              <SelectTrigger className="w-[180px]" data-testid="select-theme">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="light">
-                  <div className="flex items-center gap-2">
-                    <Sun className="h-4 w-4" />
-                    Light
-                  </div>
-                </SelectItem>
-                <SelectItem value="dark">
-                  <div className="flex items-center gap-2">
-                    <Moon className="h-4 w-4" />
-                    Dark
-                  </div>
-                </SelectItem>
-                <SelectItem value="system">
-                  <div className="flex items-center gap-2">
-                    <Monitor className="h-4 w-4" />
-                    System
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

@@ -2,7 +2,6 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Scale,
   FileText,
@@ -91,7 +90,6 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <ThemeToggle />
             <Link href="/hub">
               <Button data-testid="button-get-started">
                 Get Started
