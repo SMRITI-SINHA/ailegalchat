@@ -1,0 +1,153 @@
+{
+  "colorScheme": "light",
+  "fonts": [
+    {
+      "family": "Plus Jakarta Sans",
+      "count": 45
+    },
+    {
+      "family": "Inter",
+      "count": 45
+    },
+    {
+      "family": "-apple-system",
+      "count": 45
+    },
+    {
+      "family": "BlinkMacSystemFont",
+      "count": 45
+    },
+    {
+      "family": "Segoe UI",
+      "count": 45
+    },
+    {
+      "family": "Roboto",
+      "count": 45
+    },
+    {
+      "family": "Oxygen",
+      "count": 45
+    },
+    {
+      "family": "Ubuntu",
+      "count": 45
+    },
+    {
+      "family": "Cantarell",
+      "count": 45
+    },
+    {
+      "family": "Fira Sans",
+      "count": 45
+    }
+  ],
+  "colors": {
+    "primary": "#1F2937",
+    "accent": "#6B7280",
+    "background": "#F5F5EF",
+    "textPrimary": "#1A1A1A",
+    "link": "#6B7280"
+  },
+  "typography": {
+    "fontFamilies": {
+      "primary": "Plus Jakarta Sans",
+      "heading": "Plus Jakarta Sans"
+    },
+    "fontStacks": {
+      "body": [
+        "Plus Jakarta Sans",
+        "Inter",
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "Roboto",
+        "Oxygen",
+        "Ubuntu",
+        "Cantarell",
+        "Fira Sans",
+        "Droid Sans",
+        "Helvetica Neue",
+        "sans-serif"
+      ],
+      "heading": [
+        "Plus Jakarta Sans",
+        "Inter",
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "Roboto",
+        "Oxygen",
+        "Ubuntu",
+        "Cantarell",
+        "Fira Sans",
+        "Droid Sans",
+        "Helvetica Neue",
+        "sans-serif"
+      ],
+      "paragraph": [
+        "Plus Jakarta Sans",
+        "Inter",
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "Roboto",
+        "Oxygen",
+        "Ubuntu",
+        "Cantarell",
+        "Fira Sans",
+        "Droid Sans",
+        "Helvetica Neue",
+        "sans-serif"
+      ]
+    },
+    "fontSizes": {
+      "h1": "36px",
+      "h2": "24px",
+      "body": "20px"
+    }
+  },
+  "spacing": {
+    "baseUnit": 4,
+    "borderRadius": "8px"
+  },
+  "components": {
+    "input": {
+      "background": "#F6F6F0",
+      "textColor": "#1F2839",
+      "borderColor": "#DCD2BE",
+      "borderRadius": "8px",
+      "borderRadiusCorners": {
+        "topLeft": "8px",
+        "topRight": "8px",
+        "bottomRight": "8px",
+        "bottomLeft": "8px"
+      },
+      "shadow": "none"
+    }
+  },
+  "images": {
+    "logo": null,
+    "favicon": "File saved at: attached_assets/favicon.html",
+    "ogImage": null
+  },
+  "__framework_hints": [],
+  "__llm_button_reasoning": {
+    "primary": {
+      "index": -1,
+      "text": "N/A",
+      "reasoning": "LLM failed"
+    },
+    "secondary": {
+      "index": -1,
+      "text": "N/A",
+      "reasoning": "LLM failed"
+    },
+    "confidence": 0
+  },
+  "confidence": {
+    "buttons": 0,
+    "colors": 0,
+    "overall": 0
+  }
+}

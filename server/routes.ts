@@ -907,14 +907,19 @@ USE THESE CITATIONS ONLY. Do not invent or modify these references.
         try {
           console.log("[DRAFTING PIPELINE] Searching Perplexity for currency/risk signals...");
           const riskQuery = `Recent amendments, notifications, or judicial developments affecting ${type} in India ${jurisdiction || ""} ${new Date().getFullYear()}`;
-          const { answer, sources } = await legalWebSearch.searchLegal(riskQuery);
+          const result = await legalWebSearch.searchLegal(riskQuery);
+          const answer = result?.answer || "";
+          const sources = result?.sources || [];
           if (answer) {
+            const sourcesList = sources.length > 0 
+              ? sources.slice(0, 3).map((s: any) => s?.source || "Unknown").join(", ")
+              : "Web search";
             perplexityRiskContext = `\n\n=== CURRENCY & RISK SIGNALS (Advisory - Verify Independently) ===
 The following are recent developments that MAY affect this document. These are for awareness only - do NOT cite as authority.
 
 ${answer.substring(0, 1500)}
 
-Sources checked: ${sources.slice(0, 3).map((s: any) => s.source).join(", ")}
+Sources checked: ${sourcesList}
 
 NOTE: This is advisory information only. Recent amendments/notifications should be verified from official gazettes before relying on them.
 ===`;
@@ -1270,14 +1275,19 @@ USE THESE CITATIONS ONLY. Do not invent or modify these references.
         try {
           console.log("[MEMO PIPELINE] Searching Perplexity for currency/risk signals...");
           const riskQuery = `Recent amendments, notifications, or judicial developments in India ${jurisdiction || ""} ${new Date().getFullYear()} ${issues?.substring(0, 100) || ""}`;
-          const { answer, sources } = await legalWebSearch.searchLegal(riskQuery);
+          const result = await legalWebSearch.searchLegal(riskQuery);
+          const answer = result?.answer || "";
+          const sources = result?.sources || [];
           if (answer) {
+            const sourcesList = sources.length > 0 
+              ? sources.slice(0, 3).map((s: any) => s?.source || "Unknown").join(", ")
+              : "Web search";
             perplexityRiskContext = `\n\n=== CURRENCY & RISK SIGNALS (Advisory - Verify Independently) ===
 The following are recent developments that MAY affect this analysis. These are for awareness only - do NOT cite as authority.
 
 ${answer.substring(0, 1500)}
 
-Sources checked: ${sources.slice(0, 3).map((s: any) => s.source).join(", ")}
+Sources checked: ${sourcesList}
 
 NOTE: This is advisory information only. Recent amendments/notifications should be verified from official gazettes before relying on them.
 ===`;
