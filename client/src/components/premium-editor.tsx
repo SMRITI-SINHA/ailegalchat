@@ -581,7 +581,7 @@ export function PremiumEditor({
 
       <Dialog open={showAiDialog} onOpenChange={setShowAiDialog}>
         <DialogContent className="max-w-lg p-0 overflow-hidden [&>button]:hidden">
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4">
+          <div className="bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-600 p-4">
             <div className="flex items-center gap-2 text-white">
               <Sparkles className="h-5 w-5" />
               <span className="font-medium">Help me write</span>
@@ -776,7 +776,7 @@ export function PremiumEditor({
                 onClick={openAiDialog}
                 data-testid="button-ai-assistance"
               >
-                <Sparkles className="h-4 w-4 text-blue-500" />
+                <Sparkles className="h-4 w-4 text-amber-600" />
                 <span className="text-muted-foreground">AI Assistance</span>
               </Button>
             </TooltipTrigger>
@@ -808,7 +808,7 @@ export function PremiumEditor({
                   data-testid="placeholder-help-me-write"
                 >
                   <span className="w-0.5 h-5 bg-foreground animate-pulse" />
-                  <Sparkles className="h-4 w-4 text-blue-500" />
+                  <Sparkles className="h-4 w-4 text-amber-600" />
                   <span className="text-sm">Help me write</span>
                   <span className="text-xs text-muted-foreground/60 ml-2">Alt + W</span>
                 </div>
