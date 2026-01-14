@@ -49,9 +49,13 @@ import {
   Calendar,
   Edit,
   GraduationCap,
+  MessageSquare,
+  Gauge,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { markdownToHtml, stripHtmlTags } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import type { Draft, IndianLanguage } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -77,7 +81,91 @@ const documentAcceptTypes = {
   "text/plain": [".txt"],
 };
 
+// Quality meter calculation - measures detail level of user input
+function calculateDetailQuality(text: string): { score: number; level: "poor" | "fair" | "good" | "excellent"; message: string } {
+  const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+  const hasNumbers = /\d/.test(text);
+  const hasNames = /[A-Z][a-z]+/.test(text);
+  const hasDates = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}|\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i.test(text);
+  const hasLegalTerms = /court|petition|plaintiff|defendant|section|act|clause|agreement|contract|party|parties|jurisdiction|claim|relief|prayer|affidavit|notice|order|decree|appeal|suit|case/i.test(text);
+  
+  let score = 0;
+  
+  // Word count scoring (max 40 points)
+  if (wordCount >= 200) score += 40;
+  else if (wordCount >= 100) score += 30;
+  else if (wordCount >= 50) score += 20;
+  else if (wordCount >= 25) score += 10;
+  else score += Math.floor(wordCount / 3);
+  
+  // Content richness scoring (max 60 points)
+  if (hasNumbers) score += 10;
+  if (hasNames) score += 15;
+  if (hasDates) score += 15;
+  if (hasLegalTerms) score += 20;
+  
+  // Clamp score to 100
+  score = Math.min(100, score);
+  
+  let level: "poor" | "fair" | "good" | "excellent";
+  let message: string;
+  
+  if (score >= 80) {
+    level = "excellent";
+    message = "Excellent! Very detailed input";
+  } else if (score >= 60) {
+    level = "good";
+    message = "Good level of detail";
+  } else if (score >= 35) {
+    level = "fair";
+    message = "Add more details for better results";
+  } else {
+    level = "poor";
+    message = "More details needed for quality output";
+  }
+  
+  return { score, level, message };
+}
+
+// Quality meter component
+function DetailQualityMeter({ text, label }: { text: string; label?: string }) {
+  const { score, level, message } = calculateDetailQuality(text);
+  
+  const colorClass = {
+    poor: "text-destructive",
+    fair: "text-amber-500",
+    good: "text-blue-500",
+    excellent: "text-green-500",
+  }[level];
+  
+  const progressColor = {
+    poor: "bg-destructive",
+    fair: "bg-amber-500",
+    good: "bg-blue-500",
+    excellent: "bg-green-500",
+  }[level];
+  
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Gauge className="h-3 w-3" />
+          <span>{label || "Detail Level"}</span>
+        </div>
+        <span className={colorClass}>{message}</span>
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+        <div 
+          className={`h-full rounded-full transition-all duration-300 ${progressColor}`}
+          style={{ width: `${score}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function AIDraftingPage() {
+  const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [startOption, setStartOption] = useState<StartOption>(null);
   const [useFirmStyle, setUseFirmStyle] = useState(false);
@@ -105,7 +193,11 @@ export default function AIDraftingPage() {
     parties: "",
     jurisdiction: "Delhi High Court",
     documentType: "petition",
+    additionalInstructions: "",
   });
+  
+  // Additional prompt for reference docs
+  const [referencePrompt, setReferencePrompt] = useState("");
 
   const { data: drafts = [], isLoading: draftsLoading } = useQuery<Draft[]>({
     queryKey: ["/api/drafts"],
@@ -187,10 +279,14 @@ export default function AIDraftingPage() {
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
+      const factsWithInstructions = formData.additionalInstructions 
+        ? `${formData.facts}\n\nADDITIONAL INSTRUCTIONS:\n${formData.additionalInstructions}`
+        : formData.facts;
+      
       const response = await apiRequest("POST", "/api/drafts/generate", {
         type: formData.documentType,
         title: formData.title || `${formData.documentType} - Draft`,
-        facts: formData.facts,
+        facts: factsWithInstructions,
         parties: formData.parties,
         jurisdiction: formData.jurisdiction,
         language,
@@ -234,13 +330,16 @@ export default function AIDraftingPage() {
       parties: "",
       jurisdiction: "Delhi High Court",
       documentType: "petition",
+      additionalInstructions: "",
     });
+    setReferencePrompt("");
   };
 
   const handleReferenceFilesUpload = async (files: File[]) => {
     setIsUploadingRef(true);
     try {
       const uploadedFiles: { name: string; content: string }[] = [];
+      const errorFiles: string[] = [];
       
       // Upload all files together
       const formData = new FormData();
@@ -256,18 +355,41 @@ export default function AIDraftingPage() {
         // Handle all returned documents
         for (let i = 0; i < docs.length; i++) {
           const doc = docs[i];
-          if (doc.extractedText) {
+          const fileName = files[i]?.name || doc.name || `Document ${i + 1}`;
+          
+          // Check if document has an error message (old .doc format or extraction failed)
+          if (doc.extractedText?.includes("Please save it as .docx format") || 
+              doc.extractedText?.includes("could not be read") ||
+              doc.extractedText?.includes("[Error extracting")) {
+            errorFiles.push(fileName);
+          } else if (doc.extractedText && doc.extractedText.length > 50) {
             uploadedFiles.push({
-              name: files[i]?.name || doc.name || `Document ${i + 1}`,
+              name: fileName,
               content: doc.extractedText,
             });
+          } else {
+            errorFiles.push(fileName);
           }
+        }
+        
+        // Show toast for error files
+        if (errorFiles.length > 0) {
+          toast({
+            title: "Some files could not be processed",
+            description: `${errorFiles.join(", ")} - Please convert to .docx format and try again.`,
+            variant: "destructive",
+          });
         }
       }
       
       setUploadedReferenceFiles(prev => [...prev, ...uploadedFiles]);
     } catch (error) {
       console.error("Reference upload error:", error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to process the documents. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsUploadingRef(false);
     }
@@ -289,9 +411,32 @@ export default function AIDraftingPage() {
       if (response.ok) {
         const docs = await response.json();
         if (docs.length > 0) {
+          const doc = docs[0];
+          
+          // Check if document has an error message (old .doc format or extraction failed)
+          if (doc.extractedText?.includes("Please save it as .docx format") || 
+              doc.extractedText?.includes("could not be read") ||
+              doc.extractedText?.includes("[Error extracting")) {
+            toast({
+              title: "File format not supported",
+              description: `"${file.name}" is in an older format. Please convert it to .docx format and try again.`,
+              variant: "destructive",
+            });
+            return;
+          }
+          
           // Use extractedHtml from server (preserves legal document structure)
           // Fallback to extractedText if HTML not available
-          const htmlContent = docs[0].extractedHtml || docs[0].extractedText || "";
+          const htmlContent = doc.extractedHtml || doc.extractedText || "";
+          if (htmlContent.length < 50) {
+            toast({
+              title: "Could not read file",
+              description: "The document appears to be empty or couldn't be processed. Please try a different file.",
+              variant: "destructive",
+            });
+            return;
+          }
+          
           setUploadedDraftFile({
             name: file.name,
             content: htmlContent,
@@ -300,6 +445,11 @@ export default function AIDraftingPage() {
       }
     } catch (error) {
       console.error("Draft upload error:", error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to process the document. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsUploadingDraft(false);
     }
@@ -331,7 +481,7 @@ export default function AIDraftingPage() {
       const response = await apiRequest("POST", "/api/drafts/generate", {
         type: formData.documentType,
         title: formData.title || `${formData.documentType} - Draft`,
-        facts: `REFERENCE DOCUMENTS:\n${referenceContext}\n\nADDITIONAL CONTEXT:\n${formData.facts || "Use the reference documents to understand the case."}`,
+        facts: `REFERENCE DOCUMENTS:\n${referenceContext}\n\nADDITIONAL CONTEXT / INSTRUCTIONS:\n${referencePrompt || "Use the reference documents to understand the case details."}`,
         parties: formData.parties,
         jurisdiction: formData.jurisdiction,
         language,
@@ -700,15 +850,30 @@ export default function AIDraftingPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label>Facts of the Case</Label>
                   <Textarea
-                    placeholder="Enter the facts and details of your case..."
+                    placeholder="Enter detailed facts including: dates, party names, locations, amounts, chronological events, claims, and any relevant legal issues..."
                     rows={8}
                     value={formData.facts}
                     onChange={(e) => setFormData((p) => ({ ...p, facts: e.target.value }))}
                     className="font-mono text-sm"
                     data-testid="textarea-facts"
+                  />
+                  <DetailQualityMeter text={formData.facts} label="Facts Detail Level" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                    <Label>Additional Instructions for AI</Label>
+                  </div>
+                  <Textarea
+                    placeholder="Any specific instructions for the AI, e.g., 'Include prayer for interim relief', 'Use formal language', 'Focus on breach of contract aspects'..."
+                    rows={3}
+                    value={formData.additionalInstructions}
+                    onChange={(e) => setFormData((p) => ({ ...p, additionalInstructions: e.target.value }))}
+                    className="text-sm"
+                    data-testid="textarea-additional-instructions"
                   />
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
@@ -773,6 +938,21 @@ export default function AIDraftingPage() {
 
                 {uploadedReferenceFiles.length > 0 && (
                   <>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                        <Label>Additional Context / Instructions</Label>
+                      </div>
+                      <Textarea
+                        placeholder="Provide any additional context about the case that may not be in the reference documents, or specific instructions for the AI (e.g., 'Focus on the contractual breach', 'Include prayer for specific performance')..."
+                        rows={4}
+                        value={referencePrompt}
+                        onChange={(e) => setReferencePrompt(e.target.value)}
+                        className="text-sm"
+                        data-testid="textarea-ref-prompt"
+                      />
+                      <DetailQualityMeter text={referencePrompt} label="Instructions Detail Level" />
+                    </div>
                     <div className="border-t pt-4 space-y-4">
                       <div>
                         <Label>Document Type</Label>

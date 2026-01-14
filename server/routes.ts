@@ -204,11 +204,38 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: s
     }
     
     if (mimeType === "application/msword" || fileName.endsWith(".doc")) {
-      const htmlResult = await mammoth.convertToHtml({ buffer: file.buffer });
-      const textResult = await mammoth.extractRawText({ buffer: file.buffer });
-      // Sanitize HTML to prevent XSS and remove page markers
-      const html = sanitizeHtml(htmlResult.value || "");
-      return { text: textResult.value || "", html };
+      // Check if this is actually a .doc file (not .docx mislabeled)
+      // .doc files are OLE compound documents which start with D0 CF 11 E0
+      const isOldDocFormat = file.buffer.length >= 4 && 
+        file.buffer[0] === 0xD0 && 
+        file.buffer[1] === 0xCF && 
+        file.buffer[2] === 0x11 && 
+        file.buffer[3] === 0xE0;
+      
+      if (isOldDocFormat) {
+        // Old .doc format is not supported by mammoth
+        const errorMsg = `The file "${file.originalname}" is in the old .doc format (Word 97-2003). Please save it as .docx format in Microsoft Word and try again.`;
+        console.warn(errorMsg);
+        return { 
+          text: errorMsg, 
+          html: `<p style="color: #f59e0b;">${errorMsg}</p>` 
+        };
+      }
+      
+      // Try to process as docx (some .doc files are actually docx with wrong extension)
+      try {
+        const htmlResult = await mammoth.convertToHtml({ buffer: file.buffer });
+        const textResult = await mammoth.extractRawText({ buffer: file.buffer });
+        const html = sanitizeHtml(htmlResult.value || "");
+        return { text: textResult.value || "", html };
+      } catch (docError) {
+        const errorMsg = `The file "${file.originalname}" could not be read. Please convert it to .docx format and try again.`;
+        console.warn(errorMsg, docError);
+        return { 
+          text: errorMsg, 
+          html: `<p style="color: #f59e0b;">${errorMsg}</p>` 
+        };
+      }
     }
     
     if (mimeType === "text/plain" || fileName.endsWith(".txt")) {

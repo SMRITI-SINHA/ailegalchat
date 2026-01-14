@@ -204,3 +204,12 @@ The application runs via `npm run dev` which starts both the Express backend and
 - DOCX extraction uses mammoth.convertToHtml for structure preservation
 - PDF/TXT extraction uses textToLegalHtml for legal formatting detection (court titles, headings, party markers)
 - Page markers removed from extracted content (— 1 of 6 —, Page X, etc.)
+- Added DetailQualityMeter component to measure input quality (word count, names, dates, legal terms)
+- AI Legal Drafting "Type Facts" interface now has quality meter and "Additional Instructions for AI" section
+- AI Legal Drafting "Upload Reference Docs" interface now has prompt box with quality meter for additional context
+- Reference documents in AI Legal Drafting extract case DETAILS only (plain text), not structure
+- Structure extraction is preserved for: Upload your own draft, Custom Draft templates, Train Your Drafts
+- Old .doc format (Word 97-2003) detection with user-friendly error message and toast notification
+- Toast notifications when files can't be processed, guiding users to convert to .docx format
+- Train Your Drafts uses PostgreSQL with per-user isolation (userId field)
+- Training docs store extractedHtml for structure preservation when useFirmStyle is enabled
