@@ -64,6 +64,7 @@ const chatCards = [
     description: "General legal assistant trained on 1000+ documents",
     icon: Scale,
     url: "/hub/chat/nyaya",
+    isPremium: true,
   },
 ];
 
@@ -120,10 +121,12 @@ const studyBuddyCards = [
 
 
 function FeatureCard({ card, isBeta = false }: { card: any; isBeta?: boolean }) {
+  const isPremium = card.isPremium === true;
+  
   return (
     <Link href={card.url}>
       <Card
-        className="hover-elevate cursor-pointer h-full relative"
+        className={`hover-elevate cursor-pointer h-full relative ${isPremium ? "border-amber-300/50 bg-gradient-to-br from-amber-50/80 via-yellow-50/30 to-background shadow-sm" : ""}`}
         data-testid={`card-hub-${card.title.toLowerCase().replace(/\s+/g, "-")}`}
       >
         {isBeta && (
@@ -131,14 +134,19 @@ function FeatureCard({ card, isBeta = false }: { card: any; isBeta?: boolean }) 
             Beta
           </Badge>
         )}
+        {isPremium && (
+          <Badge className="absolute top-2 right-2 text-[10px] bg-gradient-to-r from-amber-600 to-yellow-500 border-0">
+            Premium
+          </Badge>
+        )}
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-md bg-muted">
-              <card.icon className="h-5 w-5 text-muted-foreground" />
+            <div className={`p-2 rounded-md ${isPremium ? "bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-500 shadow-sm shadow-amber-400/30" : "bg-muted"}`}>
+              <card.icon className={`h-5 w-5 ${isPremium ? "text-white" : "text-muted-foreground"}`} />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-medium text-sm">{card.title}</h3>
-              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{card.description}</p>
+              <h3 className={`font-medium text-sm ${isPremium ? "text-amber-900" : ""}`}>{card.title}</h3>
+              <p className={`text-xs mt-1 line-clamp-2 ${isPremium ? "text-amber-700/70" : "text-muted-foreground"}`}>{card.description}</p>
             </div>
           </div>
         </CardContent>

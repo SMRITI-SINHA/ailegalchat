@@ -941,7 +941,7 @@ export default function ChatWithPDFPage() {
             size="sm"
             onClick={() => setNyayaExpanded(!nyayaExpanded)}
             data-testid="button-toggle-nyaya"
-            className={nyayaExpanded ? "bg-gradient-to-r from-indigo-500 to-purple-500" : ""}
+            className={nyayaExpanded ? "bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-600 border-amber-500/50 shadow-md" : "border-amber-600/30 text-amber-800 hover:bg-amber-50 hover:border-amber-600/50"}
           >
             <Scale className="mr-2 h-4 w-4" />
             Nyaya AI
@@ -974,7 +974,7 @@ export default function ChatWithPDFPage() {
             >
               <Button
                 size="sm"
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg gap-1.5"
+                className="bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-600 text-white shadow-lg shadow-amber-500/25 gap-1.5 border border-amber-500/30"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => handleAskNyayaAI(selectionPosition.text)}
                 data-testid="button-ask-nyaya-floating"
@@ -1163,13 +1163,13 @@ export default function ChatWithPDFPage() {
         )}
 
         {nyayaExpanded && (
-          <div className="w-80 border-l flex flex-col bg-gradient-to-b from-indigo-50/50 to-background dark:from-indigo-950/20">
-            <div className="p-3 border-b flex items-center justify-between bg-gradient-to-r from-indigo-500/10 to-purple-500/10">
+          <div className="w-80 border-l border-amber-200/50 flex flex-col bg-gradient-to-b from-amber-50/80 via-orange-50/30 to-background">
+            <div className="p-3 border-b border-amber-200/50 flex items-center justify-between bg-gradient-to-r from-amber-100/80 via-yellow-50/60 to-orange-50/40">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-gradient-to-r from-indigo-500 to-purple-500">
+                <div className="p-1.5 rounded-md bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-500 shadow-sm shadow-amber-400/30">
                   <Scale className="h-3.5 w-3.5 text-white" />
                 </div>
-                <span className="font-medium text-sm">Nyaya AI</span>
+                <span className="font-medium text-sm text-amber-900">Nyaya AI</span>
                 {nyayaMessages.length > 0 && (
                   <Badge variant="secondary" className="text-[10px]">
                     {nyayaMessages.length} messages
@@ -1310,7 +1310,7 @@ export default function ChatWithPDFPage() {
               </Button>
               <Button
                 onClick={handleSendNyayaPrompt}
-                className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500"
+                className="flex-1 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-600 shadow-md shadow-amber-500/20"
                 data-testid="button-send-nyaya-prompt"
               >
                 <Send className="h-4 w-4 mr-2" />

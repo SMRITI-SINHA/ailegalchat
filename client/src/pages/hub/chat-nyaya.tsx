@@ -240,12 +240,12 @@ export default function NyayaAIPage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div className="p-2 rounded-md bg-primary/10">
-            <Scale className="h-5 w-5 text-primary" />
+          <div className="p-2 rounded-md bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-500 shadow-sm shadow-amber-400/30">
+            <Scale className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h1 className="font-semibold">Nyaya AI</h1>
-            <p className="text-xs text-muted-foreground">Your intelligent legal assistant</p>
+            <h1 className="font-semibold text-amber-900">Nyaya AI</h1>
+            <p className="text-xs text-amber-700/70">Your intelligent legal assistant</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -265,13 +265,13 @@ export default function NyayaAIPage() {
         <ScrollArea className="flex-1 p-4">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center">
-              <Scale className="h-16 w-16 mb-6 text-muted-foreground/30" />
+              <Scale className="h-16 w-16 mb-6 text-amber-400/50" />
               <h2 className="text-xl font-semibold mb-2">Welcome to Nyaya AI</h2>
               <p className="text-muted-foreground text-center max-w-md mb-4">
                 Ask any legal question and get accurate, citation-backed answers instantly. Trained on Indian law, statutes, case precedents and live trusted legal sources.
               </p>
               
-              <Card className="max-w-md mb-8 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+              <Card className="max-w-md mb-8 border-amber-300/40 bg-gradient-to-br from-amber-50/80 via-yellow-50/40 to-transparent">
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground italic text-center">
                     This AI provides legal research and information. No legal opinion or advice is provided. Always consult a qualified legal professional.
@@ -310,11 +310,11 @@ export default function NyayaAIPage() {
                     <Card>
                       <CardContent className="p-4">
                         <div className="flex items-center gap-2 mb-3">
-                          <Scale className="h-4 w-4 text-primary" />
-                          <span className="font-medium text-sm">Nyaya AI</span>
+                          <Scale className="h-4 w-4 text-amber-600" />
+                          <span className="font-medium text-sm text-amber-900">Nyaya AI</span>
                           {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
                         </div>
-                        <div className="mb-3 p-2 rounded bg-muted/50 border-l-2 border-primary">
+                        <div className="mb-3 p-2 rounded bg-amber-50/50 border-l-2 border-amber-500">
                           <p className="text-[10px] text-muted-foreground italic">
                             This research compiles judicial decisions and statutory provisions. No legal opinion or advice is provided.
                           </p>
