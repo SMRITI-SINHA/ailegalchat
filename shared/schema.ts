@@ -634,3 +634,80 @@ export type DocumentTypeSelection = {
   subSubtypeLabel?: string;
   customText?: string;
 };
+
+// Pre-Draft Validation Types (Court-Ready Pipeline)
+export type JurisdictionType = {
+  territorial: string;
+  pecuniary?: string;
+  subjectMatter?: string;
+};
+
+export type PreDraftValidation = {
+  documentCategory: "civil" | "criminal" | "constitutional" | "commercial" | "contract" | "notice" | "legal_memo";
+  courtForum: string;
+  jurisdiction: JurisdictionType;
+  limitationStatus?: {
+    isChecked: boolean;
+    limitationPeriod?: string;
+    dateOfCauseOfAction?: string;
+    isWithinLimitation?: boolean;
+    notes?: string;
+  };
+  factualSufficiency: {
+    isComplete: boolean;
+    missingElements?: string[];
+  };
+  validationWarnings?: string[];
+  validationErrors?: string[];
+};
+
+// Document DNA - Mandatory Structural Blocks
+export const documentDNABlocks = [
+  { id: "forum_court", label: "Forum / Court", required: true },
+  { id: "parties", label: "Parties & Description", required: true },
+  { id: "jurisdiction_maintainability", label: "Jurisdiction & Maintainability", required: true },
+  { id: "facts", label: "Facts (Chronological)", required: true },
+  { id: "legal_basis", label: "Legal Basis (Statutes First, Then Case Law)", required: true },
+  { id: "relief_prayer", label: "Relief / Prayer", required: true },
+  { id: "procedural_closure", label: "Procedural Closure (Verification / Signature / Place / Date)", required: true },
+] as const;
+
+export type DocumentDNABlock = typeof documentDNABlocks[number];
+
+// Citation Verification Status
+export type CitationVerification = {
+  citation: string;
+  type: "statute" | "case_law";
+  isVerified: boolean;
+  source?: string;
+  court?: string;
+  year?: string;
+  verificationNotes?: string;
+};
+
+// Judge/Registry Simulator Report
+export type JudgeSimulatorReport = {
+  overallStatus: "pass" | "fail" | "needs_review";
+  maintainabilityCheck: {
+    status: "pass" | "fail" | "warning";
+    notes?: string;
+    orderVIIRule11Risk?: boolean;
+  };
+  jurisdictionConsistency: {
+    status: "pass" | "fail" | "warning";
+    notes?: string;
+  };
+  limitationPleading: {
+    status: "pass" | "fail" | "warning" | "not_applicable";
+    notes?: string;
+  };
+  reliefEnforceability: {
+    status: "pass" | "fail" | "warning";
+    notes?: string;
+  };
+  internalContradictions: {
+    status: "pass" | "fail";
+    contradictions?: string[];
+  };
+  recommendations?: string[];
+};
