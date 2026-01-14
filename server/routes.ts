@@ -696,18 +696,22 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
         ? `\n\nCRITICAL LANGUAGE REQUIREMENT: You MUST write the ENTIRE document in ${selectedLanguage} language. Every word, every sentence, every section heading must be in ${selectedLanguage}. Do not use English at all except for proper nouns, case citations (like "AIR 2023 SC 456"), or statute names (like "Indian Contract Act, 1872"). The document must be grammatically correct and professionally written in ${selectedLanguage} using appropriate legal terminology in that language.`
         : "";
 
-      // Get trained style documents if enabled (limited to 2 docs, 1500 chars each to stay within token limits)
+      // Get trained style documents if enabled (limited to 2 docs)
+      // Uses extractedHtml for structure preservation when available, falls back to content
       let trainedStyleContext = "";
+      const userId = req.body.userId || "default-user";
       if (useFirmStyle) {
-        const trainingDocs = await storage.getTrainingDocs();
+        const trainingDocs = await storage.getTrainingDocs(userId);
         if (trainingDocs.length > 0) {
-          trainedStyleContext = "\n\nTRAINED FIRM STYLE REFERENCE:\nMatch the writing style, tone, and formatting from these sample documents:\n\n";
+          trainedStyleContext = "\n\nTRAINED FIRM STYLE REFERENCE:\nMatch the writing style, tone, document structure, and formatting from these sample documents. Pay special attention to:\n- How sections and clauses are numbered\n- Heading styles and hierarchy\n- Legal terminology usage\n- Formatting patterns (indentation, spacing)\n\n";
           for (const doc of trainingDocs.slice(0, 2)) {
-            if (doc.content) {
-              trainedStyleContext += `=== ${doc.name} ===\n${doc.content.substring(0, 1500)}\n\n`;
+            // Prefer extractedHtml for structure, fall back to content
+            const structuredContent = doc.extractedHtml || doc.content;
+            if (structuredContent) {
+              trainedStyleContext += `=== ${doc.name} (Structure Reference) ===\n${structuredContent.substring(0, 2000)}\n\n`;
             }
           }
-          trainedStyleContext += "\nAdapt the format and tone from these samples.";
+          trainedStyleContext += "\nAdapt the exact format, structure, and tone from these samples to maintain firm consistency.";
         }
       }
 
@@ -838,6 +842,64 @@ Ensure the translation is accurate and uses appropriate legal terminology in ${t
     } catch (error) {
       console.error("Error translating document:", error);
       res.status(500).json({ error: "Failed to translate document" });
+    }
+  });
+
+  // Training Documents API endpoints
+  app.get("/api/training-docs", async (req: Request, res: Response) => {
+    try {
+      const userId = (req.query.userId as string) || "default-user";
+      const docs = await storage.getTrainingDocs(userId);
+      res.json(docs);
+    } catch (error) {
+      console.error("Error fetching training docs:", error);
+      res.status(500).json({ error: "Failed to fetch training documents" });
+    }
+  });
+
+  app.post("/api/training-docs/upload", upload.array("files", 20), async (req: Request, res: Response) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      const userId = (req.body.userId as string) || "default-user";
+      
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      const trainingDocs = await Promise.all(
+        files.map(async (file) => {
+          // Extract text and HTML structure using the same technique as document upload
+          const extracted = await extractTextFromFile(file);
+          const decodedName = decodeFilename(file.originalname);
+          
+          const doc = await storage.createTrainingDoc({
+            userId,
+            name: decodedName,
+            type: file.mimetype,
+            size: file.size,
+            content: extracted.text,
+            extractedHtml: extracted.html,
+            status: "completed",
+          });
+
+          return doc;
+        })
+      );
+
+      res.status(201).json(trainingDocs);
+    } catch (error) {
+      console.error("Error uploading training docs:", error);
+      res.status(500).json({ error: "Failed to upload training documents" });
+    }
+  });
+
+  app.delete("/api/training-docs/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteTrainingDoc(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting training doc:", error);
+      res.status(500).json({ error: "Failed to delete training document" });
     }
   });
 

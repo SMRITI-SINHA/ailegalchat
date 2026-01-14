@@ -3,7 +3,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import {
   GraduationCap,
@@ -13,51 +12,63 @@ import {
   Trash2,
   AlertCircle,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-
-interface TrainingDocument {
-  id: string;
-  name: string;
-  type: string;
-  size: number;
-  status: "pending" | "processing" | "completed";
-  uploadedAt: Date;
-}
+import type { TrainingDoc } from "@shared/schema";
 
 export default function TrainDraftsPage() {
-  const [uploadedFiles, setUploadedFiles] = useState<TrainingDocument[]>([
-    { id: "1", name: "Firm_SOP_Contracts.pdf", type: "application/pdf", size: 245000, status: "completed", uploadedAt: new Date() },
-    { id: "2", name: "Drafting_Playbook_2024.docx", type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 189000, status: "completed", uploadedAt: new Date() },
-    { id: "3", name: "Sample_Petition_Format.pdf", type: "application/pdf", size: 78000, status: "processing", uploadedAt: new Date() },
-  ]);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleFilesSelected = (files: File[]) => {
-    const newDocs: TrainingDocument[] = files.map((file, i) => ({
-      id: `new-${Date.now()}-${i}`,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      status: "pending" as const,
-      uploadedAt: new Date(),
-    }));
-    setUploadedFiles((prev) => [...prev, ...newDocs]);
-    
-    setTimeout(() => {
-      setUploadedFiles((prev) =>
-        prev.map((doc) =>
-          newDocs.some((n) => n.id === doc.id) ? { ...doc, status: "completed" as const } : doc
-        )
-      );
-    }, 3000);
+  const { data: trainingDocs = [], isLoading } = useQuery<TrainingDoc[]>({
+    queryKey: ["/api/training-docs"],
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (files: File[]) => {
+      const formData = new FormData();
+      files.forEach((file) => formData.append("files", file));
+      formData.append("userId", "default-user");
+      
+      const response = await fetch("/api/training-docs/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training-docs"] });
+      setIsUploading(false);
+    },
+    onError: () => {
+      setIsUploading(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/training-docs/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/training-docs"] });
+    },
+  });
+
+  const handleFilesSelected = async (files: File[]) => {
+    setIsUploading(true);
+    uploadMutation.mutate(files);
   };
 
   const handleRemove = (id: string) => {
-    setUploadedFiles((prev) => prev.filter((doc) => doc.id !== id));
+    deleteMutation.mutate(id);
   };
 
-  const completedCount = uploadedFiles.filter((d) => d.status === "completed").length;
-  const processingCount = uploadedFiles.filter((d) => d.status === "processing" || d.status === "pending").length;
+  const completedCount = trainingDocs.filter((d) => d.status === "completed").length;
+  const processingCount = trainingDocs.filter((d) => d.status === "processing" || d.status === "pending").length;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -79,10 +90,18 @@ export default function TrainDraftsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <UploadDropzone
-            onUpload={async (files) => handleFilesSelected(files)}
-            maxFiles={20}
-          />
+          {isUploading ? (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin mb-2" />
+              <p>Processing documents...</p>
+              <p className="text-xs">Extracting structure and formatting patterns</p>
+            </div>
+          ) : (
+            <UploadDropzone
+              onUpload={handleFilesSelected}
+              maxFiles={20}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -108,14 +127,18 @@ export default function TrainDraftsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {uploadedFiles.length === 0 ? (
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : trainingDocs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p>No training documents uploaded yet</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {uploadedFiles.map((doc) => (
+              {trainingDocs.map((doc) => (
                 <div
                   key={doc.id}
                   className="flex items-center gap-3 p-3 border rounded-md"
@@ -128,6 +151,11 @@ export default function TrainDraftsPage() {
                     <p className="font-medium text-sm truncate">{doc.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {(doc.size / 1024).toFixed(1)} KB
+                      {doc.extractedHtml && (
+                        <span className="ml-2 text-green-600 dark:text-green-400">
+                          Structure preserved
+                        </span>
+                      )}
                     </p>
                   </div>
                   {doc.status === "completed" ? (
@@ -150,6 +178,7 @@ export default function TrainDraftsPage() {
                     variant="ghost"
                     size="icon"
                     onClick={() => handleRemove(doc.id)}
+                    disabled={deleteMutation.isPending}
                     data-testid={`button-remove-${doc.id}`}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -171,6 +200,7 @@ export default function TrainDraftsPage() {
               <h3 className="font-semibold">How Training Works</h3>
               <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                 <li>Chakshi analyzes your documents to understand formatting, structure, and language patterns</li>
+                <li>Document structure (numbering, headings, clause formatting) is preserved and learned</li>
                 <li>Your training data is stored securely and never shared with other users</li>
                 <li>Toggle "Use trained firm style" when drafting to apply your preferences</li>
                 <li>You can update your training anytime by adding or removing documents</li>
