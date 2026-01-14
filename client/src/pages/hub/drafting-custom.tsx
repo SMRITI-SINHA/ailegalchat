@@ -46,6 +46,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { IndianLanguage, Draft } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import { 
+  DocumentTypeSelector, 
+  getDocumentTypeForPrompt, 
+  getDocumentTypeString,
+  type DocumentTypeSelection 
+} from "@/components/document-type-selector";
 
 type ViewMode = "list" | "editor";
 
@@ -67,6 +73,7 @@ export default function CustomDraftPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState<IndianLanguage>("English");
+  const [documentTypeSelection, setDocumentTypeSelection] = useState<DocumentTypeSelection | null>(null);
 
   const { data: allDrafts = [], isLoading } = useQuery<Draft[]>({
     queryKey: ["/api/drafts"],
@@ -143,14 +150,18 @@ export default function CustomDraftPage() {
     setIsGenerating(true);
 
     try {
+      const documentTypeStr = getDocumentTypeForPrompt(documentTypeSelection);
+      const documentTypeFullStr = getDocumentTypeString(documentTypeSelection);
+      
       const response = await apiRequest("POST", "/api/drafts/generate", {
-        type: "custom",
-        title: draftTitle,
+        type: documentTypeStr || "custom",
+        title: draftTitle || documentTypeFullStr || "Custom Draft",
         facts: caseFacts,
         additionalPrompts,
         language,
         formatReference: uploadedFormat.name,
         formatHtml: extractedFormatHtml,
+        documentTypeDetails: documentTypeSelection,
       });
       const draft = await response.json();
       setDraftId(draft.id);
@@ -224,9 +235,10 @@ export default function CustomDraftPage() {
     setCaseFacts("");
     setAdditionalPrompts("");
     setDraftTitle("Custom Draft");
+    setDocumentTypeSelection(null);
   };
 
-  const canGenerate = caseFacts.trim().length > 0 && uploadedFormat !== null && !isExtractingFormat && extractedFormatHtml !== null;
+  const canGenerate = caseFacts.trim().length > 0 && uploadedFormat !== null && !isExtractingFormat && extractedFormatHtml !== null && documentTypeSelection !== null;
 
   if (viewMode === "list") {
     return (
@@ -410,6 +422,17 @@ export default function CustomDraftPage() {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Document Type <span className="text-destructive">*</span>
+                </Label>
+                <DocumentTypeSelector 
+                  value={documentTypeSelection} 
+                  onChange={setDocumentTypeSelection} 
+                />
               </div>
 
               <div className="space-y-2">

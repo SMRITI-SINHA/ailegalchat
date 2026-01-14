@@ -708,10 +708,24 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
 
   app.post("/api/drafts/generate", async (req: Request, res: Response) => {
     try {
-      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle } = req.body;
+      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle, documentTypeDetails } = req.body;
 
       if (!type || !facts) {
         return res.status(400).json({ error: "Type and facts are required" });
+      }
+
+      // Build detailed document type context from hierarchical selection
+      let documentTypeContext = "";
+      if (documentTypeDetails) {
+        const { category, subType, subSubType, customText } = documentTypeDetails;
+        documentTypeContext = `\nDOCUMENT TYPE SPECIFICATION:`;
+        if (category) documentTypeContext += `\n- Procedural Category: ${category}`;
+        if (subType) documentTypeContext += `\n- Document Nature: ${subType}`;
+        if (subSubType && subSubType !== "not_applicable") {
+          documentTypeContext += `\n- Statutory/Contextual Type: ${subSubType}`;
+        }
+        if (customText) documentTypeContext += `\n- Custom Specification: ${customText}`;
+        documentTypeContext += `\n\nGenerate the document following the exact legal requirements, statutory framework, and formatting conventions for this specific document type under Indian law.\n`;
       }
 
       const selectedLanguage = language || "English";
@@ -786,7 +800,7 @@ Generate a complete, properly formatted legal document following Indian legal co
 
 CRITICAL DATE/YEAR REQUIREMENT: The current year is ${new Date().getFullYear()}. For any petition numbers, cause titles, filing years, verification dates, or any other reference requiring a year, use ${new Date().getFullYear()} unless a different year is explicitly provided in the facts. If the exact year cannot be determined, leave it as a blank (e.g., "____") for the user to fill in. Never use outdated years like 2024.
 
-Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${languageInstruction}${trainedStyleContext}${formatTemplateContext}`;
+Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${documentTypeContext}${languageInstruction}${trainedStyleContext}${formatTemplateContext}`;
 
       // Expert-level Indian legal drafting system prompt (used when useFirmStyle is OFF)
       const expertDraftingPrompt = `You are a senior advocate / law firm partner with 30+ years of experience drafting court-ready legal documents in India. Generate professionally formatted, court-ready legal drafts that strictly follow Indian legal drafting conventions, procedural standards, and stylistic norms used in High Courts, Supreme Court, District Courts, law firms, and corporate legal departments.
