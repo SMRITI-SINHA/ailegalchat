@@ -1,19 +1,16 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { createRequire } from "module";
 import multer from "multer";
 import OpenAI from "openai";
 import mammoth from "mammoth";
 import sanitizeHtmlLib from "sanitize-html";
+import { PDFParse } from "pdf-parse";
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
 import { trainingDataLoader } from "./training-data-loader";
-
-const require = createRequire(import.meta.url);
-const { PDFParse } = require("pdf-parse");
 
 function decodeFilename(rawName: string): string {
   try {
