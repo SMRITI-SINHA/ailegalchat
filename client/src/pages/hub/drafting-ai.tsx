@@ -899,13 +899,16 @@ export default function AIDraftingPage() {
             <Card className="max-w-2xl mx-auto">
               <CardHeader>
                 <CardTitle className="text-base">Upload Reference Documents</CardTitle>
-                <CardDescription>Upload documents to use as reference. AI will analyze them to understand the case details.</CardDescription>
+                <CardDescription>Upload documents to use as reference. AI will analyze them to understand the case details. (Max 10 docs, 50 pages each, 150 pages total)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <UploadDropzone
                   onUpload={handleReferenceFilesUpload}
                   accept={documentAcceptTypes}
                   maxFiles={10}
+                  maxSize={25 * 1024 * 1024}
+                  maxPages={50}
+                  description="Max 10 docs, 50 pages each, 25MB total. PDF, Word supported."
                 />
                 
                 {isUploadingRef && (
@@ -1020,13 +1023,16 @@ export default function AIDraftingPage() {
             <Card className="max-w-2xl mx-auto">
               <CardHeader>
                 <CardTitle className="text-base">Upload Your Draft</CardTitle>
-                <CardDescription>Upload your existing draft to edit with AI assistance</CardDescription>
+                <CardDescription>Upload your existing draft to edit with AI assistance (Max 50 pages)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <UploadDropzone
                   onUpload={handleDraftFileUpload}
                   accept={documentAcceptTypes}
                   maxFiles={1}
+                  maxSize={10 * 1024 * 1024}
+                  maxPages={50}
+                  description="Max 50 pages (ideal 5-25), 10MB. PDF, Word supported."
                 />
                 
                 {isUploadingDraft && (

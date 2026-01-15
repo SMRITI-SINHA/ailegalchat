@@ -76,7 +76,7 @@ const researchCards = [
   },
   {
     title: "Legal Memo Generator",
-    description: "IRAC structured memos with hallucination guard",
+    description: "Expert-level IRAC, CRAC & CREAC structured memos",
     icon: Scroll,
     url: "/hub/research/memo",
   },

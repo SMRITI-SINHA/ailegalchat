@@ -402,7 +402,13 @@ export default function CustomDraftPage() {
                     Upload a reference document for style and formatting. The AI will match its tone and structure but NOT use its content.
                   </AlertDescription>
                 </Alert>
-                <UploadDropzone onUpload={handleUpload} maxFiles={1} />
+                <UploadDropzone 
+                  onUpload={handleUpload} 
+                  maxFiles={1}
+                  maxSize={5 * 1024 * 1024}
+                  maxPages={10}
+                  description="Max 1-10 pages, 5MB. PDF, Word supported for template."
+                />
                 {uploadedFormat && (
                   <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
                     <FileText className="h-4 w-4 text-muted-foreground" />

@@ -9,6 +9,9 @@ interface UploadDropzoneProps {
   onUpload: (files: File[]) => Promise<void>;
   accept?: Record<string, string[]>;
   maxFiles?: number;
+  maxSize?: number; // in bytes
+  maxPages?: number;
+  description?: string;
   className?: string;
 }
 
@@ -27,6 +30,9 @@ export function UploadDropzone({
     "image/*": [".png", ".jpg", ".jpeg"],
   },
   maxFiles = 10,
+  maxSize,
+  maxPages,
+  description,
   className 
 }: UploadDropzoneProps) {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
@@ -73,8 +79,19 @@ export function UploadDropzone({
     onDrop,
     accept,
     maxFiles,
+    maxSize,
     disabled: isUploading,
   });
+
+  // Generate description text based on limits
+  const getDescriptionText = () => {
+    if (description) return description;
+    const parts: string[] = [];
+    if (maxPages) parts.push(`up to ${maxPages} pages`);
+    if (maxSize) parts.push(`max ${Math.round(maxSize / (1024 * 1024))}MB`);
+    if (maxFiles && maxFiles > 1) parts.push(`${maxFiles} files`);
+    return parts.length > 0 ? `PDF, Word, and images supported (${parts.join(", ")})` : "PDF, Word, and images supported";
+  };
 
   const removeFile = (index: number) => {
     setUploadingFiles((prev) => prev.filter((_, i) => i !== index));
@@ -103,7 +120,7 @@ export function UploadDropzone({
               {isDragActive ? "Drop files here" : "Drag & drop files here"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              or click to browse. PDF, Word, and images supported (up to 800 pages)
+              or click to browse. {getDescriptionText()}
             </p>
           </div>
           <Button variant="outline" size="sm" disabled={isUploading}>

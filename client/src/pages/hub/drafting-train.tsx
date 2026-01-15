@@ -86,7 +86,7 @@ export default function TrainDraftsPage() {
         <CardHeader>
           <CardTitle className="text-base">Upload Training Documents</CardTitle>
           <CardDescription>
-            Upload your firm's SOPs, playbooks, and past drafts to help Chakshi understand your preferred structure, language, clauses, and tone.
+            Upload your firm's SOPs, playbooks, and past drafts to help Chakshi understand your preferred structure, language, clauses, and tone. (Max 10 docs, 20 pages each)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -99,7 +99,10 @@ export default function TrainDraftsPage() {
           ) : (
             <UploadDropzone
               onUpload={handleFilesSelected}
-              maxFiles={20}
+              maxFiles={10}
+              maxSize={15 * 1024 * 1024}
+              maxPages={20}
+              description="Max 10 docs, 20 pages each, 100 pages total, 15MB. PDF, Word supported."
             />
           )}
         </CardContent>

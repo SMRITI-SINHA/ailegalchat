@@ -304,6 +304,131 @@ Be precise and always cite your sources with proper legal citations.`
     }
   }
 
+  async searchComplianceRequirements(industry: string, activity: string, jurisdiction: string): Promise<{
+    answer: string;
+    sources: WebSearchResult[];
+    recentChanges: string[];
+  }> {
+    if (!this.perplexityKey) {
+      console.warn("Perplexity API key not configured for compliance search");
+      return { answer: "", sources: [], recentChanges: [] };
+    }
+
+    // Industry-specific regulatory domains
+    const industryDomains: Record<string, string[]> = {
+      "Startup / Tech": ["startupindia.gov.in", "dpiit.gov.in", "mca.gov.in", "meity.gov.in", "livelaw.in"],
+      "Fintech": ["rbi.org.in", "sebi.gov.in", "ibbi.gov.in", "mca.gov.in", "barandbench.com"],
+      "Edtech": ["mhrd.gov.in", "aicte-india.org", "ugc.ac.in", "mca.gov.in", "livelaw.in"],
+      "Healthcare": ["cdsco.gov.in", "fssai.gov.in", "nhm.gov.in", "mohfw.gov.in", "barandbench.com"],
+      "E-commerce": ["mca.gov.in", "dpiit.gov.in", "cbic.gov.in", "gst.gov.in", "livelaw.in"],
+      "Real Estate": ["rera.gov.in", "mohua.gov.in", "mca.gov.in", "barandbench.com", "latestlaws.com"],
+      "Manufacturing": ["moef.gov.in", "cpcb.nic.in", "labour.gov.in", "dgft.gov.in", "livelaw.in"],
+      "NBFC": ["rbi.org.in", "mca.gov.in", "sebi.gov.in", "ibbi.gov.in", "barandbench.com"],
+      "Banking": ["rbi.org.in", "dea.gov.in", "mca.gov.in", "sebi.gov.in", "latestlaws.com"],
+      "Insurance": ["irdai.gov.in", "mca.gov.in", "rbi.org.in", "barandbench.com", "livelaw.in"],
+    };
+
+    // Get relevant domains for this industry (with fallbacks)
+    const primaryDomains = industryDomains[industry] || PRIORITY_DOMAINS.slice(0, 10);
+    const searchDomains = [...primaryDomains, ...PRIORITY_DOMAINS.slice(0, 5)].slice(0, 10);
+
+    try {
+      const response = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.perplexityKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-sonar-small-128k-online",
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert Indian regulatory compliance advisor. Your role is to provide CURRENT, ACCURATE compliance requirements for businesses in India.
+
+STRICT VERIFICATION REQUIREMENTS:
+1. ONLY cite requirements that are currently in force (not proposed or repealed)
+2. Include SPECIFIC legal references: Act name + Year + Section/Rule number
+3. Note any recent amendments or notifications (last 6 months)
+4. Distinguish between mandatory requirements and best practices
+5. Provide actual deadlines and penalty amounts where applicable
+
+TRUSTED SOURCES ONLY - Verify from:
+- Government portals: MCA, SEBI, RBI, CBIC, State portals
+- Official gazette notifications (egazette.gov.in)
+- Regulatory circulars and master directions
+- Authoritative legal news: Live Law, Bar & Bench
+
+Mark any unverified items with "[VERIFY FROM OFFICIAL SOURCE]"`
+            },
+            {
+              role: "user",
+              content: `Generate a comprehensive compliance checklist for:
+
+Industry: ${industry}
+Business Activity: ${activity}
+Jurisdiction: ${jurisdiction}
+
+For each compliance requirement, provide:
+1. Requirement name
+2. What exactly needs to be done
+3. EXACT legal reference (Act/Section/Rule)
+4. Deadline (specific timeframe from triggering event)
+5. Penalty for non-compliance
+6. Risk level (HIGH/MEDIUM/LOW based on penalties)
+7. Any RECENT CHANGES or amendments in the last 6 months
+
+Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requirements for ${jurisdiction} if any.`
+            }
+          ],
+          max_tokens: 2048,
+          temperature: 0.1,
+          top_p: 0.9,
+          search_domain_filter: searchDomains,
+          return_images: false,
+          return_related_questions: false,
+          search_recency_filter: "month",
+          stream: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Perplexity compliance search error:", response.status, errorText);
+        return { answer: "", sources: [], recentChanges: [] };
+      }
+
+      const data: PerplexityResponse = await response.json();
+      
+      const answer = data.choices?.[0]?.message?.content || "";
+      const sources: WebSearchResult[] = (data.citations || []).map((url) => ({
+        title: this.extractDomainName(url),
+        url,
+        snippet: "",
+        source: this.extractSourceName(url),
+      }));
+
+      // Extract recent changes mentioned in the response
+      const recentChanges: string[] = [];
+      const changePatterns = [
+        /(?:recent|new|latest|amended|notification|circular).*?(?:\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/gi,
+        /w\.e\.f\.?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/gi,
+        /effective from\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/gi,
+      ];
+      for (const pattern of changePatterns) {
+        const matches = answer.match(pattern);
+        if (matches) {
+          recentChanges.push(...matches.slice(0, 5));
+        }
+      }
+
+      return { answer, sources, recentChanges: Array.from(new Set(recentChanges)) };
+    } catch (error) {
+      console.error("Compliance search error:", error);
+      return { answer: "", sources: [], recentChanges: [] };
+    }
+  }
+
   async searchRegulatory(query: string, regulator: "sebi" | "rbi" | "mca" | "cbic" | "general"): Promise<{ answer: string; sources: WebSearchResult[] }> {
     if (!this.perplexityKey) {
       return { answer: "", sources: [] };

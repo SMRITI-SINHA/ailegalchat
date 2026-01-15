@@ -102,6 +102,8 @@ export default function ComplianceChecklistPage() {
   const [showProofDialog, setShowProofDialog] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [sources, setSources] = useState<{ title: string; url: string; source: string }[]>([]);
+  const [isVerified, setIsVerified] = useState(false);
   const { toast } = useToast();
 
   const { data: savedChecklists = [], isLoading: isLoadingChecklists } = useQuery<ComplianceChecklist[]>({
@@ -137,6 +139,8 @@ export default function ComplianceChecklistPage() {
   const handleGenerate = async () => {
     if (!industry || !jurisdiction || !activity) return;
     setIsGenerating(true);
+    setSources([]);
+    setIsVerified(false);
 
     try {
       const response = await apiRequest("POST", "/api/compliance/generate", {
@@ -145,6 +149,12 @@ export default function ComplianceChecklistPage() {
         activity,
       });
       const data = await response.json();
+      
+      // Store verification sources
+      if (data.sources && Array.isArray(data.sources)) {
+        setSources(data.sources);
+      }
+      setIsVerified(!!data.verifiedFromPerplexity);
       
       if (data.items && Array.isArray(data.items)) {
         setChecklist(data.items.map((item: any, idx: number) => ({
@@ -260,7 +270,7 @@ export default function ComplianceChecklistPage() {
         </div>
         <div>
           <h1 className="font-semibold text-xl">Smart Compliance Checklist Generator</h1>
-          <p className="text-sm text-muted-foreground">AI-powered regulatory compliance tracker with legal references</p>
+          <p className="text-sm text-muted-foreground">Live-verified compliance requirements from trusted Indian government and legal sources</p>
         </div>
       </div>
 
@@ -352,8 +362,19 @@ export default function ComplianceChecklistPage() {
                     {industry} - {activity}
                   </h2>
                   <p className="text-sm text-muted-foreground">{jurisdiction}</p>
+                  {isVerified && sources.length > 0 && (
+                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Verified from {sources.length} trusted government sources
+                    </p>
+                  )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {isVerified && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">
+                      Live Verified
+                    </Badge>
+                  )}
                   <Badge variant="outline" data-testid="badge-progress">
                     {completedCount}/{checklist.length} completed
                   </Badge>

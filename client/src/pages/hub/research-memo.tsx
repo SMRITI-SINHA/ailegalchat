@@ -256,7 +256,7 @@ export default function LegalMemoPage() {
             </div>
             <div>
               <h1 className="font-semibold">Legal Memo Generator</h1>
-              <p className="text-xs text-muted-foreground">IRAC structured memos with citations</p>
+              <p className="text-xs text-muted-foreground">Professional legal memo drafting trained on expert practice, live research, and verified Indian legal authority</p>
             </div>
           </div>
           <Button

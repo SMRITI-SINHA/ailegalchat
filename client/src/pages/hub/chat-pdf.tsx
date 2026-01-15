@@ -865,14 +865,17 @@ export default function ChatWithPDFPage() {
                 Upload Documents
               </DialogTitle>
               <DialogDescription>
-                Upload PDFs, case files, or evidence folders (up to 800 pages per document)
+                Upload PDFs, case files, or evidence folders. DocuChat can analyze up to 800 pages per document with extractive mode.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
               <UploadDropzone
                 onUpload={handleFilesSelected}
-                maxFiles={20}
+                maxFiles={1}
+                maxSize={200 * 1024 * 1024}
+                maxPages={800}
+                description="Max 800 pages, 200MB per document. One document per session (read-only, extractive mode)."
               />
 
               {uploadedDocs.length > 0 && (

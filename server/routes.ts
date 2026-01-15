@@ -500,18 +500,26 @@ export async function registerRoutes(
               const midPart = docText.substring(midStart, midStart + sectionSize);
               const endPart = docText.substring(docText.length - sectionSize);
               
+              // Calculate approximate page ranges for each section
+              const pagesPerSection = Math.ceil(estimatedPages / 3);
+              const beginPageEnd = pagesPerSection;
+              const midPageStart = Math.floor(estimatedPages / 2) - Math.floor(pagesPerSection / 2);
+              const midPageEnd = midPageStart + pagesPerSection;
+              const endPageStart = estimatedPages - pagesPerSection;
+              
               const truncatedDoc = `=== Document: ${docName} (${estimatedPages} pages - key sections shown) ===
---- BEGINNING ---
+
+--- BEGINNING (Pages 1-${beginPageEnd}) ---
 ${beginPart}
 
-[... Section break ...]
+[... Pages ${beginPageEnd + 1}-${midPageStart - 1} not shown ...]
 
---- MIDDLE SECTION ---
+--- MIDDLE SECTION (Pages ${midPageStart}-${midPageEnd}) ---
 ${midPart}
 
-[... Section break ...]
+[... Pages ${midPageEnd + 1}-${endPageStart - 1} not shown ...]
 
---- END SECTION ---
+--- END SECTION (Pages ${endPageStart}-${estimatedPages}) ---
 ${endPart}`;
               docParts.push(truncatedDoc);
             }
@@ -624,7 +632,23 @@ OUTPUT FORMAT:
 Output your response as clean, readable text. Use proper paragraph breaks for separation. Do NOT use markdown formatting symbols like ** for bold or ## for headers - just use regular text with capitalization for emphasis where needed.`;
 
       if (documentContext) {
-        systemPrompt += `\n\n=== USER'S UPLOADED DOCUMENTS ===\nAnalyze these documents with the same rigor as you would in legal due diligence:\n\n${documentContext}`;
+        systemPrompt += `\n\n=== USER'S UPLOADED DOCUMENTS ===
+Analyze these documents with the same rigor as you would in legal due diligence.
+
+CRITICAL REQUIREMENT FOR DOCUMENT EXTRACTION:
+1. When extracting ANY fact, date, name, amount, or legal provision from the documents, you MUST include a page reference
+2. Format: "According to the document (Page X)..." or "[Page X]" after each extracted fact
+3. For multi-page references: "(Pages X-Y)" 
+4. If document sections are labeled, include section references: "(Section A, Page X)"
+5. NEVER state information from the document without indicating WHERE in the document it appears
+6. If you cannot determine the exact page, estimate based on document position: "(Beginning section)", "(Middle section)", "(End section)"
+
+Example formats:
+- "The agreement was signed on 15th March 2024 [Page 3]"
+- "The petitioner claims damages of Rs. 50 lakhs (Page 12, Para 4)"
+- "As stated in the FIR (Pages 2-3)..."
+
+${documentContext}`;
       }
       
       if (indianKanoonContext) {
@@ -1666,47 +1690,101 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
         return res.status(400).json({ error: "Industry, jurisdiction, and activity are required" });
       }
 
-      const prompt = `Generate a compliance checklist for the following:
+      // Step 1: Search current compliance requirements using Perplexity with trusted legal domains
+      let perplexityContext = "";
+      let sources: { title: string; url: string; source: string }[] = [];
+      let recentChanges: string[] = [];
+      
+      try {
+        const complianceSearch = await legalWebSearch.searchComplianceRequirements(industry, activity, jurisdiction);
+        if (complianceSearch.answer) {
+          perplexityContext = complianceSearch.answer;
+          sources = complianceSearch.sources;
+          recentChanges = complianceSearch.recentChanges;
+        }
+      } catch (searchError) {
+        console.error("Perplexity compliance search failed:", searchError);
+        // Continue without Perplexity context
+      }
 
+      // Step 2: Generate structured checklist using OpenAI with verified context
+      const systemPrompt = `You are an expert Indian regulatory compliance advisor. Generate ACCURATE, CURRENT compliance checklists.
+
+CRITICAL REQUIREMENTS:
+1. ONLY include requirements that are CURRENTLY IN FORCE under Indian law
+2. Every legal reference MUST be EXACT: Act Name + Year + Section/Rule number
+3. If a requirement cannot be verified, mark it as "[VERIFY FROM OFFICIAL SOURCE]"
+4. Include ACTUAL penalty amounts and deadlines from the law
+5. Note any recent amendments or notifications
+
+TRUSTED SOURCES HIERARCHY:
+1. Primary: Official Government Portals (MCA, SEBI, RBI, CBIC, State Govts)
+2. Secondary: eGazette notifications, Regulatory Circulars
+3. Advisory: Live Law, Bar & Bench (for updates only)
+
+${perplexityContext ? `\n=== LIVE COMPLIANCE DATA FROM TRUSTED SOURCES ===\n${perplexityContext}\n\nUSE the above verified information. Cross-reference and include specific legal citations.\n` : ""}
+
+OUTPUT FORMAT - Return ONLY a JSON array of compliance items:
+[
+  {
+    "id": "1",
+    "title": "Requirement name",
+    "description": "Detailed description of what must be done",
+    "legalReference": "Exact Act Name, Year - Section X / Rule Y",
+    "deadline": "Specific timeframe (e.g., 'Within 30 days of incorporation')",
+    "riskLevel": "high|medium|low",
+    "penalty": "Actual penalty amount/consequence",
+    "recentChange": "Any recent amendment (optional)",
+    "completed": false
+  }
+]`;
+
+      const response = await openai.chat.completions.create({
+        model: MODEL_TIERS.standard,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { 
+            role: "user", 
+            content: `Generate a compliance checklist for:
 Industry: ${industry}
 Jurisdiction: ${jurisdiction}
 Activity: ${activity}
 
-For each compliance item, provide:
-1. Title - Clear name of the compliance requirement
-2. Description - What needs to be done
-3. Legal Reference - Specific act, section, or regulation
-4. Deadline - When it must be completed
-5. Risk Level - high/medium/low based on penalties for non-compliance
-
-Generate at least 8-10 relevant compliance items specific to Indian law and regulations.`;
-
-      const response = await openai.chat.completions.create({
-        model: MODEL_TIERS.mini,
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert compliance advisor specializing in Indian regulatory requirements. Generate accurate compliance checklists with proper legal references.",
+Generate 8-12 VERIFIED compliance items with exact legal references. Include any recent changes from the last 6 months.`
           },
-          { role: "user", content: prompt },
         ],
-        max_completion_tokens: 2048,
+        max_completion_tokens: 3000,
+        response_format: { type: "json_object" },
       });
 
       const content = response.choices[0]?.message?.content || "";
-      const cost = MODEL_COSTS.mini;
+      const cost = MODEL_COSTS.standard;
+
+      // Parse the JSON response
+      let items: any[] = [];
+      try {
+        const parsed = JSON.parse(content);
+        items = parsed.items || parsed.checklist || (Array.isArray(parsed) ? parsed : []);
+      } catch (parseError) {
+        console.error("Failed to parse compliance JSON:", parseError);
+        // Return content as-is for client-side parsing
+      }
 
       await storage.addCostEntry({
         type: "compliance_checklist",
         description: `Generated checklist for ${industry} - ${activity}`,
         amount: cost,
-        modelUsed: "mini",
+        modelUsed: "standard",
       });
 
       res.json({
         content,
-        modelUsed: "mini",
+        items,
+        sources,
+        recentChanges,
+        modelUsed: "standard",
         cost,
+        verifiedFromPerplexity: !!perplexityContext,
       });
     } catch (error) {
       console.error("Compliance generation error:", error);
