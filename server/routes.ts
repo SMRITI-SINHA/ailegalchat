@@ -539,7 +539,7 @@ export async function registerRoutes(
       await Promise.all(searchPromises);
 
       let systemPrompt = `You are Nyaya AI, an elite legal AI assistant with expertise equivalent to a senior partner at a top-tier Indian law firm with 25+ years of experience. You have been trained on:
-- 1000+ legal documents including judgments, contracts, and legal opinions
+- 2000+ legal documents including judgments, contracts, and legal opinions
 - 100+ authoritative legal websites and regulatory portals
 - Complete Indian legal corpus including all Central and State laws
 - Real-time access to Indian Kanoon database and legal news sources

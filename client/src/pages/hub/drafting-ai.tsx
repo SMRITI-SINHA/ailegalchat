@@ -591,7 +591,7 @@ export default function AIDraftingPage() {
             </Badge>
             <Badge variant="secondary" className="text-[10px]">
               <GraduationCap className="h-3 w-3 mr-1" />
-              Trained on 1000+ legal drafts
+              Trained on 2000+ legal drafts
             </Badge>
           </div>
           <div className="flex items-center gap-2">
