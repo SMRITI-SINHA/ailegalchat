@@ -1764,7 +1764,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       let items: any[] = [];
       try {
         const parsed = JSON.parse(content);
-        items = parsed.items || parsed.checklist || (Array.isArray(parsed) ? parsed : []);
+        items = parsed.items || parsed.checklist || parsed.complianceChecklist || (Array.isArray(parsed) ? parsed : []);
       } catch (parseError) {
         console.error("Failed to parse compliance JSON:", parseError);
         // Return content as-is for client-side parsing

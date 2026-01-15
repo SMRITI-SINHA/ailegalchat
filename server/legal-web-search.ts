@@ -252,7 +252,7 @@ export class LegalWebSearchService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.1-sonar-small-128k-online",
+          model: "sonar",
           messages: [
             {
               role: "system",
@@ -340,7 +340,7 @@ Be precise and always cite your sources with proper legal citations.`
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.1-sonar-small-128k-online",
+          model: "sonar",
           messages: [
             {
               role: "system",
@@ -450,7 +450,7 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.1-sonar-small-128k-online",
+          model: "sonar",
           messages: [
             {
               role: "system",
@@ -584,7 +584,7 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.1-sonar-large-128k-online",
+          model: "sonar-pro",
           messages: [
             {
               role: "system",
