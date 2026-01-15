@@ -466,8 +466,10 @@ export async function registerRoutes(
       res.setHeader("Connection", "keep-alive");
 
       let documentContext = "";
-      // Maximum context for documents: ~120,000 characters (~30,000 tokens) to leave room for system prompt and response
-      const MAX_DOC_CONTEXT_CHARS = 120000;
+      // Conservative document context budget: ~80,000 characters (~20,000 tokens)
+      // Leaves room for: system prompt (~5K tokens), training context (~10K tokens), 
+      // Indian Kanoon (~2K tokens), response (~4K tokens), safety buffer
+      const MAX_DOC_CONTEXT_CHARS = 80000;
       
       if (documentIds && Array.isArray(documentIds) && documentIds.length > 0) {
         const docs = await Promise.all(
@@ -476,27 +478,42 @@ export async function registerRoutes(
         const validDocs = docs.filter((d) => d && d.extractedText);
         if (validDocs.length > 0) {
           // Build document context with smart truncation for large documents
-          let totalChars = 0;
           const docParts: string[] = [];
           const charsPerDoc = Math.floor(MAX_DOC_CONTEXT_CHARS / validDocs.length);
           
           for (const doc of validDocs) {
             const docText = doc!.extractedText || "";
             const docName = doc!.name;
+            const estimatedPages = Math.max(1, Math.round(docText.length / 3000));
             
             if (docText.length <= charsPerDoc) {
               // Document fits within allocation
-              docParts.push(`=== Document: ${docName} ===\n${docText}`);
-              totalChars += docText.length;
+              docParts.push(`=== Document: ${docName} (${estimatedPages} pages) ===\n${docText}`);
             } else {
-              // Large document - include beginning and end sections for context
-              const headerChars = Math.floor(charsPerDoc * 0.7); // 70% from start
-              const tailChars = Math.floor(charsPerDoc * 0.25); // 25% from end
-              const headerPart = docText.substring(0, headerChars);
-              const tailPart = docText.substring(docText.length - tailChars);
-              const truncatedDoc = `=== Document: ${docName} (Large document - key sections shown) ===\n${headerPart}\n\n[... Document continues - ${Math.round(docText.length / 3000)} pages total ...]\n\n${tailPart}`;
+              // Large document - intelligent sectioning
+              // Take beginning (where most legal documents have key parties, facts, issues)
+              // Take middle section (where analysis/arguments often appear)
+              // Take end (where conclusions, prayers, orders appear)
+              const sectionSize = Math.floor(charsPerDoc / 3);
+              const beginPart = docText.substring(0, sectionSize);
+              const midStart = Math.floor((docText.length - sectionSize) / 2);
+              const midPart = docText.substring(midStart, midStart + sectionSize);
+              const endPart = docText.substring(docText.length - sectionSize);
+              
+              const truncatedDoc = `=== Document: ${docName} (${estimatedPages} pages - key sections shown) ===
+--- BEGINNING ---
+${beginPart}
+
+[... Section break ...]
+
+--- MIDDLE SECTION ---
+${midPart}
+
+[... Section break ...]
+
+--- END SECTION ---
+${endPart}`;
               docParts.push(truncatedDoc);
-              totalChars += headerChars + tailChars;
             }
           }
           

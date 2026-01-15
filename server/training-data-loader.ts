@@ -231,6 +231,9 @@ class TrainingDataLoader {
       return "";
     }
 
+    // Limit training context to ~15,000 characters (~4K tokens) to leave room for other prompt components
+    const MAX_TRAINING_CONTEXT_CHARS = 15000;
+
     let context = `\n=== CHAKSHI LEGAL TRAINING DATA ===
 You have been trained on ${index.totalDocuments}+ authentic Indian legal documents across ${index.categories.length} categories:
 
@@ -264,12 +267,18 @@ Based on analysis of 2000+ legal documents, follow these Indian legal drafting c
 4. DOCUMENT-SPECIFIC CONVENTIONS:
 `;
 
-    // Add specific conventions for top categories
-    for (const category of index.categories.slice(0, 10)) {
+    // Add specific conventions for top categories (limit to prevent context overflow)
+    for (const category of index.categories.slice(0, 8)) {
+      if (context.length >= MAX_TRAINING_CONTEXT_CHARS * 0.9) break;
       const conventions = this.getCategoryConventions(category.normalizedName);
       if (conventions) {
         context += `\n   ${category.name}:\n${conventions}\n`;
       }
+    }
+
+    // Ensure we don't exceed the limit
+    if (context.length > MAX_TRAINING_CONTEXT_CHARS) {
+      context = context.substring(0, MAX_TRAINING_CONTEXT_CHARS);
     }
 
     return context;
