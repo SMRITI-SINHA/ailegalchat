@@ -15,14 +15,93 @@ interface PerplexityResponse {
   citations?: string[];
 }
 
-export const LEGAL_DOMAINS = [
-  // Legal News & Analysis
+// PRIORITY DOMAINS - From urls.json (Chakshi's curated sources)
+export const PRIORITY_DOMAINS = [
+  // Legal News & Analysis (Priority)
   "livelaw.in",
   "barandbench.com",
+  "indialegallive.com",
+  "legal.economictimes.indiatimes.com",
+  "lawstreet.co",
+  "latestlaws.com",
+  "aironline.in",
+  "indialawlibrary.com",
+  "karanjawala.in",
+  
+  // Supreme Court & Judiciary (Priority)
+  "sci.gov.in",
+  
+  // Government & Regulatory Bodies (Priority)
+  "sebi.gov.in",
+  "rbi.org.in",
+  "mca.gov.in",
+  "cbic.gov.in",
+  "gst.gov.in",
+  "services.gst.gov.in",
+  "incometaxindia.gov.in",
+  "incometax.gov.in",
+  "irdai.gov.in",
+  "epfindia.gov.in",
+  "esic.gov.in",
+  "pfrda.org.in",
+  "fssai.gov.in",
+  "ibbi.gov.in",
+  "cci.gov.in",
+  "cciindia.org",
+  "labour.gov.in",
+  "clc.gov.in",
+  "eshram.gov.in",
+  "moef.gov.in",
+  "cpcb.nic.in",
+  "pcbassam.org",
+  "cercind.gov.in",
+  
+  // Trade & Commerce (Priority)
+  "dgft.gov.in",
+  "icegate.gov.in",
+  "commerce.gov.in",
+  "dpiit.gov.in",
+  "startupindia.gov.in",
+  "apeda.gov.in",
+  "main.ecgc.in",
+  "wto.org",
+  
+  // Banking & Finance (Priority)
+  "nabard.org",
+  "sidbi.in",
+  "bankofbaroda.bank.in",
+  "dea.gov.in",
+  
+  // Industry & Energy (Priority)
+  "steel.gov.in",
+  "coal.nic.in",
+  "mines.gov.in",
+  "dgms.gov.in",
+  "powermin.gov.in",
+  "petroleum.nic.in",
+  "mopng.gov.in",
+  
+  // Telecom & IT (Priority)
+  "trai.gov.in",
+  "dot.gov.in",
+  
+  // Health & Pharma (Priority)
+  "cdsco.gov.in",
+  
+  // Government Gazette & Publications (Priority)
+  "egazette.gov.in",
+  "pib.gov.in",
+  "india.gov.in",
+  "indiacode.nic.in",
+  "lawcommissionofindia.nic.in",
+];
+
+// SECONDARY DOMAINS - Additional legal sources
+export const SECONDARY_DOMAINS = [
+  // Legal News & Analysis
   "scconline.com",
   "lawctopus.com",
   "legalbites.in",
-  "latestlaws.com",
   "advocatekhoj.com",
   "vakilno1.com",
   "lawyersclubindia.com",
@@ -34,7 +113,6 @@ export const LEGAL_DOMAINS = [
   "caclubindia.com",
   "icai.org",
   "icsi.edu",
-  "lawstreet.co",
   "itatonline.org",
   "judis.nic.in",
   "casemine.com",
@@ -44,7 +122,6 @@ export const LEGAL_DOMAINS = [
   "lawweb.in",
   "nludelhi.ac.in",
   "nlsiu.ac.in",
-  "lawcommissionofindia.nic.in",
   
   // Supreme Court & High Courts
   "main.sci.gov.in",
@@ -75,20 +152,7 @@ export const LEGAL_DOMAINS = [
   "sikkimjudiciary.nic.in",
   "meghalayahighcourt.nic.in",
   
-  // Government & Regulatory Bodies
-  "sebi.gov.in",
-  "rbi.org.in",
-  "mca.gov.in",
-  "incometaxindia.gov.in",
-  "cbic.gov.in",
-  "gst.gov.in",
-  "irdai.gov.in",
-  "epfindia.gov.in",
-  "esic.nic.in",
-  "pfrda.org.in",
-  "fssai.gov.in",
-  "cpcb.nic.in",
-  "cci.gov.in",
+  // Additional Government & Regulatory Bodies
   "nclat.nic.in",
   "nclt.gov.in",
   "ncdrc.nic.in",
@@ -104,12 +168,7 @@ export const LEGAL_DOMAINS = [
   "ncst.nic.in",
   "shc.nic.in",
   "rera.gov.in",
-  "ibbi.gov.in",
-  "moef.gov.in",
-  "labour.gov.in",
-  "pib.gov.in",
   "prsindia.org",
-  "indiacode.nic.in",
   "legislative.gov.in",
   "egazette.nic.in",
   "doj.gov.in",
@@ -118,7 +177,6 @@ export const LEGAL_DOMAINS = [
   "socialjustice.nic.in",
   "tribal.nic.in",
   "agrimin.gov.in",
-  "commerce.gov.in",
   "meity.gov.in",
   "doe.gov.in",
   "mea.gov.in",
@@ -127,10 +185,6 @@ export const LEGAL_DOMAINS = [
   "mohua.gov.in",
   "msme.gov.in",
   "morth.nic.in",
-  "petroleum.nic.in",
-  "coal.gov.in",
-  "mines.gov.in",
-  "powermin.gov.in",
   "shipmin.gov.in",
   "civilaviation.gov.in",
   "textilesindia.gov.in",
@@ -152,6 +206,9 @@ export const LEGAL_DOMAINS = [
   "indianbusinesslaw.com"
 ];
 
+// Combined domains - Priority first, then secondary (with deduplication)
+export const LEGAL_DOMAINS = Array.from(new Set([...PRIORITY_DOMAINS, ...SECONDARY_DOMAINS]));
+
 export class LegalWebSearchService {
   private perplexityKey: string | null;
 
@@ -165,6 +222,18 @@ export class LegalWebSearchService {
 
   getDomainList(): string[] {
     return LEGAL_DOMAINS;
+  }
+
+  getPriorityDomains(): string[] {
+    return PRIORITY_DOMAINS;
+  }
+
+  getTotalDomainCount(): { priority: number; secondary: number; total: number } {
+    return {
+      priority: PRIORITY_DOMAINS.length,
+      secondary: SECONDARY_DOMAINS.length,
+      total: LEGAL_DOMAINS.length,
+    };
   }
 
   async searchLegal(query: string): Promise<{ answer: string; sources: WebSearchResult[] }> {
@@ -204,7 +273,7 @@ Be precise and always cite your sources with proper legal citations.`
           max_tokens: 1024,
           temperature: 0.2,
           top_p: 0.9,
-          search_domain_filter: [],
+          search_domain_filter: PRIORITY_DOMAINS,
           return_images: false,
           return_related_questions: false,
           search_recency_filter: "month",
@@ -241,11 +310,11 @@ Be precise and always cite your sources with proper legal citations.`
     }
 
     const regulatorDomains: Record<string, string[]> = {
-      sebi: ["sebi.gov.in", "nseindia.com", "bseindia.com"],
-      rbi: ["rbi.org.in", "bankingfrontiers.com"],
-      mca: ["mca.gov.in", "companiesact.in"],
-      cbic: ["cbic.gov.in", "gst.gov.in", "taxguru.in"],
-      general: ["livelaw.in", "barandbench.com", "scconline.com"],
+      sebi: ["sebi.gov.in", "nseindia.com", "bseindia.com", "legal.economictimes.indiatimes.com"],
+      rbi: ["rbi.org.in", "nabard.org", "sidbi.in", "dea.gov.in", "bankofbaroda.bank.in"],
+      mca: ["mca.gov.in", "ibbi.gov.in", "nclt.gov.in", "nclat.nic.in"],
+      cbic: ["cbic.gov.in", "gst.gov.in", "services.gst.gov.in", "icegate.gov.in", "dgft.gov.in"],
+      general: ["livelaw.in", "barandbench.com", "scconline.com", "indialegallive.com", "latestlaws.com"],
     };
 
     try {
@@ -439,7 +508,7 @@ Ensure all extracted paragraphs are VERBATIM quotes with proper citations. Ident
           ],
           max_tokens: 4096,
           temperature: 0.1,
-          search_domain_filter: [],
+          search_domain_filter: PRIORITY_DOMAINS,
           return_images: false,
           search_recency_filter: "month",
           stream: false,
