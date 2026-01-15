@@ -1724,20 +1724,24 @@ TRUSTED SOURCES HIERARCHY:
 
 ${perplexityContext ? `\n=== LIVE COMPLIANCE DATA FROM TRUSTED SOURCES ===\n${perplexityContext}\n\nUSE the above verified information. Cross-reference and include specific legal citations.\n` : ""}
 
-OUTPUT FORMAT - Return ONLY a JSON array of compliance items:
-[
-  {
-    "id": "1",
-    "title": "Requirement name",
-    "description": "Detailed description of what must be done",
-    "legalReference": "Exact Act Name, Year - Section X / Rule Y",
-    "deadline": "Specific timeframe (e.g., 'Within 30 days of incorporation')",
-    "riskLevel": "high|medium|low",
-    "penalty": "Actual penalty amount/consequence",
-    "recentChange": "Any recent amendment (optional)",
-    "completed": false
-  }
-]`;
+OUTPUT FORMAT - Return a JSON object with an "items" key containing the array:
+{
+  "items": [
+    {
+      "id": "1",
+      "title": "Requirement name",
+      "description": "Detailed description of what must be done",
+      "legalReference": "Exact Act Name, Year - Section X / Rule Y",
+      "deadline": "Specific timeframe (e.g., 'Within 30 days of incorporation')",
+      "riskLevel": "high|medium|low",
+      "penalty": "Actual penalty amount/consequence",
+      "recentChange": "Any recent amendment (optional)",
+      "completed": false
+    }
+  ]
+}
+
+IMPORTANT: The key MUST be "items" - do not use any other key name like "checklist" or "compliance".`;
 
       const response = await openai.chat.completions.create({
         model: MODEL_TIERS.standard,
@@ -1760,11 +1764,24 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       const content = response.choices[0]?.message?.content || "";
       const cost = MODEL_COSTS.standard;
 
-      // Parse the JSON response
+      // Parse the JSON response - AI may use various key names
       let items: any[] = [];
       try {
         const parsed = JSON.parse(content);
-        items = parsed.items || parsed.checklist || parsed.complianceChecklist || (Array.isArray(parsed) ? parsed : []);
+        // Check all possible key names the AI might use
+        items = parsed.items || parsed.checklist || parsed.complianceChecklist || 
+                parsed.compliance || parsed.requirements || parsed.checklistItems ||
+                (Array.isArray(parsed) ? parsed : []);
+        
+        // If still empty, try to find any array in the response
+        if (items.length === 0 && typeof parsed === 'object') {
+          for (const key of Object.keys(parsed)) {
+            if (Array.isArray(parsed[key]) && parsed[key].length > 0) {
+              items = parsed[key];
+              break;
+            }
+          }
+        }
       } catch (parseError) {
         console.error("Failed to parse compliance JSON:", parseError);
         // Return content as-is for client-side parsing
