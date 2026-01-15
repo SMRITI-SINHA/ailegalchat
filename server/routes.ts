@@ -10,6 +10,7 @@ import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNote
 import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
+import { trainingDataLoader } from "./training-data-loader";
 
 const require = createRequire(import.meta.url);
 const { PDFParse } = require("pdf-parse");
@@ -538,6 +539,14 @@ export async function registerRoutes(
       
       await Promise.all(searchPromises);
 
+      // Load Chakshi's 2000+ document training context
+      let chakshiTrainingKnowledge = "";
+      try {
+        chakshiTrainingKnowledge = await trainingDataLoader.getTrainingContext();
+      } catch (e) {
+        console.log("[NYAYA AI] Training data loader failed, continuing without training context");
+      }
+
       let systemPrompt = `You are Nyaya AI, an elite legal AI assistant with expertise equivalent to a senior partner at a top-tier Indian law firm with 25+ years of experience. You have been trained on:
 - 2000+ legal documents including judgments, contracts, and legal opinions
 - 100+ authoritative legal websites and regulatory portals
@@ -580,6 +589,11 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
       
       if (indianKanoonContext || webSearchContext) {
         systemPrompt += `\n\nUse these sources to support your answers. Reference them as [1], [2], etc. when citing. Prioritize authoritative sources.`;
+      }
+
+      // Add Chakshi's comprehensive training knowledge
+      if (chakshiTrainingKnowledge) {
+        systemPrompt += chakshiTrainingKnowledge;
       }
 
       try {
@@ -758,6 +772,20 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
         }
       }
 
+      // When firm style is not enabled, use Chakshi's 2000+ document training data
+      let chakshiTrainingContext = "";
+      if (!useFirmStyle) {
+        try {
+          const documentTypeForTraining = documentTypeDetails?.subtypeLabel || type;
+          chakshiTrainingContext = await trainingDataLoader.getDraftingGuidelines(documentTypeForTraining);
+          if (chakshiTrainingContext) {
+            chakshiTrainingContext = `\n\n=== CHAKSHI TRAINING DATA (2000+ Legal Documents) ===\n${chakshiTrainingContext}\n`;
+          }
+        } catch (e) {
+          console.log("[DRAFTING] Training data loader failed, continuing without training context");
+        }
+      }
+
       // One-time format template from uploaded file (custom drafts)
       let formatTemplateContext = "";
       if (formatHtml) {
@@ -802,7 +830,7 @@ Generate a complete, properly formatted legal document following Indian legal co
 
 CRITICAL DATE/YEAR REQUIREMENT: The current year is ${new Date().getFullYear()}. For any petition numbers, cause titles, filing years, verification dates, or any other reference requiring a year, use ${new Date().getFullYear()} unless a different year is explicitly provided in the facts. If the exact year cannot be determined, leave it as a blank (e.g., "____") for the user to fill in. Never use outdated years like 2024.
 
-Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${documentTypeContext}${languageInstruction}${trainedStyleContext}${formatTemplateContext}`;
+Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${documentTypeContext}${languageInstruction}${trainedStyleContext}${chakshiTrainingContext}${formatTemplateContext}`;
 
       // Expert-level Indian legal drafting system prompt with strict pipeline adherence
       const expertDraftingPrompt = `You are a CAUTIOUS SENIOR INDIAN ADVOCATE with 30+ years of litigation and corporate drafting experience. Your overriding objective is LEGAL CORRECTNESS, PROCEDURAL SAFETY, and COURT SURVIVABILITY - NOT content generation.
@@ -1300,6 +1328,14 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
       // Combine research context
       const researchContext = indianKanoonContext + perplexityRiskContext;
 
+      // Load Chakshi's 2000+ document training context for memo drafting standards
+      let memoTrainingContext = "";
+      try {
+        memoTrainingContext = await trainingDataLoader.getTrainingContext();
+      } catch (e) {
+        console.log("[MEMO PIPELINE] Training data loader failed, continuing without training context");
+      }
+
       const languageInstruction = selectedLanguage !== "English" 
         ? `\n\nCRITICAL LANGUAGE REQUIREMENT: You MUST write the ENTIRE memorandum in ${selectedLanguage} language. Every word, every sentence, every section heading must be in ${selectedLanguage}. Do not use English at all except for proper nouns, case citations (like "AIR 2023 SC 456"), or statute names (like "Indian Contract Act, 1872"). The memorandum must be grammatically correct and professionally written in ${selectedLanguage} using appropriate legal terminology in that language.`
         : "";
@@ -1428,9 +1464,14 @@ Before finalizing, verify:
 
 OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
 
-      const systemPrompt = selectedLanguage !== "English"
+      let systemPrompt = selectedLanguage !== "English"
         ? `${expertMemoPrompt}\n\nCRITICAL LANGUAGE REQUIREMENT: You are completely fluent in ${selectedLanguage} and must generate the ENTIRE memorandum in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations (like "AIR 2023 SC 456"), or official statute names. All section headings, content, and legal analysis must be in ${selectedLanguage}.`
         : expertMemoPrompt;
+
+      // Add Chakshi's comprehensive training knowledge for memo standards
+      if (memoTrainingContext) {
+        systemPrompt += memoTrainingContext;
+      }
 
       const response = await openai.chat.completions.create({
         model: MODEL_TIERS.standard,
