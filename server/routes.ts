@@ -4,7 +4,14 @@ import multer from "multer";
 import OpenAI from "openai";
 import mammoth from "mammoth";
 import sanitizeHtmlLib from "sanitize-html";
-import { PDFParse } from "pdf-parse";
+// pdf-parse loaded dynamically to avoid bundling browser dependencies
+let pdfParse: any;
+async function getPdfParse() {
+  if (!pdfParse) {
+    pdfParse = (await import("pdf-parse")).default || (await import("pdf-parse"));
+  }
+  return pdfParse;
+}
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
@@ -184,9 +191,8 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: s
   
   try {
     if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
-      const parser = new PDFParse({ data: file.buffer });
-      const result = await parser.getText();
-      await parser.destroy();
+      const parser = await getPdfParse();
+      const result = await parser(file.buffer);
       const text = result.text || "";
       return { text, html: textToLegalHtml(text) };
     }
