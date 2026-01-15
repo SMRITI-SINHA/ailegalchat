@@ -117,16 +117,6 @@ export default function SettingsPage() {
             </div>
             <Switch id="draft-ready" defaultChecked />
           </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="cost-alerts">Cost Alerts</Label>
-              <p className="text-sm text-muted-foreground">
-                Alert when spending exceeds threshold
-              </p>
-            </div>
-            <Switch id="cost-alerts" />
-          </div>
         </CardContent>
       </Card>
 

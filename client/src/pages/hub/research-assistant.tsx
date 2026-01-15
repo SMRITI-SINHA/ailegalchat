@@ -206,7 +206,7 @@ export default function ResearchAssistantPage() {
             </div>
             <div className="flex-1">
               <h1 className="font-semibold text-lg">AI Legal Research</h1>
-              <p className="text-xs text-muted-foreground">Powered by Indian Kanoon + 130+ Legal Sources</p>
+              <p className="text-xs text-muted-foreground">Expert-grade AI legal research across authoritative Indian law</p>
             </div>
             <div className="flex gap-2">
               <Button

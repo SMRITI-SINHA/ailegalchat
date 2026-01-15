@@ -466,15 +466,46 @@ export async function registerRoutes(
       res.setHeader("Connection", "keep-alive");
 
       let documentContext = "";
+      // Maximum context for documents: ~120,000 characters (~30,000 tokens) to leave room for system prompt and response
+      const MAX_DOC_CONTEXT_CHARS = 120000;
+      
       if (documentIds && Array.isArray(documentIds) && documentIds.length > 0) {
         const docs = await Promise.all(
           documentIds.map((id: string) => storage.getDocument(id))
         );
         const validDocs = docs.filter((d) => d && d.extractedText);
         if (validDocs.length > 0) {
-          documentContext = validDocs
-            .map((d) => `=== Document: ${d!.name} ===\n${d!.extractedText}`)
-            .join("\n\n");
+          // Build document context with smart truncation for large documents
+          let totalChars = 0;
+          const docParts: string[] = [];
+          const charsPerDoc = Math.floor(MAX_DOC_CONTEXT_CHARS / validDocs.length);
+          
+          for (const doc of validDocs) {
+            const docText = doc!.extractedText || "";
+            const docName = doc!.name;
+            
+            if (docText.length <= charsPerDoc) {
+              // Document fits within allocation
+              docParts.push(`=== Document: ${docName} ===\n${docText}`);
+              totalChars += docText.length;
+            } else {
+              // Large document - include beginning and end sections for context
+              const headerChars = Math.floor(charsPerDoc * 0.7); // 70% from start
+              const tailChars = Math.floor(charsPerDoc * 0.25); // 25% from end
+              const headerPart = docText.substring(0, headerChars);
+              const tailPart = docText.substring(docText.length - tailChars);
+              const truncatedDoc = `=== Document: ${docName} (Large document - key sections shown) ===\n${headerPart}\n\n[... Document continues - ${Math.round(docText.length / 3000)} pages total ...]\n\n${tailPart}`;
+              docParts.push(truncatedDoc);
+              totalChars += headerChars + tailChars;
+            }
+          }
+          
+          documentContext = docParts.join("\n\n");
+          
+          // Final safety truncation if still too long
+          if (documentContext.length > MAX_DOC_CONTEXT_CHARS) {
+            documentContext = documentContext.substring(0, MAX_DOC_CONTEXT_CHARS) + "\n\n[... Additional content truncated for processing ...]";
+          }
         }
       }
 

@@ -55,13 +55,13 @@ const chatCards = [
   },
   {
     title: "DocuChat",
-    description: "Upload documents (800+ pages), generate timelines",
+    description: "Upload documents (800 pages), generate timelines",
     icon: FileText,
     url: "/hub/chat/pdf",
   },
   {
     title: "Nyaya AI",
-    description: "General legal assistant trained on 2000+ documents",
+    description: "Expert Legal Assistant trained on live trusted legal sources",
     icon: Scale,
     url: "/hub/chat/nyaya",
   },
@@ -70,7 +70,7 @@ const chatCards = [
 const researchCards = [
   {
     title: "AI Research Assistant",
-    description: "Indian Kanoon API for statute/case law search",
+    description: "Authoritative Indian case-law and statutory research engine",
     icon: Search,
     url: "/hub/research/assistant",
   },
