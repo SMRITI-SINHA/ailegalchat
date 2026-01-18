@@ -977,8 +977,7 @@ export function PremiumEditor({
                   if (e.key === 'Enter' && !e.shiftKey && isInHeading()) {
                     e.preventDefault();
                     const selection = window.getSelection();
-                    if (selection && selection.rangeCount > 0) {
-                      // Insert a new paragraph after current heading
+                    if (selection && selection.rangeCount > 0 && contentEditableRef.current) {
                       const range = selection.getRangeAt(0);
                       let node: Node | null = range.startContainer;
                       let headingEl: HTMLElement | null = null;
@@ -991,22 +990,31 @@ export function PremiumEditor({
                         node = node.parentNode;
                       }
                       
-                      if (headingEl) {
-                        // Create new paragraph
+                      if (headingEl && headingEl.parentNode) {
+                        // Create new paragraph with text node for reliable cursor placement
                         const p = document.createElement('p');
-                        p.innerHTML = '<br>';
-                        headingEl.parentNode?.insertBefore(p, headingEl.nextSibling);
+                        const textNode = document.createTextNode('\u200B'); // zero-width space
+                        p.appendChild(textNode);
+                        headingEl.parentNode.insertBefore(p, headingEl.nextSibling);
                         
-                        // Move cursor to new paragraph
-                        const newRange = document.createRange();
-                        newRange.selectNodeContents(p);
-                        newRange.collapse(true);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
+                        // Force focus on editor before setting selection
+                        contentEditableRef.current.focus();
                         
-                        setHeadingStyle('Normal text');
-                        isInternalUpdate.current = true;
-                        onContentChange(contentEditableRef.current?.innerHTML || "");
+                        // Delay selection to next frame for DOM stability
+                        requestAnimationFrame(() => {
+                          const newRange = document.createRange();
+                          newRange.setStart(textNode, 1);
+                          newRange.setEnd(textNode, 1);
+                          selection.removeAllRanges();
+                          selection.addRange(newRange);
+                          
+                          // Update state after selection is set
+                          setHeadingStyle('Normal text');
+                          isInternalUpdate.current = true;
+                          if (contentEditableRef.current) {
+                            onContentChange(contentEditableRef.current.innerHTML || "");
+                          }
+                        });
                       }
                     }
                   }
