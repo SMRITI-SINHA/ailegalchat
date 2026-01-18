@@ -228,7 +228,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
           <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="research" className="flex-1 flex flex-col p-4 mt-0 overflow-hidden">
+        <TabsContent value="research" className="flex-1 flex flex-col p-4 mt-0 overflow-hidden min-h-0">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Switch
@@ -268,7 +268,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
             </Button>
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             {(searchMutation.isPending || advancedSearchMutation.isPending) ? (
               <div className="space-y-3">
                 <Skeleton className="h-20 w-full" />
@@ -463,8 +463,8 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="notes" className="flex-1 flex flex-col mt-0 overflow-hidden h-full">
-          <Tabs value={notesSubTab} onValueChange={(v) => setNotesSubTab(v as "write" | "saved")} className="flex-1 flex flex-col h-full">
+        <TabsContent value="notes" className="flex-1 flex flex-col mt-0 overflow-hidden min-h-0">
+          <Tabs value={notesSubTab} onValueChange={(v) => setNotesSubTab(v as "write" | "saved")} className="flex-1 flex flex-col min-h-0">
             <TabsList className="w-full h-9 mx-4 mt-2" style={{ width: 'calc(100% - 32px)' }}>
               <TabsTrigger value="write" className="text-xs flex-1">Write</TabsTrigger>
               <TabsTrigger value="saved" className="text-xs flex-1">

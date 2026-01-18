@@ -39,7 +39,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <header className="flex items-center gap-4 p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-hidden">
             {children}
           </main>
         </div>

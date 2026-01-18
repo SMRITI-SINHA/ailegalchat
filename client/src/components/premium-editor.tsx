@@ -530,7 +530,7 @@ export function PremiumEditor({
   const handleBulletedList = () => {
     if (contentEditableRef.current) {
       restoreSelection();
-      normalizeToP();
+      contentEditableRef.current.focus();
       document.execCommand('insertUnorderedList', false);
       isInternalUpdate.current = true;
       onContentChange(contentEditableRef.current.innerHTML || "");
@@ -539,7 +539,7 @@ export function PremiumEditor({
   const handleNumberedList = () => {
     if (contentEditableRef.current) {
       restoreSelection();
-      normalizeToP();
+      contentEditableRef.current.focus();
       document.execCommand('insertOrderedList', false);
       isInternalUpdate.current = true;
       onContentChange(contentEditableRef.current.innerHTML || "");
@@ -564,6 +564,7 @@ export function PremiumEditor({
     setHeadingStyle(heading);
     if (contentEditableRef.current) {
       restoreSelection();
+      contentEditableRef.current.focus();
       let tag = 'p';
       if (heading === "Heading 1") tag = 'h1';
       else if (heading === "Heading 2") tag = 'h2';
