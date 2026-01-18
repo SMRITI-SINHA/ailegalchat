@@ -848,19 +848,6 @@ export function PremiumEditor({
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <Select value={headingStyle} onValueChange={handleHeadingChange}>
-          <SelectTrigger className="h-7 w-28 text-xs" data-testid="select-heading" onMouseDown={() => saveSelection()}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {headingStyles.map((style) => (
-              <SelectItem key={style} value={style}>{style}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Separator orientation="vertical" className="h-5 mx-1" />
-
         <Select value={fontFamily} onValueChange={handleFontChange}>
           <SelectTrigger className="h-7 w-24 text-xs" data-testid="select-font" onMouseDown={() => saveSelection()}>
             <SelectValue />
