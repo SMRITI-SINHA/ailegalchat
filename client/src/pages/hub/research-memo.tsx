@@ -528,6 +528,11 @@ export default function LegalMemoPage() {
           onOpenDraft={handleOpenMemoFromEditor}
           onMakeCopy={handleMakeCopy}
           showAiHelper
+          onAiAssist={async (prompt: string) => {
+            const response = await apiRequest("POST", "/api/drafts/assist", { prompt, context: memoContent?.slice(0, 500) });
+            const data = await response.json();
+            return data.content || "";
+          }}
         />
       </div>
       <ResearchSidebar

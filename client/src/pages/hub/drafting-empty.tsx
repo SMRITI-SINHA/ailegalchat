@@ -64,6 +64,11 @@ export default function EmptyDraftPage() {
           drafts={drafts}
           onOpenDraft={handleOpenDraft}
           onMakeCopy={handleMakeCopy}
+          onAiAssist={async (prompt: string) => {
+            const response = await apiRequest("POST", "/api/drafts/assist", { prompt, context: draftContent?.slice(0, 500) });
+            const data = await response.json();
+            return data.content || "";
+          }}
         />
       </div>
       <ResearchSidebar
