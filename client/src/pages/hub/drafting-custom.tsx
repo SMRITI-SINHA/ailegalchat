@@ -536,6 +536,11 @@ export default function CustomDraftPage() {
           drafts={allDrafts}
           onOpenDraft={handleOpenDraftFromEditor}
           onMakeCopy={handleMakeCopy}
+          onAiAssist={async (prompt: string) => {
+            const response = await apiRequest("POST", "/api/drafts/assist", { prompt, context: draftContent?.slice(0, 500) });
+            const data = await response.json();
+            return data.content || "";
+          }}
         />
       </div>
       <ResearchSidebar

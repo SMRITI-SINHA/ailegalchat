@@ -84,6 +84,7 @@ export interface IStorage {
   getResearchNotes(): Promise<ResearchNote[]>;
   getResearchNote(id: string): Promise<ResearchNote | undefined>;
   createResearchNote(note: InsertResearchNote): Promise<ResearchNote>;
+  updateResearchNote(id: string, updates: Partial<{ name: string; content: string }>): Promise<ResearchNote | undefined>;
   deleteResearchNote(id: string): Promise<void>;
 
   getCnrNotes(): Promise<CnrNote[]>;
@@ -611,6 +612,14 @@ export class MemStorage implements IStorage {
     };
     this.researchNotes.set(id, note);
     return note;
+  }
+
+  async updateResearchNote(id: string, updates: Partial<{ name: string; content: string }>): Promise<ResearchNote | undefined> {
+    const note = this.researchNotes.get(id);
+    if (!note) return undefined;
+    const updatedNote = { ...note, ...updates };
+    this.researchNotes.set(id, updatedNote);
+    return updatedNote;
   }
 
   async deleteResearchNote(id: string): Promise<void> {

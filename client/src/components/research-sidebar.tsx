@@ -56,6 +56,8 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [noteName, setNoteName] = useState("");
   const [activeTab, setActiveTab] = useState("research");
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [notesSubTab, setNotesSubTab] = useState<"write" | "saved">("write");
 
   const { data: savedNotes = [], isLoading: notesLoading } = useQuery<ResearchNote[]>({
     queryKey: ["/api/research/notes", draftId],
@@ -90,14 +92,21 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
   });
 
   const saveNoteMutation = useMutation({
-    mutationFn: async ({ name, content }: { name: string; content: string }) => {
-      const response = await apiRequest("POST", "/api/research/notes", { name, content, draftId });
-      return response.json();
+    mutationFn: async ({ name, content, noteId }: { name: string; content: string; noteId?: string }) => {
+      if (noteId) {
+        const response = await apiRequest("PATCH", `/api/research/notes/${noteId}`, { name, content });
+        return response.json();
+      } else {
+        const response = await apiRequest("POST", "/api/research/notes", { name, content, draftId });
+        return response.json();
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/research/notes", draftId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/research/notes"] });
       setNotes("");
       setNoteName("");
+      setEditingNoteId(null);
       setShowSaveDialog(false);
     },
   });
@@ -123,7 +132,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
 
   const handleSaveNote = () => {
     if (noteName.trim() && notes.trim()) {
-      saveNoteMutation.mutate({ name: noteName, content: notes });
+      saveNoteMutation.mutate({ name: noteName, content: notes, noteId: editingNoteId || undefined });
     }
   };
 
@@ -195,9 +204,28 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                   {advancedResults.disclaimer}
                 </p>
                 
-                <div className="p-3 border rounded-md bg-background max-h-64 overflow-y-auto">
-                  <p className="text-sm whitespace-pre-wrap break-words">{advancedResults.answer}</p>
-                </div>
+                {advancedResults.answer && (
+                  <div className="p-3 border rounded-md bg-background">
+                    <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                      {(() => {
+                        // Clean up any JSON formatting from the answer
+                        let cleanAnswer = advancedResults.answer;
+                        if (cleanAnswer.startsWith("```json") || cleanAnswer.startsWith("{")) {
+                          try {
+                            const jsonMatch = cleanAnswer.match(/\{[\s\S]*\}/);
+                            if (jsonMatch) {
+                              const parsed = JSON.parse(jsonMatch[0]);
+                              cleanAnswer = parsed.analysis || cleanAnswer;
+                            }
+                          } catch (e) {
+                            // Keep original if parsing fails
+                          }
+                        }
+                        return cleanAnswer.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+                      })()}
+                    </p>
+                  </div>
+                )}
 
                 {advancedResults.extractedParagraphs.length > 0 && (
                   <Collapsible>
@@ -360,8 +388,8 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="notes" className="flex-1 flex flex-col p-4 mt-0 overflow-hidden">
-          <Tabs defaultValue="write" className="flex-1 flex flex-col">
+        <TabsContent value="notes" className="flex-1 flex flex-col p-4 mt-0 overflow-auto">
+          <Tabs value={notesSubTab} onValueChange={(v) => setNotesSubTab(v as "write" | "saved")} className="flex-1 flex flex-col">
             <TabsList className="w-full h-8">
               <TabsTrigger value="write" className="text-xs flex-1">Write</TabsTrigger>
               <TabsTrigger value="saved" className="text-xs flex-1">
@@ -373,23 +401,45 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
               <Textarea
                 placeholder="Your research notes..."
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="flex-1 resize-none text-sm"
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                }}
+                className="flex-1 resize-none text-sm min-h-[200px]"
                 data-testid="textarea-notes"
               />
               <Button
                 className="mt-2 w-full"
                 size="sm"
-                onClick={() => setShowSaveDialog(true)}
+                onClick={() => {
+                  if (editingNoteId) {
+                    const existingNote = savedNotes.find(n => n.id === editingNoteId);
+                    setNoteName(existingNote?.name || "");
+                  }
+                  setShowSaveDialog(true);
+                }}
                 disabled={!notes.trim()}
                 data-testid="button-save-note"
               >
                 <Save className="h-4 w-4 mr-2" />
-                Save Note
+                {editingNoteId ? "Update Note" : "Save Note"}
               </Button>
+              {editingNoteId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 w-full text-xs"
+                  onClick={() => {
+                    setEditingNoteId(null);
+                    setNotes("");
+                    setNoteName("");
+                  }}
+                >
+                  Cancel Editing
+                </Button>
+              )}
             </TabsContent>
 
-            <TabsContent value="saved" className="flex-1 mt-2">
+            <TabsContent value="saved" className="flex-1 mt-2 overflow-auto">
               <ScrollArea className="h-full">
                 {notesLoading ? (
                   <div className="space-y-2">
@@ -401,16 +451,29 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                     No saved notes yet
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2 pb-4">
                     {savedNotes.map((note) => (
-                      <div key={note.id} className="p-3 border rounded-md bg-background">
+                      <div 
+                        key={note.id} 
+                        className="p-3 border rounded-md bg-background cursor-pointer hover-elevate transition-colors"
+                        onClick={() => {
+                          setNotes(note.content || "");
+                          setNoteName(note.name || "");
+                          setEditingNoteId(note.id);
+                          setNotesSubTab("write");
+                        }}
+                        data-testid={`note-card-${note.id}`}
+                      >
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className="font-medium text-sm truncate">{note.name}</h4>
+                          <h4 className="font-medium text-sm truncate">{note.name || "Untitled Note"}</h4>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6"
-                            onClick={() => deleteNoteMutation.mutate(note.id)}
+                            className="h-6 w-6 shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteNoteMutation.mutate(note.id);
+                            }}
                             disabled={deleteNoteMutation.isPending}
                             data-testid={`button-delete-note-${note.id}`}
                           >

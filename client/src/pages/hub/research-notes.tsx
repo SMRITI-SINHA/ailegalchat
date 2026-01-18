@@ -55,8 +55,8 @@ export default function ResearchNotesPage() {
 
   const filteredNotes = notes.filter(
     (note) =>
-      note.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.content.toLowerCase().includes(searchQuery.toLowerCase())
+      (note.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (note.content || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleViewNote = (note: ResearchNote) => {

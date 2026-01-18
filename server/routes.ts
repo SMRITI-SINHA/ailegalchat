@@ -1143,6 +1143,67 @@ Ensure the translation is accurate and uses appropriate legal terminology in ${t
     }
   });
 
+  // AI Assistance endpoint for quick legal content generation
+  app.post("/api/drafts/assist", async (req: Request, res: Response) => {
+    try {
+      const { prompt, context } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({ error: "Prompt is required" });
+      }
+
+      const systemPrompt = `You are a SENIOR INDIAN LEGAL EXPERT with 30+ years of experience drafting legal documents. Generate the requested legal content following these strict rules:
+
+BEHAVIORAL STANDARDS:
+- Draft as a cautious senior advocate would
+- Use formal legal language appropriate for Indian courts
+- Include proper legal terminology and citations where applicable
+- Structure content with proper headings, numbering, and formatting
+- For statutory references, use format: "Section X of [Act Name], [Year]"
+- For case citations: "[Party Name] v. [Party Name], [Year] [Volume] [Reporter] [Page]"
+
+OUTPUT FORMAT:
+- Use proper markdown formatting (headings, bold, italic, lists)
+- Include appropriate section breaks and paragraph formatting
+- Structure legal documents with proper clauses and sub-clauses
+- For notices/letters: Include proper header, salutation, body, and closing
+
+ANTI-HALLUCINATION:
+- Only cite well-established legal principles you are certain about
+- If uncertain about specific citations, use placeholders like "[CITATION TO BE VERIFIED]"
+- Prefer general principles over specific case citations if unsure
+
+Generate the requested content now:`;
+
+      const userMessage = context 
+        ? `Context: ${context}\n\nRequest: ${prompt}` 
+        : prompt;
+
+      const response = await openai.chat.completions.create({
+        model: MODEL_TIERS.standard,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        max_completion_tokens: 4096,
+      });
+
+      const generatedContent = response.choices[0]?.message?.content || "";
+
+      await storage.addCostEntry({
+        type: "ai_assistance",
+        description: `AI assistance: ${prompt.slice(0, 50)}...`,
+        amount: MODEL_COSTS.standard,
+        modelUsed: "standard",
+      });
+
+      res.json({ content: generatedContent });
+    } catch (error) {
+      console.error("Error in AI assistance:", error);
+      res.status(500).json({ error: "Failed to generate content" });
+    }
+  });
+
   // Training Documents API endpoints
   app.get("/api/training-docs", async (req: Request, res: Response) => {
     try {
@@ -1648,47 +1709,6 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
     }
   });
 
-  // Research Notes CRUD - uses ResearchQuery model with "note:" prefix to distinguish from search results
-  app.get("/api/research/notes", async (req: Request, res: Response) => {
-    try {
-      const allQueries = await storage.getResearchQueries();
-      // Filter to only return notes (queries with "note:" prefix)
-      const notes = allQueries.filter(q => q.query.startsWith("note:"));
-      // Parse results JSON before sending
-      const parsedNotes = notes.map(n => ({
-        ...n,
-        query: n.query.replace("note:", ""), // Remove prefix for display
-        results: typeof n.results === "string" ? JSON.parse(n.results) : n.results,
-      }));
-      res.json(parsedNotes);
-    } catch (error) {
-      console.error("Error fetching notes:", error);
-      res.status(500).json({ error: "Failed to fetch notes" });
-    }
-  });
-
-  app.post("/api/research/notes", async (req: Request, res: Response) => {
-    try {
-      const { title, content, query } = req.body;
-      if (!title || !content) {
-        return res.status(400).json({ error: "Title and content are required" });
-      }
-      // Store with "note:" prefix to distinguish from regular search queries
-      const note = await storage.createResearchQuery({
-        query: `note:${title}`,
-        results: JSON.stringify({ title, content, savedAt: new Date().toISOString() }),
-      });
-      res.json({
-        ...note,
-        query: title, // Return without prefix
-        results: { title, content, savedAt: new Date().toISOString() },
-      });
-    } catch (error) {
-      console.error("Error saving note:", error);
-      res.status(500).json({ error: "Failed to save note" });
-    }
-  });
-
   app.post("/api/compliance/generate", async (req: Request, res: Response) => {
     try {
       const { industry, jurisdiction, activity } = req.body;
@@ -1848,6 +1868,23 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
     } catch (error) {
       console.error("Error deleting research note:", error);
       res.status(500).json({ error: "Failed to delete note" });
+    }
+  });
+
+  app.patch("/api/research/notes/:id", async (req: Request, res: Response) => {
+    try {
+      const { name, content } = req.body;
+      if (!name && !content) {
+        return res.status(400).json({ error: "Name or content is required" });
+      }
+      const note = await storage.updateResearchNote(req.params.id, { name, content });
+      if (!note) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      res.json(note);
+    } catch (error) {
+      console.error("Error updating research note:", error);
+      res.status(500).json({ error: "Failed to update note" });
     }
   });
 
