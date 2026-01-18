@@ -12,8 +12,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import { Search, Save, Plus, FileText, Trash2, Sparkles, Zap, Clock, AlertTriangle, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Search, Save, Plus, FileText, Trash2, Sparkles, Zap, Clock, AlertTriangle, ChevronDown, Download } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +28,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { stripHtmlTags, isNewLaw } from "@/lib/utils";
 import type { ResearchNote } from "@shared/schema";
+import { jsPDF } from "jspdf";
 
 interface SearchResult {
   tid: string;
@@ -117,6 +125,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/research/notes", draftId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/research/notes"] });
     },
   });
 
@@ -136,6 +145,74 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
     }
   };
 
+  const handleNewNote = () => {
+    setEditingNoteId(null);
+    setNotes("");
+    setNoteName("");
+  };
+
+  const handleDownloadNote = (format: "txt" | "docx" | "pdf") => {
+    const noteTitle = editingNoteId 
+      ? savedNotes.find(n => n.id === editingNoteId)?.name || "note"
+      : "note";
+    
+    if (format === "txt") {
+      const blob = new Blob([notes], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${noteTitle}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === "docx") {
+      const htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' 
+              xmlns:w='urn:schemas-microsoft-com:office:word' 
+              xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>${noteTitle}</title></head>
+        <body style="font-family: Arial; font-size: 12pt;">
+          <h1>${noteTitle}</h1>
+          <div>${notes.replace(/\n/g, '<br>')}</div>
+        </body>
+        </html>`;
+      const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${noteTitle}.doc`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === "pdf") {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const maxWidth = pageWidth - (margin * 2);
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text(noteTitle, margin, margin);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(12);
+      
+      const lines = doc.splitTextToSize(notes, maxWidth);
+      let yPosition = margin + 15;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const lineHeight = 7;
+      
+      for (const line of lines) {
+        if (yPosition + lineHeight > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+        doc.text(line, margin, yPosition);
+        yPosition += lineHeight;
+      }
+      
+      doc.save(`${noteTitle}.pdf`);
+    }
+  };
+
   const filteredResults = searchResults.filter((result) => {
     const isNew = isNewLaw(result.title);
     return lawFilter === "new" ? isNew : !isNew;
@@ -144,9 +221,9 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
   if (!isOpen) return null;
 
   return (
-    <div className="w-[400px] min-w-[360px] flex flex-col overflow-hidden bg-muted/30 border-l">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="w-full justify-start rounded-none border-b px-4 h-10">
+    <div className="w-[400px] min-w-[360px] flex flex-col overflow-hidden bg-muted/30 border-l h-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col h-full">
+        <TabsList className="w-full justify-start rounded-none border-b px-4 h-10 shrink-0">
           <TabsTrigger value="research" className="text-xs">AI Legal Research</TabsTrigger>
           <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
         </TabsList>
@@ -208,7 +285,6 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                   <div className="p-3 border rounded-md bg-background">
                     <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
                       {(() => {
-                        // Clean up any JSON formatting from the answer
                         let cleanAnswer = advancedResults.answer;
                         if (cleanAnswer.startsWith("```json") || cleanAnswer.startsWith("{")) {
                           try {
@@ -218,7 +294,6 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                               cleanAnswer = parsed.analysis || cleanAnswer;
                             }
                           } catch (e) {
-                            // Keep original if parsing fails
                           }
                         }
                         return cleanAnswer.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
@@ -388,58 +463,86 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="notes" className="flex-1 flex flex-col p-4 mt-0 overflow-auto">
-          <Tabs value={notesSubTab} onValueChange={(v) => setNotesSubTab(v as "write" | "saved")} className="flex-1 flex flex-col">
-            <TabsList className="w-full h-8">
+        <TabsContent value="notes" className="flex-1 flex flex-col mt-0 overflow-hidden h-full">
+          <Tabs value={notesSubTab} onValueChange={(v) => setNotesSubTab(v as "write" | "saved")} className="flex-1 flex flex-col h-full">
+            <TabsList className="w-full h-9 mx-4 mt-2" style={{ width: 'calc(100% - 32px)' }}>
               <TabsTrigger value="write" className="text-xs flex-1">Write</TabsTrigger>
               <TabsTrigger value="saved" className="text-xs flex-1">
                 Saved ({savedNotes.length})
               </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="write" className="flex-1 flex flex-col mt-2">
-              <Textarea
-                placeholder="Your research notes..."
-                value={notes}
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                }}
-                className="flex-1 resize-none text-sm min-h-[200px]"
-                data-testid="textarea-notes"
-              />
-              <Button
-                className="mt-2 w-full"
-                size="sm"
-                onClick={() => {
-                  if (editingNoteId) {
-                    const existingNote = savedNotes.find(n => n.id === editingNoteId);
-                    setNoteName(existingNote?.name || "");
-                  }
-                  setShowSaveDialog(true);
-                }}
-                disabled={!notes.trim()}
-                data-testid="button-save-note"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {editingNoteId ? "Update Note" : "Save Note"}
-              </Button>
-              {editingNoteId && (
+            <TabsContent value="write" className="flex-1 flex flex-col px-4 pb-4 mt-2 overflow-hidden">
+              <div className="flex-1 flex flex-col min-h-0">
+                <Textarea
+                  placeholder="Write your notes here..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="flex-1 resize-none text-sm border rounded-md bg-background"
+                  style={{ minHeight: '100%' }}
+                  data-testid="textarea-notes"
+                />
+              </div>
+              <div className="flex gap-2 mt-3 shrink-0">
+                {editingNoteId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleNewNote}
+                    data-testid="button-new-note"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New
+                  </Button>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={editingNoteId ? "" : "w-10"}
+                      disabled={!notes.trim()}
+                      data-testid="button-download-note"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleDownloadNote("txt")} data-testid="download-txt">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Download as TXT
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDownloadNote("docx")} data-testid="download-docx">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Download as DOC
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDownloadNote("pdf")} data-testid="download-pdf">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Download as PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
-                  variant="ghost"
+                  className="flex-1 bg-[#c4a67c] hover:bg-[#b39669] text-white"
                   size="sm"
-                  className="mt-1 w-full text-xs"
                   onClick={() => {
-                    setEditingNoteId(null);
-                    setNotes("");
-                    setNoteName("");
+                    if (editingNoteId) {
+                      const existingNote = savedNotes.find(n => n.id === editingNoteId);
+                      setNoteName(existingNote?.name || "");
+                    }
+                    setShowSaveDialog(true);
                   }}
+                  disabled={!notes.trim()}
+                  data-testid="button-save-note"
                 >
-                  Cancel Editing
+                  <Save className="h-4 w-4 mr-2" />
+                  {editingNoteId ? "Update" : "Save Note"}
                 </Button>
-              )}
+              </div>
             </TabsContent>
 
-            <TabsContent value="saved" className="flex-1 mt-2 overflow-auto">
+            <TabsContent value="saved" className="flex-1 px-4 pb-4 mt-2 overflow-hidden">
               <ScrollArea className="h-full">
                 {notesLoading ? (
                   <div className="space-y-2">
@@ -497,7 +600,10 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Save Note</DialogTitle>
+            <DialogTitle>{editingNoteId ? "Update Note" : "Save Note"}</DialogTitle>
+            <DialogDescription>
+              Enter a name for your note to save it for later.
+            </DialogDescription>
           </DialogHeader>
           <Input
             placeholder="Note name..."
@@ -512,6 +618,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
             <Button
               onClick={handleSaveNote}
               disabled={!noteName.trim() || saveNoteMutation.isPending}
+              className="bg-[#c4a67c] hover:bg-[#b39669]"
             >
               {saveNoteMutation.isPending ? "Saving..." : "Save"}
             </Button>

@@ -256,19 +256,51 @@ export function PremiumEditor({
       a.click();
       URL.revokeObjectURL(url);
     } else if (format === "pdf") {
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        printWindow.document.write(`
+      const printFrame = document.createElement("iframe");
+      printFrame.style.position = "fixed";
+      printFrame.style.right = "0";
+      printFrame.style.bottom = "0";
+      printFrame.style.width = "0";
+      printFrame.style.height = "0";
+      printFrame.style.border = "0";
+      document.body.appendChild(printFrame);
+      
+      const frameDoc = printFrame.contentDocument || printFrame.contentWindow?.document;
+      if (frameDoc) {
+        frameDoc.open();
+        frameDoc.write(`
+          <!DOCTYPE html>
           <html>
-            <head><title>${title}</title></head>
-            <body style="font-family: ${fontFamily}; font-size: ${fontSize}pt; padding: 40px;">
-              <h1>${title}</h1>
+            <head>
+              <title>${title || "Document"}</title>
+              <style>
+                @media print {
+                  @page { margin: 1in; }
+                  body { 
+                    font-family: ${fontFamily}, sans-serif; 
+                    font-size: ${fontSize}pt;
+                    line-height: 1.6;
+                    color: #000;
+                  }
+                  h1 { margin-bottom: 1em; }
+                }
+              </style>
+            </head>
+            <body>
+              <h1>${title || "Document"}</h1>
               <div>${content}</div>
-              <script>window.print(); window.close();</script>
             </body>
           </html>
         `);
-        printWindow.document.close();
+        frameDoc.close();
+        
+        setTimeout(() => {
+          printFrame.contentWindow?.focus();
+          printFrame.contentWindow?.print();
+          setTimeout(() => {
+            document.body.removeChild(printFrame);
+          }, 1000);
+        }, 250);
       }
     }
   };
