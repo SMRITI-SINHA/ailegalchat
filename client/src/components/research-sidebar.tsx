@@ -135,7 +135,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
   if (!isOpen) return null;
 
   return (
-    <div className="w-80 flex flex-col overflow-hidden bg-muted/30 border-l">
+    <div className="w-[400px] min-w-[360px] flex flex-col overflow-hidden bg-muted/30 border-l">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <TabsList className="w-full justify-start rounded-none border-b px-4 h-10">
           <TabsTrigger value="research" className="text-xs">AI Legal Research</TabsTrigger>
@@ -190,13 +190,13 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                 <Skeleton className="h-20 w-full" />
               </div>
             ) : advancedResults ? (
-              <div className="space-y-3">
+              <div className="space-y-3 pb-4">
                 <p className="text-xs text-muted-foreground italic mb-2">
                   {advancedResults.disclaimer}
                 </p>
                 
-                <div className="p-3 border rounded-md bg-background">
-                  <p className="text-sm">{advancedResults.answer}</p>
+                <div className="p-3 border rounded-md bg-background max-h-64 overflow-y-auto">
+                  <p className="text-sm whitespace-pre-wrap break-words">{advancedResults.answer}</p>
                 </div>
 
                 {advancedResults.extractedParagraphs.length > 0 && (
@@ -316,10 +316,10 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                   </div>
                 ) : (
                   filteredResults.map((result) => (
-                    <div key={result.tid} className="p-3 border rounded-md bg-background">
-                      <h4 className="font-medium text-sm line-clamp-2">{stripHtmlTags(result.title)}</h4>
+                    <div key={result.tid} className="p-3 border rounded-md bg-background overflow-hidden">
+                      <h4 className="font-medium text-sm break-words" title={stripHtmlTags(result.title)}>{stripHtmlTags(result.title)}</h4>
                       {result.headline && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-3">
+                        <p className="text-xs text-muted-foreground mt-1 break-words line-clamp-4">
                           {stripHtmlTags(result.headline)}
                         </p>
                       )}

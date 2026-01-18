@@ -6,6 +6,11 @@ import { documentTypeHierarchy, type DocumentTypeSelection, type DocumentCategor
 
 export type { DocumentTypeSelection } from "@shared/schema";
 
+function truncateText(text: string, maxLength: number = 35): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength - 3) + "...";
+}
+
 interface DocumentTypeSelectorProps {
   value: DocumentTypeSelection | null;
   onChange: (selection: DocumentTypeSelection | null) => void;
@@ -95,13 +100,13 @@ export function DocumentTypeSelector({ value, onChange, compact = false }: Docum
               onValueChange={handleSubtypeChange}
               disabled={!selectedCategory}
             >
-              <SelectTrigger className="h-9" data-testid="select-doc-subtype">
+              <SelectTrigger className="h-9 overflow-hidden" data-testid="select-doc-subtype">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-w-[300px]">
                 {currentCategory?.subtypes.map((sub) => (
-                  <SelectItem key={sub.id} value={sub.id}>
-                    {sub.label}
+                  <SelectItem key={sub.id} value={sub.id} title={sub.label}>
+                    <span className="truncate block max-w-[250px]">{truncateText(sub.label, 35)}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -116,14 +121,14 @@ export function DocumentTypeSelector({ value, onChange, compact = false }: Docum
               value={selectedSubSubtype} 
               onValueChange={handleSubSubtypeChange}
             >
-              <SelectTrigger className="h-9" data-testid="select-doc-subsubtype">
+              <SelectTrigger className="h-9 overflow-hidden" data-testid="select-doc-subsubtype">
                 <SelectValue placeholder="Select if applicable" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-w-[350px]">
                 <SelectItem value="none">Not Applicable</SelectItem>
                 {currentSubtype?.subSubtypes?.map((ss) => (
-                  <SelectItem key={ss.id} value={ss.id}>
-                    {ss.label}
+                  <SelectItem key={ss.id} value={ss.id} title={ss.label}>
+                    <span className="truncate block max-w-[300px]">{truncateText(ss.label, 45)}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -169,13 +174,13 @@ export function DocumentTypeSelector({ value, onChange, compact = false }: Docum
         <div className="space-y-2">
           <Label>Document Type</Label>
           <Select value={selectedSubtype} onValueChange={handleSubtypeChange}>
-            <SelectTrigger data-testid="select-doc-subtype">
+            <SelectTrigger data-testid="select-doc-subtype" className="max-w-full overflow-hidden">
               <SelectValue placeholder="Select document type" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-[380px]">
               {currentCategory?.subtypes.map((sub) => (
-                <SelectItem key={sub.id} value={sub.id}>
-                  {sub.label}
+                <SelectItem key={sub.id} value={sub.id} title={sub.label}>
+                  <span className="truncate block max-w-[320px]">{truncateText(sub.label, 50)}</span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -187,14 +192,14 @@ export function DocumentTypeSelector({ value, onChange, compact = false }: Docum
         <div className="space-y-2">
           <Label>Statutory / Contextual Sub-Type (Optional)</Label>
           <Select value={selectedSubSubtype} onValueChange={handleSubSubtypeChange}>
-            <SelectTrigger data-testid="select-doc-subsubtype">
+            <SelectTrigger data-testid="select-doc-subsubtype" className="max-w-full overflow-hidden">
               <SelectValue placeholder="Select if applicable" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-[380px]">
               <SelectItem value="none">Not Applicable</SelectItem>
               {currentSubtype?.subSubtypes?.map((ss) => (
-                <SelectItem key={ss.id} value={ss.id}>
-                  {ss.label}
+                <SelectItem key={ss.id} value={ss.id} title={ss.label}>
+                  <span className="truncate block max-w-[320px]">{truncateText(ss.label, 50)}</span>
                 </SelectItem>
               ))}
             </SelectContent>

@@ -39,8 +39,8 @@ export function CitationCard({
           <div className="p-1.5 rounded bg-muted flex-shrink-0">
             <FileText className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{citation.source}</p>
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <p className="text-sm font-medium break-words" title={citation.source}>{citation.source}</p>
             {citation.page && (
               <p className="text-xs text-muted-foreground font-mono">
                 Page {citation.page}
