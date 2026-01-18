@@ -191,7 +191,8 @@ export default function ResearchAssistantPage() {
     }
   };
 
-  const truncateText = (text: string, maxLength: number) => {
+  const truncateText = (text: string | undefined | null, maxLength: number) => {
+    if (!text) return "";
     if (text.length <= maxLength) return text;
     return text.slice(0, maxLength) + "...";
   };
@@ -656,7 +657,7 @@ Save important findings, citations, and analysis here."
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <h4 className="font-medium text-sm truncate" title={saved.query}>
+                          <h4 className="font-medium text-sm truncate" title={saved.query || ""}>
                             {truncateText(saved.query, 25)}
                           </h4>
                           <p className="text-xs text-muted-foreground mt-1">
