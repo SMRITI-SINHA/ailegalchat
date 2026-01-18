@@ -222,53 +222,54 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
 
   return (
     <div className="w-[400px] min-w-[360px] flex flex-col bg-muted/30 border-l h-full">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
         <TabsList className="w-full justify-start rounded-none border-b px-4 h-10 shrink-0">
           <TabsTrigger value="research" className="text-xs">AI Legal Research</TabsTrigger>
           <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="research" className="flex-1 flex flex-col p-4 mt-0 min-h-0" style={{ height: 'calc(100% - 40px)' }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Switch
-                id="advanced-mode"
-                checked={isAdvancedMode}
-                onCheckedChange={setIsAdvancedMode}
-                data-testid="switch-advanced-mode"
-              />
-              <Label htmlFor="advanced-mode" className="text-xs flex items-center gap-1">
-                {isAdvancedMode && <Sparkles className="h-3 w-3 text-primary" />}
-                Advanced
-              </Label>
+        <TabsContent value="research" className="flex-1 p-4 mt-0 overflow-hidden relative" data-state={activeTab === "research" ? "active" : "inactive"}>
+          <div className="absolute inset-0 p-4 flex flex-col">
+            <div className="flex items-center justify-between mb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="advanced-mode"
+                  checked={isAdvancedMode}
+                  onCheckedChange={setIsAdvancedMode}
+                  data-testid="switch-advanced-mode"
+                />
+                <Label htmlFor="advanced-mode" className="text-xs flex items-center gap-1">
+                  {isAdvancedMode && <Sparkles className="h-3 w-3 text-primary" />}
+                  Advanced
+                </Label>
+              </div>
+              {isAdvancedMode && (
+                <Badge variant="secondary" className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
+                  <Zap className="h-2.5 w-2.5 mr-1" />
+                  Live Search
+                </Badge>
+              )}
             </div>
-            {isAdvancedMode && (
-              <Badge variant="secondary" className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
-                <Zap className="h-2.5 w-2.5 mr-1" />
-                Live Search
-              </Badge>
-            )}
-          </div>
-          
-          <div className="flex gap-2 mb-4">
-            <Input
-              placeholder={isAdvancedMode ? "Advanced legal search..." : "Search legal provisions..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              data-testid="input-research-search"
-            />
-            <Button
-              size="icon"
-              onClick={handleSearch}
-              disabled={searchMutation.isPending || advancedSearchMutation.isPending}
-              data-testid="button-search"
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-          </div>
+            
+            <div className="flex gap-2 mb-4 shrink-0">
+              <Input
+                placeholder={isAdvancedMode ? "Advanced legal search..." : "Search legal provisions..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                data-testid="input-research-search"
+              />
+              <Button
+                size="icon"
+                onClick={handleSearch}
+                disabled={searchMutation.isPending || advancedSearchMutation.isPending}
+                data-testid="button-search"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
 
-          <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+            <div className="flex-1 overflow-y-auto">
             {(searchMutation.isPending || advancedSearchMutation.isPending) ? (
               <div className="space-y-3">
                 <Skeleton className="h-20 w-full" />
@@ -460,6 +461,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                 <p className="text-sm">Search for legal provisions, case law, or statutes</p>
               </div>
             )}
+            </div>
           </div>
         </TabsContent>
 
