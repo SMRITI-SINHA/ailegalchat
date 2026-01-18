@@ -142,6 +142,79 @@ export function PremiumEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const contentEditableRef = useRef<HTMLDivElement>(null);
   const isInternalUpdate = useRef(false);
+  const savedSelectionRef = useRef<Range | null>(null);
+
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && contentEditableRef.current) {
+      const range = selection.getRangeAt(0);
+      if (contentEditableRef.current.contains(range.startContainer)) {
+        savedSelectionRef.current = range.cloneRange();
+      }
+    }
+  };
+
+  const restoreSelection = () => {
+    if (savedSelectionRef.current && contentEditableRef.current) {
+      contentEditableRef.current.focus();
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        try {
+          selection.addRange(savedSelectionRef.current);
+        } catch {
+          // Range may be invalid if DOM changed, just focus
+        }
+      }
+    }
+  };
+
+  const isInHeading = (): boolean => {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return false;
+    let node: Node | null = selection.getRangeAt(0).startContainer;
+    while (node && node !== contentEditableRef.current) {
+      if (node.nodeName.match(/^H[1-6]$/)) return true;
+      node = node.parentNode;
+    }
+    return false;
+  };
+
+  const normalizeToP = () => {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount || !contentEditableRef.current) return;
+    
+    let node: Node | null = selection.getRangeAt(0).startContainer;
+    let headingEl: HTMLElement | null = null;
+    
+    while (node && node !== contentEditableRef.current) {
+      if (node.nodeName.match(/^H[1-6]$/)) {
+        headingEl = node as HTMLElement;
+        break;
+      }
+      node = node.parentNode;
+    }
+    
+    if (headingEl) {
+      // Create paragraph with same content
+      const p = document.createElement('p');
+      p.innerHTML = headingEl.innerHTML;
+      headingEl.parentNode?.replaceChild(p, headingEl);
+      
+      // Move cursor into new paragraph
+      const range = document.createRange();
+      range.selectNodeContents(p);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      setHeadingStyle('Normal text');
+      isInternalUpdate.current = true;
+      if (contentEditableRef.current) {
+        onContentChange(contentEditableRef.current.innerHTML || "");
+      }
+    }
+  };
 
   const getCursorPositionInEditor = (): number | null => {
     const selection = window.getSelection();
@@ -166,6 +239,30 @@ export function PremiumEditor({
     const pos = getCursorPositionInEditor();
     if (pos !== null) {
       lastKnownCursorPosition.current = pos;
+    }
+  };
+
+  const getCurrentHeadingFromDOM = (): string => {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount || !contentEditableRef.current) {
+      return 'Normal text';
+    }
+    let node: Node | null = selection.getRangeAt(0).startContainer;
+    while (node && node !== contentEditableRef.current) {
+      const name = node.nodeName.toUpperCase();
+      if (name === 'H1') return 'Heading 1';
+      if (name === 'H2') return 'Heading 2';
+      if (name === 'H3') return 'Heading 3';
+      if (name === 'H4') return 'Heading 4';
+      node = node.parentNode;
+    }
+    return 'Normal text';
+  };
+
+  const syncHeadingState = () => {
+    const currentHeading = getCurrentHeadingFromDOM();
+    if (currentHeading !== headingStyle) {
+      setHeadingStyle(currentHeading);
     }
   };
 
@@ -376,7 +473,7 @@ export function PremiumEditor({
 
   const execFormatCommand = (command: string, value?: string) => {
     if (contentEditableRef.current) {
-      contentEditableRef.current.focus();
+      restoreSelection();
       document.execCommand(command, false, value);
       isInternalUpdate.current = true;
       const newContent = contentEditableRef.current.innerHTML || "";
@@ -392,7 +489,7 @@ export function PremiumEditor({
   const handleStrikethrough = () => execFormatCommand('strikeThrough');
   const handleHighlight = () => {
     if (contentEditableRef.current) {
-      contentEditableRef.current.focus();
+      restoreSelection();
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
@@ -430,8 +527,24 @@ export function PremiumEditor({
   const handleAlignCenter = () => execFormatCommand('justifyCenter');
   const handleAlignRight = () => execFormatCommand('justifyRight');
   const handleAlignJustify = () => execFormatCommand('justifyFull');
-  const handleBulletedList = () => execFormatCommand('insertUnorderedList');
-  const handleNumberedList = () => execFormatCommand('insertOrderedList');
+  const handleBulletedList = () => {
+    if (contentEditableRef.current) {
+      restoreSelection();
+      normalizeToP();
+      document.execCommand('insertUnorderedList', false);
+      isInternalUpdate.current = true;
+      onContentChange(contentEditableRef.current.innerHTML || "");
+    }
+  };
+  const handleNumberedList = () => {
+    if (contentEditableRef.current) {
+      restoreSelection();
+      normalizeToP();
+      document.execCommand('insertOrderedList', false);
+      isInternalUpdate.current = true;
+      onContentChange(contentEditableRef.current.innerHTML || "");
+    }
+  };
   const handleIndent = () => execFormatCommand('indent');
   const handleOutdent = () => execFormatCommand('outdent');
 
@@ -450,7 +563,7 @@ export function PremiumEditor({
   const handleHeadingChange = (heading: string) => {
     setHeadingStyle(heading);
     if (contentEditableRef.current) {
-      contentEditableRef.current.focus();
+      restoreSelection();
       let tag = 'p';
       if (heading === "Heading 1") tag = 'h1';
       else if (heading === "Heading 2") tag = 'h2';
@@ -470,6 +583,10 @@ export function PremiumEditor({
           variant="ghost"
           size="icon"
           className={`h-7 w-7 ${active ? 'bg-accent' : ''}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            saveSelection();
+          }}
           onClick={onClick}
           data-testid={`toolbar-${tooltip.toLowerCase().replace(/\s+/g, "-")}`}
         >
@@ -733,7 +850,7 @@ export function PremiumEditor({
         <Separator orientation="vertical" className="h-5 mx-1" />
 
         <Select value={headingStyle} onValueChange={handleHeadingChange}>
-          <SelectTrigger className="h-7 w-28 text-xs" data-testid="select-heading">
+          <SelectTrigger className="h-7 w-28 text-xs" data-testid="select-heading" onMouseDown={() => saveSelection()}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -746,7 +863,7 @@ export function PremiumEditor({
         <Separator orientation="vertical" className="h-5 mx-1" />
 
         <Select value={fontFamily} onValueChange={handleFontChange}>
-          <SelectTrigger className="h-7 w-24 text-xs" data-testid="select-font">
+          <SelectTrigger className="h-7 w-24 text-xs" data-testid="select-font" onMouseDown={() => saveSelection()}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -856,8 +973,52 @@ export function PremiumEditor({
                   updateLastKnownCursorPosition();
                 }}
                 onClick={updateLastKnownCursorPosition}
-                onKeyUp={updateLastKnownCursorPosition}
-                onSelect={updateLastKnownCursorPosition}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && isInHeading()) {
+                    e.preventDefault();
+                    const selection = window.getSelection();
+                    if (selection && selection.rangeCount > 0) {
+                      // Insert a new paragraph after current heading
+                      const range = selection.getRangeAt(0);
+                      let node: Node | null = range.startContainer;
+                      let headingEl: HTMLElement | null = null;
+                      
+                      while (node && node !== contentEditableRef.current) {
+                        if (node.nodeName.match(/^H[1-6]$/)) {
+                          headingEl = node as HTMLElement;
+                          break;
+                        }
+                        node = node.parentNode;
+                      }
+                      
+                      if (headingEl) {
+                        // Create new paragraph
+                        const p = document.createElement('p');
+                        p.innerHTML = '<br>';
+                        headingEl.parentNode?.insertBefore(p, headingEl.nextSibling);
+                        
+                        // Move cursor to new paragraph
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(p);
+                        newRange.collapse(true);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                        
+                        setHeadingStyle('Normal text');
+                        isInternalUpdate.current = true;
+                        onContentChange(contentEditableRef.current?.innerHTML || "");
+                      }
+                    }
+                  }
+                }}
+                onKeyUp={() => {
+                  updateLastKnownCursorPosition();
+                  syncHeadingState();
+                }}
+                onSelect={() => {
+                  updateLastKnownCursorPosition();
+                  syncHeadingState();
+                }}
                 onFocus={() => {
                   setEditorFocused(true);
                   updateLastKnownCursorPosition();
