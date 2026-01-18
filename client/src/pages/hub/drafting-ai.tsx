@@ -1073,7 +1073,7 @@ export default function AIDraftingPage() {
   }
 
   return (
-    <div className="h-full flex">
+    <div className="flex" style={{ height: 'calc(100vh - 57px)' }}>
       <div className="flex-1 flex flex-col overflow-hidden">
         <PremiumEditor
           title={draftTitle}
