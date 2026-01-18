@@ -8,7 +8,8 @@ import sanitizeHtmlLib from "sanitize-html";
 let pdfParse: any;
 async function getPdfParse() {
   if (!pdfParse) {
-    pdfParse = (await import("pdf-parse")).default || (await import("pdf-parse"));
+    const module = await import("pdf-parse") as any;
+    pdfParse = module.default || module;
   }
   return pdfParse;
 }
