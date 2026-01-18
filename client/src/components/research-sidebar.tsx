@@ -221,14 +221,14 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
   if (!isOpen) return null;
 
   return (
-    <div className="w-[400px] min-w-[360px] flex flex-col overflow-hidden bg-muted/30 border-l h-full">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col h-full">
+    <div className="w-[400px] min-w-[360px] flex flex-col bg-muted/30 border-l h-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
         <TabsList className="w-full justify-start rounded-none border-b px-4 h-10 shrink-0">
           <TabsTrigger value="research" className="text-xs">AI Legal Research</TabsTrigger>
           <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="research" className="flex-1 flex flex-col p-4 mt-0 overflow-hidden min-h-0">
+        <TabsContent value="research" className="flex-1 flex flex-col p-4 mt-0 min-h-0" style={{ height: 'calc(100% - 40px)' }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Switch
@@ -268,7 +268,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
             </Button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
             {(searchMutation.isPending || advancedSearchMutation.isPending) ? (
               <div className="space-y-3">
                 <Skeleton className="h-20 w-full" />
