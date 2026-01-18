@@ -633,7 +633,7 @@ Ensure all extracted paragraphs are VERBATIM quotes with proper citations. Ident
           ],
           max_tokens: 4096,
           temperature: 0.1,
-          search_domain_filter: PRIORITY_DOMAINS,
+          search_domain_filter: PRIORITY_DOMAINS.slice(0, 3),
           return_images: false,
           search_recency_filter: "month",
           stream: false,
@@ -641,7 +641,8 @@ Ensure all extracted paragraphs are VERBATIM quotes with proper citations. Ident
       });
 
       if (!response.ok) {
-        console.error("Perplexity advanced search error:", response.status);
+        const errorText = await response.text();
+        console.error("Perplexity advanced search error:", response.status, errorText);
         return {
           answer: "",
           sources: [],

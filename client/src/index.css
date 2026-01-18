@@ -49,9 +49,9 @@
   --muted: 30 12% 94%;
   --muted-foreground: 25 15% 45%;
   
-  /* Accent - Teal/Cyan (for links, "Online" status) */
-  --accent: 187 70% 45%;
-  --accent-foreground: 0 0% 100%;
+  /* Accent - Warm Brown (matches platform theme for selected items) */
+  --accent: 30 25% 90%;
+  --accent-foreground: 25 20% 15%;
   
   /* Destructive - Red (for HIGH priority, errors) */
   --destructive: 0 72% 51%;

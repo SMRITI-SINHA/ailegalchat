@@ -5,13 +5,13 @@ import OpenAI from "openai";
 import mammoth from "mammoth";
 import sanitizeHtmlLib from "sanitize-html";
 // pdf-parse loaded dynamically to avoid bundling browser dependencies
-let pdfParse: any;
-async function getPdfParse() {
-  if (!pdfParse) {
+let PDFParseClass: any;
+async function getPdfParseClass() {
+  if (!PDFParseClass) {
     const module = await import("pdf-parse") as any;
-    pdfParse = module.default || module;
+    PDFParseClass = module.PDFParse || module.default?.PDFParse || module.default;
   }
-  return pdfParse;
+  return PDFParseClass;
 }
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema } from "@shared/schema";
@@ -192,9 +192,11 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: s
   
   try {
     if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
-      const parser = await getPdfParse();
-      const result = await parser(file.buffer);
+      const PDFParse = await getPdfParseClass();
+      const parser = new PDFParse({ data: file.buffer });
+      const result = await parser.getText();
       const text = result.text || "";
+      await parser.destroy();
       return { text, html: textToLegalHtml(text) };
     }
     
