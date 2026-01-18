@@ -268,7 +268,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
             </Button>
           </div>
 
-          <ScrollArea className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-auto">
             {(searchMutation.isPending || advancedSearchMutation.isPending) ? (
               <div className="space-y-3">
                 <Skeleton className="h-20 w-full" />
@@ -460,7 +460,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                 <p className="text-sm">Search for legal provisions, case law, or statutes</p>
               </div>
             )}
-          </ScrollArea>
+          </div>
         </TabsContent>
 
         <TabsContent value="notes" className="flex-1 flex flex-col mt-0 overflow-hidden min-h-0">

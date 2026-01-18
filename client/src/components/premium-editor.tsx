@@ -44,8 +44,6 @@ import {
   AlignCenter,
   AlignRight,
   AlignJustify,
-  List,
-  ListOrdered,
   Indent,
   Outdent,
   Strikethrough,
@@ -87,7 +85,7 @@ interface PremiumEditorProps {
 
 const fontFamilies = ["Arial", "Georgia", "Times New Roman", "Courier New", "Verdana"];
 const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72];
-const headingStyles = ["Normal text", "Heading 1", "Heading 2", "Heading 3", "Heading 4"];
+const headingStyles = ["Heading 1", "Heading 2", "Heading 3", "Heading 4"];
 
 const legalExamples = [
   "Draft a Non-Disclosure Agreement",
@@ -126,7 +124,7 @@ export function PremiumEditor({
   const [zoom, setZoom] = useState(100);
   const [fontFamily, setFontFamily] = useState("Arial");
   const [fontSize, setFontSize] = useState(11);
-  const [headingStyle, setHeadingStyle] = useState("Normal text");
+  const [headingStyle, setHeadingStyle] = useState("Heading 1");
   const [selectedLanguage, setSelectedLanguage] = useState<IndianLanguage>(currentLanguage);
   const [showOpenDialog, setShowOpenDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
@@ -208,7 +206,7 @@ export function PremiumEditor({
       selection.removeAllRanges();
       selection.addRange(range);
       
-      setHeadingStyle('Normal text');
+      setHeadingStyle('');
       isInternalUpdate.current = true;
       if (contentEditableRef.current) {
         onContentChange(contentEditableRef.current.innerHTML || "");
@@ -245,7 +243,7 @@ export function PremiumEditor({
   const getCurrentHeadingFromDOM = (): string => {
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount || !contentEditableRef.current) {
-      return 'Normal text';
+      return '';
     }
     let node: Node | null = selection.getRangeAt(0).startContainer;
     while (node && node !== contentEditableRef.current) {
@@ -256,7 +254,7 @@ export function PremiumEditor({
       if (name === 'H4') return 'Heading 4';
       node = node.parentNode;
     }
-    return 'Normal text';
+    return '';
   };
 
   const syncHeadingState = () => {
@@ -909,8 +907,6 @@ export function PremiumEditor({
 
         <Separator orientation="vertical" className="h-5 mx-1" />
 
-        <ToolbarButton icon={List} tooltip="Bulleted list" onClick={handleBulletedList} />
-        <ToolbarButton icon={ListOrdered} tooltip="Numbered list" onClick={handleNumberedList} />
         <ToolbarButton icon={Outdent} tooltip="Decrease indent" onClick={handleOutdent} />
         <ToolbarButton icon={Indent} tooltip="Increase indent" onClick={handleIndent} />
 
@@ -1010,7 +1006,7 @@ export function PremiumEditor({
                           selection.addRange(newRange);
                           
                           // Update state after selection is set
-                          setHeadingStyle('Normal text');
+                          setHeadingStyle('');
                           isInternalUpdate.current = true;
                           if (contentEditableRef.current) {
                             onContentChange(contentEditableRef.current.innerHTML || "");
