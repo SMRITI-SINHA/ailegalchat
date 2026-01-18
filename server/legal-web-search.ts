@@ -577,72 +577,73 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
     }
 
     try {
-      const response = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${this.perplexityKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "sonar-pro",
-          messages: [
-            {
-              role: "system",
-              content: `You are an advanced legal research assistant specializing in Indian law with 25+ years of expertise. Search across 130+ authoritative Indian legal sources including: Indian Kanoon, Live Law, Bar & Bench, SCC Online, Manupatra, all High Courts and Supreme Court portals, government regulatory bodies (SEBI, RBI, MCA, CBIC, IRDAI, CCI, NCLT, NCLAT, NCDRC, RERA, IBBI), and legal research platforms.
+      // Split all domains into chunks of 20 (Perplexity API limit)
+      const allDomains = LEGAL_DOMAINS;
+      const domainChunks: string[][] = [];
+      for (let i = 0; i < allDomains.length; i += 20) {
+        domainChunks.push(allDomains.slice(i, i + 20));
+      }
+
+      console.log(`Advanced search using ${allDomains.length} domains in ${domainChunks.length} parallel batches`);
+
+      const systemPrompt = `You are an advanced legal research assistant specializing in Indian law. Search across authoritative Indian legal sources.
 
 IMPORTANT: You MUST respond with a valid JSON object only, no markdown formatting, no code blocks.
 
 Your response must be a JSON object with this exact structure:
 {
   "analysis": "Detailed legal analysis of the query",
-  "extractedParagraphs": [
-    {
-      "text": "Verbatim quote from legal source",
-      "citation": "Full citation (e.g., Case Name, Year, Volume, Page)",
-      "sections": ["Section numbers mentioned"],
-      "acts": ["Act names mentioned"],
-      "court": "Court name if applicable"
-    }
-  ],
-  "timeline": [
-    {
-      "date": "YYYY-MM-DD or descriptive date",
-      "event": "What happened",
-      "source": "Source of this information"
-    }
-  ],
-  "conflicts": [
-    {
-      "issue": "Description of conflicting interpretations",
-      "sources": ["Source 1", "Source 2"]
-    }
-  ],
-  "tags": {
-    "sections": ["List of all section numbers mentioned"],
-    "acts": ["List of all acts mentioned"],
-    "courts": ["List of all courts mentioned"]
-  }
-}
+  "extractedParagraphs": [{"text": "Verbatim quote", "citation": "Full citation", "sections": [], "acts": [], "court": ""}],
+  "timeline": [{"date": "YYYY-MM-DD", "event": "What happened", "source": "Source"}],
+  "conflicts": [{"issue": "Description", "sources": ["Source 1"]}],
+  "tags": {"sections": [], "acts": [], "courts": []}
+}`;
 
-Ensure all extracted paragraphs are VERBATIM quotes with proper citations. Identify chronological developments and any conflicts between judicial interpretations.`
+      // Make parallel API calls for each domain chunk
+      const searchPromises = domainChunks.map(async (domains, index) => {
+        try {
+          const response = await fetch("https://api.perplexity.ai/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${this.perplexityKey}`,
+              "Content-Type": "application/json",
             },
-            {
-              role: "user",
-              content: `Advanced legal research query for Indian law: ${query}`
-            }
-          ],
-          max_tokens: 4096,
-          temperature: 0.1,
-          search_domain_filter: PRIORITY_DOMAINS.slice(0, 20),
-          return_images: false,
-          search_recency_filter: "month",
-          stream: false,
-        }),
+            body: JSON.stringify({
+              model: "sonar-pro",
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Advanced legal research query for Indian law: ${query}` }
+              ],
+              max_tokens: 2048,
+              temperature: 0.1,
+              search_domain_filter: domains,
+              return_images: false,
+              search_recency_filter: "month",
+              stream: false,
+            }),
+          });
+
+          if (!response.ok) {
+            console.error(`Batch ${index + 1}/${domainChunks.length} failed:`, response.status);
+            return null;
+          }
+
+          const data: PerplexityResponse = await response.json();
+          return {
+            content: data.choices?.[0]?.message?.content || "{}",
+            citations: data.citations || [],
+          };
+        } catch (error) {
+          console.error(`Batch ${index + 1} error:`, error);
+          return null;
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Perplexity advanced search error:", response.status, errorText);
+      // Wait for all parallel searches
+      const results = await Promise.all(searchPromises);
+      const validResults = results.filter(r => r !== null);
+
+      if (validResults.length === 0) {
         return {
           answer: "",
           sources: [],
@@ -653,62 +654,84 @@ Ensure all extracted paragraphs are VERBATIM quotes with proper citations. Ident
         };
       }
 
-      const data: PerplexityResponse = await response.json();
-      const content = data.choices?.[0]?.message?.content || "{}";
-      
-      let parsed: any = {};
-      try {
-        const cleanContent = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        parsed = JSON.parse(cleanContent);
-      } catch (e) {
-        parsed = { analysis: content };
+      // Merge results from all batches
+      let mergedAnalysis = "";
+      const allSources: WebSearchResult[] = [];
+      const allParagraphs: any[] = [];
+      const allTimeline: any[] = [];
+      const allConflicts: any[] = [];
+      const allSections = new Set<string>();
+      const allActs = new Set<string>();
+      const allCourts = new Set<string>();
+      const seenUrls = new Set<string>();
+
+      for (const result of validResults) {
+        let parsed: any = {};
+        try {
+          const cleanContent = result.content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+          parsed = JSON.parse(cleanContent);
+        } catch (e) {
+          parsed = { analysis: result.content };
+        }
+
+        if (!mergedAnalysis && parsed.analysis) {
+          mergedAnalysis = parsed.analysis;
+        }
+
+        for (const url of result.citations) {
+          if (!seenUrls.has(url)) {
+            seenUrls.add(url);
+            allSources.push({
+              title: this.extractDomainName(url),
+              url,
+              snippet: "",
+              source: this.extractSourceName(url),
+            });
+          }
+        }
+
+        if (Array.isArray(parsed.extractedParagraphs)) {
+          for (const p of parsed.extractedParagraphs) {
+            allParagraphs.push({
+              text: p.text || "",
+              citation: p.citation || "",
+              sections: Array.isArray(p.sections) ? p.sections : [],
+              acts: Array.isArray(p.acts) ? p.acts : [],
+              court: p.court || "",
+            });
+          }
+        }
+
+        if (Array.isArray(parsed.timeline)) {
+          for (const t of parsed.timeline) {
+            allTimeline.push({ date: t.date || "", event: t.event || "", source: t.source || "" });
+          }
+        }
+
+        if (Array.isArray(parsed.conflicts)) {
+          for (const c of parsed.conflicts) {
+            allConflicts.push({ issue: c.issue || "", sources: Array.isArray(c.sources) ? c.sources : [] });
+          }
+        }
+
+        if (parsed.tags?.sections) parsed.tags.sections.forEach((s: string) => allSections.add(s));
+        if (parsed.tags?.acts) parsed.tags.acts.forEach((a: string) => allActs.add(a));
+        if (parsed.tags?.courts) parsed.tags.courts.forEach((c: string) => allCourts.add(c));
       }
 
-      const sources: WebSearchResult[] = (data.citations || []).map(url => ({
-        title: this.extractDomainName(url),
-        url,
-        snippet: "",
-        source: this.extractSourceName(url),
-      }));
-
-      const extractedParagraphs = Array.isArray(parsed.extractedParagraphs) 
-        ? parsed.extractedParagraphs.map((p: any) => ({
-            text: p.text || "",
-            citation: p.citation || "",
-            sections: Array.isArray(p.sections) ? p.sections : [],
-            acts: Array.isArray(p.acts) ? p.acts : [],
-            court: p.court || "",
-          }))
-        : [];
-
-      const timeline = Array.isArray(parsed.timeline)
-        ? parsed.timeline.map((t: any) => ({
-            date: t.date || "",
-            event: t.event || "",
-            source: t.source || "",
-          }))
-        : [];
-
-      const conflicts = Array.isArray(parsed.conflicts)
-        ? parsed.conflicts.map((c: any) => ({
-            issue: c.issue || "",
-            sources: Array.isArray(c.sources) ? c.sources : [],
-          }))
-        : [];
-
-      const tags = {
-        sections: Array.isArray(parsed.tags?.sections) ? parsed.tags.sections : [],
-        acts: Array.isArray(parsed.tags?.acts) ? parsed.tags.acts : [],
-        courts: Array.isArray(parsed.tags?.courts) ? parsed.tags.courts : [],
-      };
+      console.log(`Merged: ${allSources.length} sources, ${allParagraphs.length} paragraphs from ${validResults.length}/${domainChunks.length} batches`);
 
       return {
-        answer: parsed.analysis || content,
-        sources,
-        extractedParagraphs,
-        timeline,
-        conflicts,
-        tags,
+        answer: mergedAnalysis,
+        sources: allSources,
+        extractedParagraphs: allParagraphs,
+        timeline: allTimeline,
+        conflicts: allConflicts,
+        tags: {
+          sections: Array.from(allSections),
+          acts: Array.from(allActs),
+          courts: Array.from(allCourts),
+        },
       };
     } catch (error) {
       console.error("Advanced search error:", error);
