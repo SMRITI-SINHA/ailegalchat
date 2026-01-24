@@ -12,59 +12,59 @@
   
   /* Warm cream background */
   --background: 40 33% 98%;
-  --foreground: 25 20% 15%;
+  --foreground: 30 15% 20%;
   
   /* Borders - warm gray */
-  --border: 30 15% 88%;
+  --border: 35 15% 85%;
   
   /* Cards - pure white */
   --card: 0 0% 100%;
-  --card-foreground: 25 20% 15%;
-  --card-border: 30 15% 92%;
+  --card-foreground: 30 15% 20%;
+  --card-border: 35 15% 90%;
   
-  /* Sidebar - warm brown/terracotta header style */
-  --sidebar: 25 18% 55%;
+  /* Sidebar - olive/muddy green */
+  --sidebar: 45 20% 50%;
   --sidebar-foreground: 0 0% 98%;
-  --sidebar-border: 25 18% 48%;
-  --sidebar-primary: 30 90% 50%;
+  --sidebar-border: 45 20% 42%;
+  --sidebar-primary: 45 35% 45%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 25 18% 48%;
+  --sidebar-accent: 45 20% 42%;
   --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring: 30 90% 50%;
+  --sidebar-ring: 45 35% 45%;
   
   /* Popover */
   --popover: 0 0% 100%;
-  --popover-foreground: 25 20% 15%;
-  --popover-border: 30 15% 88%;
+  --popover-foreground: 30 15% 20%;
+  --popover-border: 35 15% 85%;
   
-  /* Primary - Warm Brown/Terracotta (matches header from reference) */
-  --primary: 25 35% 45%;
+  /* Primary - Muddy Olive Green */
+  --primary: 45 25% 42%;
   --primary-foreground: 0 0% 100%;
   
   /* Secondary - Light warm gray */
-  --secondary: 30 15% 93%;
-  --secondary-foreground: 25 20% 25%;
+  --secondary: 40 15% 93%;
+  --secondary-foreground: 30 15% 25%;
   
   /* Muted - Subtle warm gray */
-  --muted: 30 12% 94%;
-  --muted-foreground: 25 15% 45%;
+  --muted: 40 12% 94%;
+  --muted-foreground: 30 12% 45%;
   
-  /* Accent - Warm Brown (matches platform theme for selected items) */
-  --accent: 30 25% 90%;
-  --accent-foreground: 25 20% 15%;
+  /* Accent - Light olive tint */
+  --accent: 45 20% 90%;
+  --accent-foreground: 30 15% 20%;
   
   /* Destructive - Red (for HIGH priority, errors) */
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
   
   /* Input borders */
-  --input: 30 15% 75%;
+  --input: 35 15% 75%;
   
-  /* Focus ring - Warm Brown */
-  --ring: 25 35% 45%;
+  /* Focus ring - Olive */
+  --ring: 45 25% 42%;
   
   /* Chart colors - Legal platform palette */
-  --chart-1: 25 35% 45%;
+  --chart-1: 45 25% 42%;
   --chart-2: 142 71% 45%;
   --chart-3: 187 70% 45%;
   --chart-4: 45 93% 47%;

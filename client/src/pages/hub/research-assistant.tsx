@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -202,6 +203,7 @@ export default function ResearchAssistantPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-transparent">
           <div className="flex items-center gap-3 mb-4">
+            <BackButton />
             <div className="p-2.5 rounded-lg bg-primary/10 ring-1 ring-primary/20">
               <Search className="h-5 w-5 text-primary" />
             </div>

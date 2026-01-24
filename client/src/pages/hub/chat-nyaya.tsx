@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -235,11 +236,7 @@ export default function NyayaAIPage() {
     <div className="h-full flex flex-col">
       <div className="p-4 border-b flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link href="/hub">
-            <Button variant="ghost" size="icon" data-testid="button-back-hub">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <BackButton />
           <div className="p-2 rounded-md bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-500 shadow-sm shadow-amber-400/30">
             <Scale className="h-5 w-5 text-white" />
           </div>

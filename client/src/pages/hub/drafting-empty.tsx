@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { BackButton } from "@/components/back-button";
 import { PremiumEditor } from "@/components/premium-editor";
 import { ResearchSidebar } from "@/components/research-sidebar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -49,9 +50,13 @@ export default function EmptyDraftPage() {
   };
 
   return (
-    <div className="h-full flex">
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <PremiumEditor
+    <div className="h-full flex flex-col">
+      <div className="flex items-center gap-3 p-4 border-b">
+        <BackButton />
+      </div>
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <PremiumEditor
           title={draftTitle}
           onTitleChange={setDraftTitle}
           content={draftContent}
@@ -70,11 +75,12 @@ export default function EmptyDraftPage() {
             return data.content || "";
           }}
         />
+        </div>
+        <ResearchSidebar
+          isOpen={showResearchSidebar}
+          onAddToDocument={handleAddToDocument}
+        />
       </div>
-      <ResearchSidebar
-        isOpen={showResearchSidebar}
-        onAddToDocument={handleAddToDocument}
-      />
     </div>
   );
 }

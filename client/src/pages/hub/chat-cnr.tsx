@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BackButton } from "@/components/back-button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -141,6 +142,7 @@ export default function CNRChatPage() {
   return (
     <div className="p-6 h-full">
       <div className="flex items-center gap-3 mb-6">
+        <BackButton />
         <div className="p-2 rounded-md bg-primary/10">
           <Bot className="h-6 w-6 text-primary" data-testid="icon-cnr-bot" />
         </div>

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -725,11 +726,7 @@ export default function ChatWithPDFPage() {
     return (
       <div className="h-full flex flex-col">
         <div className="p-4 border-b flex items-center gap-4">
-          <Link href="/hub">
-            <Button variant="ghost" size="icon" data-testid="button-back-hub">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+          <BackButton />
           <div className="flex items-center gap-3 flex-1">
             <div className="p-2 rounded-md bg-primary/10">
               <FileText className="h-5 w-5 text-primary" />

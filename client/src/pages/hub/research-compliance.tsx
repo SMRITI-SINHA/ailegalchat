@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -265,6 +266,7 @@ export default function ComplianceChecklistPage() {
   return (
     <div className="h-full flex flex-col p-6 overflow-auto">
       <div className="flex items-center gap-3 mb-6">
+        <BackButton />
         <div className="p-2 rounded-md bg-primary/10">
           <ClipboardCheck className="h-5 w-5 text-primary" />
         </div>

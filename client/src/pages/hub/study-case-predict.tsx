@@ -1,12 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/back-button";
 import { Brain, Sparkles, TrendingUp, BarChart3, AlertTriangle, CheckCircle } from "lucide-react";
 
 export default function CasePredictPage() {
   return (
     <div className="h-full flex flex-col p-6 overflow-auto">
       <div className="flex items-center gap-3 mb-6">
+        <BackButton />
         <div className="p-2 rounded-md bg-primary/10">
           <Brain className="h-5 w-5 text-primary" />
         </div>
