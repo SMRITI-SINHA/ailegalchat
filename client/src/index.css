@@ -22,24 +22,24 @@
   --card-foreground: 30 15% 20%;
   --card-border: 35 15% 90%;
   
-  /* Sidebar - olive/muddy green */
-  --sidebar: 45 20% 50%;
+  /* Sidebar - warm tan/beige */
+  --sidebar: 35 30% 55%;
   --sidebar-foreground: 0 0% 98%;
-  --sidebar-border: 45 20% 42%;
-  --sidebar-primary: 45 35% 45%;
+  --sidebar-border: 35 25% 48%;
+  --sidebar-primary: 35 30% 52%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 45 20% 42%;
+  --sidebar-accent: 35 25% 48%;
   --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring: 45 35% 45%;
+  --sidebar-ring: 35 30% 52%;
   
   /* Popover */
   --popover: 0 0% 100%;
   --popover-foreground: 30 15% 20%;
   --popover-border: 35 15% 85%;
   
-  /* Primary - Muddy Olive Green */
-  --primary: 45 25% 42%;
-  --primary-foreground: 0 0% 100%;
+  /* Primary - Warm Tan/Beige (like the button in reference) */
+  --primary: 35 30% 55%;
+  --primary-foreground: 30 20% 20%;
   
   /* Secondary - Light warm gray */
   --secondary: 40 15% 93%;
@@ -49,8 +49,8 @@
   --muted: 40 12% 94%;
   --muted-foreground: 30 12% 45%;
   
-  /* Accent - Light olive tint */
-  --accent: 45 20% 90%;
+  /* Accent - Light tan tint */
+  --accent: 35 20% 90%;
   --accent-foreground: 30 15% 20%;
   
   /* Destructive - Red (for HIGH priority, errors) */
@@ -60,11 +60,11 @@
   /* Input borders */
   --input: 35 15% 75%;
   
-  /* Focus ring - Olive */
-  --ring: 45 25% 42%;
+  /* Focus ring - Tan */
+  --ring: 35 30% 55%;
   
   /* Chart colors - Legal platform palette */
-  --chart-1: 45 25% 42%;
+  --chart-1: 35 30% 55%;
   --chart-2: 142 71% 45%;
   --chart-3: 187 70% 45%;
   --chart-4: 45 93% 47%;
