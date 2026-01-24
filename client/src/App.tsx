@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,7 +7,6 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import NotFound from "@/pages/not-found";
-import LandingPage from "@/pages/landing";
 import HubPage from "@/pages/hub";
 import AIDraftingPage from "@/pages/hub/drafting-ai";
 import EmptyDraftPage from "@/pages/hub/drafting-empty";
@@ -49,15 +48,10 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 function Router() {
-  const [location] = useLocation();
-  
-  if (location === "/") {
-    return <LandingPage />;
-  }
-
   return (
     <AppLayout>
       <Switch>
+        <Route path="/" component={HubPage} />
         <Route path="/hub" component={HubPage} />
         <Route path="/hub/drafting/ai" component={AIDraftingPage} />
         <Route path="/hub/drafting/empty" component={EmptyDraftPage} />
