@@ -4,8 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
 import NotFound from "@/pages/not-found";
 import HubPage from "@/pages/hub";
 import AIDraftingPage from "@/pages/hub/drafting-ai";
@@ -22,28 +20,14 @@ import ResearchNotesPage from "@/pages/hub/research-notes";
 import CasePredictPage from "@/pages/hub/study-case-predict";
 import CounterArgsPage from "@/pages/hub/study-counter-args";
 import LegalSandboxPage from "@/pages/hub/study-sandbox";
-import LegalCalendarPage from "@/pages/hub/calendar";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
-  const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
-  };
-
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
-        <AppSidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center gap-4 p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-          </header>
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
+    <div className="flex flex-col h-screen w-full">
+      <main className="flex-1 overflow-auto">
+        {children}
+      </main>
+    </div>
   );
 }
 
@@ -67,7 +51,6 @@ function Router() {
         <Route path="/hub/study/case-predict" component={CasePredictPage} />
         <Route path="/hub/study/counter-args" component={CounterArgsPage} />
         <Route path="/hub/study/sandbox" component={LegalSandboxPage} />
-        <Route path="/hub/calendar" component={LegalCalendarPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
