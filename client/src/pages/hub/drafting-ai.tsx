@@ -316,7 +316,8 @@ export default function AIDraftingPage() {
   const handleOpenDraft = (draft: Draft) => {
     setSelectedDraftId(draft.id);
     setDraftTitle(draft.title || "Untitled Draft");
-    setDraftContent(draft.content || "");
+    // Convert markdown to HTML if needed - preserves existing HTML
+    setDraftContent(markdownToHtml(draft.content || ""));
     setViewMode("editor");
     setShowResearchSidebar(true);
   };
