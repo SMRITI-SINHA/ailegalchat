@@ -35,6 +35,7 @@ import {
   Trash2,
   X,
   Save,
+  Loader2,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
@@ -117,6 +118,7 @@ export default function ChatWithPDFPage() {
   
   const [showNyayaPromptDialog, setShowNyayaPromptDialog] = useState(false);
   const [pendingSelectedText, setPendingSelectedText] = useState("");
+  const [isStartingChat, setIsStartingChat] = useState(false);
   
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const nyayaMessagesEndRef = useRef<HTMLDivElement>(null);
@@ -529,18 +531,40 @@ export default function ChatWithPDFPage() {
     
     const documentIds = uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
     
-    const response = await apiRequest("POST", "/api/chat/sessions", {
-      title,
-      sessionType: "chatwithpdf",
-      documentIds,
-    });
-    const session = await response.json() as ChatSession;
+    // If no valid document IDs (all still temp), don't proceed
+    if (documentIds.length === 0) {
+      console.error("No valid document IDs - documents may still be uploading");
+      return;
+    }
     
-    setSessionDocumentIds(documentIds);
-    queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
-    setCurrentSessionId(session.id);
-    setShowUploadDialog(false);
-    setViewMode("chat");
+    setIsStartingChat(true);
+    
+    try {
+      const response = await apiRequest("POST", "/api/chat/sessions", {
+        title,
+        sessionType: "chatwithpdf",
+        documentIds,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Failed to create chat session:", errorText);
+        setIsStartingChat(false);
+        return;
+      }
+      
+      const session = await response.json() as ChatSession;
+      
+      setSessionDocumentIds(documentIds);
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
+      setCurrentSessionId(session.id);
+      setShowUploadDialog(false);
+      setViewMode("chat");
+    } catch (error) {
+      console.error("Error starting chat:", error);
+    } finally {
+      setIsStartingChat(false);
+    }
   };
 
   const currentDocs = uploadedDocs;
@@ -893,17 +917,26 @@ export default function ChatWithPDFPage() {
               )}
 
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" onClick={() => setShowUploadDialog(false)} className="flex-1 shrink-0">
+                <Button variant="outline" onClick={() => setShowUploadDialog(false)} className="flex-1 shrink-0" disabled={isStartingChat}>
                   Cancel
                 </Button>
                 <Button
                   onClick={handleStartChat}
-                  disabled={uploadedDocs.length === 0 || uploadedDocs.some(d => d.status === "processing")}
+                  disabled={uploadedDocs.length === 0 || uploadedDocs.some(d => d.status === "processing") || isStartingChat}
                   className="flex-1 shrink-0"
                   data-testid="button-start-chat"
                 >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Start Chat
+                  {isStartingChat ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Start Chat
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
