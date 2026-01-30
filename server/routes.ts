@@ -868,7 +868,7 @@ ${documentContext}`;
 
   app.post("/api/drafts/generate", async (req: Request, res: Response) => {
     try {
-      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle, documentTypeDetails } = req.body;
+      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle, documentTypeDetails, documentSubType } = req.body;
 
       if (!type || !facts) {
         return res.status(400).json({ error: "Type and facts are required" });
@@ -892,7 +892,9 @@ ${documentContext}`;
 
       const selectedLanguage = language || "English";
       const draftTitle = title || "Untitled Draft";
-      const tier = type === "brief" || type === "petition" ? "standard" : "mini";
+      // Use documentSubType for model tier selection when type is "custom"
+      const effectiveType = documentSubType || type;
+      const tier = effectiveType === "brief" || effectiveType === "petition" ? "standard" : "mini";
       const model = MODEL_TIERS[tier];
 
       const languageInstruction = selectedLanguage !== "English" 
@@ -964,7 +966,7 @@ Generate new content using the facts provided, but the OUTPUT STRUCTURE must MIR
         formatSystemOverride = `\n\nIMPORTANT FORMAT OVERRIDE: A format template has been provided. Your PRIMARY task is to generate content that EXACTLY matches the structure and formatting of this template. Do NOT use standard legal document formats - instead, replicate the specific format from the uploaded template.`;
       }
 
-      const prompt = `Generate a professional legal ${type} with the following details:
+      const prompt = `Generate a professional legal ${effectiveType} with the following details:
 
 Title: ${draftTitle}
 Parties: ${parties || "To be specified"}

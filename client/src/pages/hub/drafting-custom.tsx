@@ -156,7 +156,7 @@ export default function CustomDraftPage() {
       const documentTypeFullStr = getDocumentTypeString(documentTypeSelection);
       
       const response = await apiRequest("POST", "/api/drafts/generate", {
-        type: documentTypeStr || "custom",
+        type: "custom", // Always use "custom" type for custom drafting page
         title: draftTitle || documentTypeFullStr || "Custom Draft",
         facts: caseFacts,
         additionalPrompts,
@@ -164,6 +164,7 @@ export default function CustomDraftPage() {
         formatReference: uploadedFormat.name,
         formatHtml: extractedFormatHtml,
         documentTypeDetails: documentTypeSelection,
+        documentSubType: documentTypeStr, // Pass specific type for prompt context
       });
       const draft = await response.json();
       setDraftId(draft.id);
