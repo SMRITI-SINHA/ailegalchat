@@ -533,7 +533,7 @@ export default function AIDraftingPage() {
   const handleOpenDraftFromEditor = (draft: Draft) => {
     setSelectedDraftId(draft.id);
     setDraftTitle(draft.title || "Untitled Draft");
-    setDraftContent(draft.content || "");
+    setDraftContent(markdownToHtml(draft.content || ""));
     setCurrentLanguage((draft.language as IndianLanguage) || "English");
   };
 
@@ -1074,8 +1074,8 @@ export default function AIDraftingPage() {
   }
 
   return (
-    <div className="flex h-full">
-      <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex h-full min-h-0">
+      <div className="flex-1 flex flex-col min-h-0">
         <PremiumEditor
           title={draftTitle}
           onTitleChange={setDraftTitle}

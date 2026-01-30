@@ -44,6 +44,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { markdownToHtml } from "@/lib/utils";
 import type { IndianLanguage, Draft } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -182,7 +183,7 @@ export default function CustomDraftPage() {
   const handleOpenDraft = (draft: Draft) => {
     setDraftId(draft.id);
     setDraftTitle(draft.title);
-    setDraftContent(draft.content || "");
+    setDraftContent(markdownToHtml(draft.content || ""));
     setCurrentLanguage((draft.language as IndianLanguage) || "English");
     setViewMode("editor");
     setShowResearchSidebar(true);
@@ -191,7 +192,7 @@ export default function CustomDraftPage() {
   const handleOpenDraftFromEditor = (draft: Draft) => {
     setDraftId(draft.id);
     setDraftTitle(draft.title);
-    setDraftContent(draft.content || "");
+    setDraftContent(markdownToHtml(draft.content || ""));
     setCurrentLanguage((draft.language as IndianLanguage) || "English");
   };
 
@@ -513,8 +514,8 @@ export default function CustomDraftPage() {
   }
 
   return (
-    <div className="h-full flex">
-      <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="h-full flex min-h-0">
+      <div className="flex-1 flex flex-col min-h-0">
         <PremiumEditor
           title={draftTitle}
           onTitleChange={setDraftTitle}
