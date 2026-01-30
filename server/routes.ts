@@ -186,6 +186,75 @@ function textToLegalHtml(text: string): string {
   return htmlParts.join('\n');
 }
 
+// Extract formatting patterns from HTML to help AI understand document structure
+function extractFormatPatterns(html: string): string {
+  const patterns: string[] = [];
+  
+  // Detect heading styles
+  const h1Matches = html.match(/<h1[^>]*>([^<]+)<\/h1>/gi);
+  const h2Matches = html.match(/<h2[^>]*>([^<]+)<\/h2>/gi);
+  const h3Matches = html.match(/<h3[^>]*>([^<]+)<\/h3>/gi);
+  
+  if (h1Matches) patterns.push(`- Main Headings (H1): ${h1Matches.length} found. Example: "${h1Matches[0]?.replace(/<[^>]*>/g, '').substring(0, 50)}"`);
+  if (h2Matches) patterns.push(`- Section Headings (H2): ${h2Matches.length} found. Example: "${h2Matches[0]?.replace(/<[^>]*>/g, '').substring(0, 50)}"`);
+  if (h3Matches) patterns.push(`- Sub-section Headings (H3): ${h3Matches.length} found. Example: "${h3Matches[0]?.replace(/<[^>]*>/g, '').substring(0, 50)}"`);
+  
+  // Detect numbering patterns
+  const romanNumerals = html.match(/\b(I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)\.\s/g);
+  const arabicNumerals = html.match(/\b(\d+)\.\s+[A-Z]/g);
+  const letterNumbering = html.match(/\([a-z]\)/g);
+  const subClauseNumbering = html.match(/\(\d+\)/g);
+  
+  if (romanNumerals) patterns.push(`- Roman Numeral Sections: Yes (${romanNumerals.length} instances)`);
+  if (arabicNumerals) patterns.push(`- Arabic Numeral Sections: Yes (${arabicNumerals.length} instances)`);
+  if (letterNumbering) patterns.push(`- Letter Sub-clauses (a), (b), (c): Yes (${letterNumbering.length} instances)`);
+  if (subClauseNumbering) patterns.push(`- Numeric Sub-clauses (1), (2), (3): Yes (${subClauseNumbering.length} instances)`);
+  
+  // Detect legal terminology patterns
+  const whereas = html.match(/WHEREAS/gi);
+  const nowTherefore = html.match(/NOW\s+THEREFORE/gi);
+  const schedule = html.match(/SCHEDULE/gi);
+  const witnesseth = html.match(/WITNESSETH/gi);
+  const recitals = html.match(/RECITALS?/gi);
+  const definitions = html.match(/DEFINITION|INTERPRETATION/gi);
+  
+  if (whereas) patterns.push(`- "WHEREAS" clauses: ${whereas.length} instances`);
+  if (nowTherefore) patterns.push(`- "NOW THEREFORE" clause: Present`);
+  if (witnesseth) patterns.push(`- "WITNESSETH" clause: Present`);
+  if (recitals) patterns.push(`- Recitals section: Present`);
+  if (definitions) patterns.push(`- Definitions/Interpretation section: Present`);
+  if (schedule) patterns.push(`- Schedule sections: ${schedule.length} instances`);
+  
+  // Detect list structures
+  const orderedLists = html.match(/<ol[^>]*>/gi);
+  const unorderedLists = html.match(/<ul[^>]*>/gi);
+  const tables = html.match(/<table[^>]*>/gi);
+  
+  if (orderedLists) patterns.push(`- Ordered Lists: ${orderedLists.length} found`);
+  if (unorderedLists) patterns.push(`- Bullet Lists: ${unorderedLists.length} found`);
+  if (tables) patterns.push(`- Tables: ${tables.length} found`);
+  
+  // Detect paragraph count and structure
+  const paragraphs = html.match(/<p[^>]*>/gi);
+  if (paragraphs) patterns.push(`- Paragraphs: ${paragraphs.length} found`);
+  
+  // Detect strong/emphasis patterns
+  const boldText = html.match(/<strong[^>]*>([^<]+)<\/strong>/gi);
+  if (boldText) patterns.push(`- Bold/Strong text: ${boldText.length} instances for emphasis`);
+  
+  // Extract first few section headers to show structure
+  const allHeadings = html.match(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/gi) || [];
+  if (allHeadings.length > 0) {
+    patterns.push(`\nDOCUMENT SECTION STRUCTURE:`);
+    allHeadings.slice(0, 10).forEach((heading, idx) => {
+      const text = heading.replace(/<[^>]*>/g, '').trim();
+      patterns.push(`  ${idx + 1}. ${text}`);
+    });
+  }
+  
+  return patterns.length > 0 ? patterns.join('\n') : "Standard document format detected.";
+}
+
 async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: string; html: string }> {
   const mimeType = file.mimetype.toLowerCase();
   const fileName = file.originalname.toLowerCase();
@@ -865,23 +934,34 @@ ${documentContext}`;
 
       // One-time format template from uploaded file (custom drafts)
       let formatTemplateContext = "";
+      let formatSystemOverride = "";
       if (formatHtml) {
-        formatTemplateContext = `\n\nFORMAT TEMPLATE (ONE-TIME REFERENCE):
-The user has uploaded a format template document. Match the EXACT structure, formatting, and style from this template. Do NOT copy the content - only the format and structure.
+        // Parse the HTML structure to identify formatting patterns
+        const structurePatterns = extractFormatPatterns(formatHtml);
+        
+        formatTemplateContext = `\n\n*** CRITICAL: FORMAT TEMPLATE OVERRIDE ***
+The user has uploaded a format template document. You MUST replicate the EXACT structure and formatting from this template. This takes PRIORITY over all other formatting instructions.
 
-Pay special attention to:
-- Document layout and section ordering
-- Numbering systems (Roman numerals, decimals, letters)
-- Heading styles and hierarchy
-- Clause formatting and indentation
-- Legal terminology patterns
-- Spacing and structure
+EXTRACTED FORMAT PATTERNS:
+${structurePatterns}
 
-=== FORMAT TEMPLATE STRUCTURE ===
-${formatHtml.substring(0, 3000)}
+FULL TEMPLATE STRUCTURE FOR REFERENCE:
+=== FORMAT TEMPLATE HTML ===
+${formatHtml.substring(0, 4000)}
 ===
 
-Generate new content using the facts provided, but formatted EXACTLY like the template above.`;
+MANDATORY FORMAT REQUIREMENTS:
+1. Use the SAME section numbering system as the template (Roman numerals, Arabic numerals, letters, or hybrid)
+2. Match the EXACT heading hierarchy and capitalization style
+3. Replicate the paragraph structure and indentation patterns
+4. Follow the same clause/sub-clause nesting format
+5. Use identical terminology patterns (e.g., "WHEREAS", "NOW THEREFORE", etc.)
+6. Match spacing between sections
+7. Replicate any tables, lists, or special formatting
+
+Generate new content using the facts provided, but the OUTPUT STRUCTURE must MIRROR the template EXACTLY.`;
+
+        formatSystemOverride = `\n\nIMPORTANT FORMAT OVERRIDE: A format template has been provided. Your PRIMARY task is to generate content that EXACTLY matches the structure and formatting of this template. Do NOT use standard legal document formats - instead, replicate the specific format from the uploaded template.`;
       }
 
       const prompt = `Generate a professional legal ${type} with the following details:
@@ -1037,9 +1117,14 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
       // Combine research context into prompt
       const researchContext = indianKanoonContext + perplexityRiskContext;
       
-      const systemPrompt = selectedLanguage !== "English"
+      let systemPrompt = selectedLanguage !== "English"
         ? `${expertDraftingPrompt}\n\nCRITICAL LANGUAGE REQUIREMENT: You are completely fluent in ${selectedLanguage} and must generate the ENTIRE document in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations (like "AIR 2023 SC 456"), or official statute names. All section headings, content, and legal arguments must be in ${selectedLanguage}.`
         : expertDraftingPrompt;
+      
+      // Add format override to system prompt if a format template was provided
+      if (formatSystemOverride) {
+        systemPrompt += formatSystemOverride;
+      }
 
       const response = await openai.chat.completions.create({
         model,
