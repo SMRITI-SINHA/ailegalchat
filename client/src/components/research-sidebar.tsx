@@ -228,8 +228,8 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
           <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="research" className="flex-1 p-4 mt-0 overflow-hidden relative" data-state={activeTab === "research" ? "active" : "inactive"}>
-          <div className="absolute inset-0 p-4 flex flex-col">
+        <TabsContent value="research" className="flex-1 flex flex-col p-4 mt-0 min-h-0" data-state={activeTab === "research" ? "active" : "inactive"}>
+          <div className="flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <Switch
@@ -269,7 +269,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
               </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto min-h-0">
             {(searchMutation.isPending || advancedSearchMutation.isPending) ? (
               <div className="space-y-3">
                 <Skeleton className="h-20 w-full" />
