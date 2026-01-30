@@ -420,10 +420,10 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
                   </div>
                 ) : (
                   filteredResults.map((result) => (
-                    <div key={result.tid} className="p-3 border rounded-md bg-background overflow-hidden">
+                    <div key={result.tid} className="p-3 border rounded-md bg-background">
                       <h4 className="font-medium text-sm break-words" title={stripHtmlTags(result.title)}>{stripHtmlTags(result.title)}</h4>
                       {result.headline && (
-                        <p className="text-xs text-muted-foreground mt-1 break-words line-clamp-4">
+                        <p className="text-xs text-muted-foreground mt-1 break-words whitespace-pre-wrap">
                           {stripHtmlTags(result.headline)}
                         </p>
                       )}
