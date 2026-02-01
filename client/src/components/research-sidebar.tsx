@@ -221,7 +221,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
   if (!isOpen) return null;
 
   return (
-    <div className="w-[400px] min-w-[360px] flex flex-col bg-muted/30 border-l h-full">
+    <div className="w-[400px] min-w-[360px] flex flex-col bg-muted/30 border-l h-full" style={{height:"100rem"}}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
         <TabsList className="w-full justify-start rounded-none border-b px-4 h-10 shrink-0">
           <TabsTrigger value="research" className="text-xs">AI Legal Research</TabsTrigger>
