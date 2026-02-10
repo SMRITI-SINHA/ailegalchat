@@ -33,6 +33,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import {
   Undo2,
   Redo2,
@@ -58,6 +59,15 @@ import {
   Edit3,
   Languages,
   Sparkles,
+  Wand2,
+  X,
+  Check,
+  Minimize2,
+  MessageSquare,
+  Zap,
+  Scale,
+  Gavel,
+  PenLine,
 } from "lucide-react";
 import { indianLanguages, type IndianLanguage } from "@shared/schema";
 import type { Draft } from "@shared/schema";
@@ -141,6 +151,18 @@ export function PremiumEditor({
   const contentEditableRef = useRef<HTMLDivElement>(null);
   const isInternalUpdate = useRef(false);
   const savedSelectionRef = useRef<Range | null>(null);
+
+  const [showRefineButton, setShowRefineButton] = useState(false);
+  const [refineButtonPos, setRefineButtonPos] = useState({ top: 0, left: 0 });
+  const [selectedText, setSelectedText] = useState("");
+  const [selectedRange, setSelectedRange] = useState<Range | null>(null);
+  const [showRefinePanel, setShowRefinePanel] = useState(false);
+  const [refinedText, setRefinedText] = useState("");
+  const [refineNote, setRefineNote] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
+  const [refineAction, setRefineAction] = useState<string>("");
+  const [customRefinePrompt, setCustomRefinePrompt] = useState("");
+  const refineButtonRef = useRef<HTMLDivElement>(null);
 
   const saveSelection = () => {
     const selection = window.getSelection();
@@ -271,6 +293,117 @@ export function PremiumEditor({
     setShowAiDialog(true);
   }, []);
 
+  const handleTextSelection = useCallback(() => {
+    if (showRefinePanel) return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !contentEditableRef.current) {
+      setShowRefineButton(false);
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    if (!contentEditableRef.current.contains(range.commonAncestorContainer)) {
+      setShowRefineButton(false);
+      return;
+    }
+    const text = selection.toString().trim();
+    if (text.length < 3) {
+      setShowRefineButton(false);
+      return;
+    }
+    setSelectedText(text);
+    setSelectedRange(range.cloneRange());
+
+    const rect = range.getBoundingClientRect();
+    const editorRect = editorRef.current?.getBoundingClientRect();
+    if (editorRect) {
+      const scale = zoom / 100;
+      setRefineButtonPos({
+        top: (rect.top - editorRect.top) / scale - 36,
+        left: (rect.left - editorRect.left + rect.width / 2) / scale,
+      });
+    }
+    setShowRefineButton(true);
+  }, [showRefinePanel, zoom]);
+
+  const handleRefine = async (action: string, customPrompt?: string) => {
+    if (!selectedText) return;
+    setIsRefining(true);
+    setRefineAction(action);
+    setRefinedText("");
+    setRefineNote("");
+    setShowRefinePanel(true);
+    setShowRefineButton(false);
+
+    try {
+      const response = await fetch("/api/refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: selectedText,
+          action,
+          customPrompt,
+        }),
+      });
+      if (!response.ok) throw new Error("Refine failed");
+      const data = await response.json();
+      setRefinedText(data.refined || "");
+      setRefineNote(data.note || "");
+    } catch (error) {
+      console.error("Refine error:", error);
+      setRefinedText("");
+      setRefineNote("Failed to refine. Please try again.");
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  const handleApplyRefine = () => {
+    if (!refinedText || !selectedRange || !contentEditableRef.current) return;
+
+    try {
+      if (!contentEditableRef.current.contains(selectedRange.startContainer) ||
+          !contentEditableRef.current.contains(selectedRange.endContainer)) {
+        console.error("Selected range is no longer valid in the editor");
+        return;
+      }
+
+      selectedRange.deleteContents();
+
+      const lines = refinedText.split('\n').filter(l => l.length > 0);
+      const fragment = document.createDocumentFragment();
+      if (lines.length <= 1) {
+        fragment.appendChild(document.createTextNode(refinedText));
+      } else {
+        lines.forEach((line, i) => {
+          const p = document.createElement('p');
+          p.textContent = line;
+          fragment.appendChild(p);
+        });
+      }
+      selectedRange.insertNode(fragment);
+
+      isInternalUpdate.current = true;
+      onContentChange(contentEditableRef.current.innerHTML || "");
+    } catch (error) {
+      console.error("Error applying refined text:", error);
+    }
+
+    setShowRefinePanel(false);
+    setRefinedText("");
+    setRefineNote("");
+    setSelectedText("");
+    setSelectedRange(null);
+  };
+
+  const handleDiscardRefine = () => {
+    setShowRefinePanel(false);
+    setRefinedText("");
+    setRefineNote("");
+    setSelectedText("");
+    setSelectedRange(null);
+    setCustomRefinePrompt("");
+  };
+
   useEffect(() => {
     setSelectedLanguage(currentLanguage);
   }, [currentLanguage]);
@@ -313,6 +446,14 @@ export function PremiumEditor({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    const onMouseUp = () => {
+      setTimeout(handleTextSelection, 10);
+    };
+    document.addEventListener("mouseup", onMouseUp);
+    return () => document.removeEventListener("mouseup", onMouseUp);
+  }, [handleTextSelection]);
 
   const canTranslate = selectedLanguage !== currentLanguage && onTranslate;
 
@@ -921,11 +1062,11 @@ export function PremiumEditor({
       </div>
 
       <div className="flex-1 overflow-auto bg-muted/20">
-        <div className="flex">
+        <div className="flex h-full">
           <div className="flex-1 flex justify-center py-8 px-4">
             <div
               ref={editorRef}
-              className="bg-background shadow-lg border min-h-[800px] w-full max-w-[816px] p-16 cursor-text"
+              className="bg-background shadow-lg border min-h-[800px] w-full max-w-[816px] p-16 cursor-text relative"
               style={{
                 fontFamily: fontFamily,
                 fontSize: `${fontSize}pt`,
@@ -934,6 +1075,36 @@ export function PremiumEditor({
               }}
               onClick={handleEditorClick}
             >
+              {showRefineButton && !showRefinePanel && (
+                <div
+                  ref={refineButtonRef}
+                  className="absolute z-50"
+                  style={{
+                    top: `${refineButtonPos.top}px`,
+                    left: `${refineButtonPos.left}px`,
+                    transform: 'translateX(-50%)',
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs shadow-md"
+                        onClick={() => handleRefine("default")}
+                        data-testid="button-refine-hover"
+                      >
+                        <Wand2 className="h-3.5 w-3.5" />
+                        Refine
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Improve clarity, tone, and legal precision without changing meaning
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+
               {showPlaceholder && (
                 <div 
                   className="flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-muted-foreground/80 transition-colors"
@@ -975,16 +1146,13 @@ export function PremiumEditor({
                       }
                       
                       if (headingEl && headingEl.parentNode) {
-                        // Create new paragraph with text node for reliable cursor placement
                         const p = document.createElement('p');
-                        const textNode = document.createTextNode('\u200B'); // zero-width space
+                        const textNode = document.createTextNode('\u200B');
                         p.appendChild(textNode);
                         headingEl.parentNode.insertBefore(p, headingEl.nextSibling);
                         
-                        // Force focus on editor before setting selection
                         contentEditableRef.current.focus();
                         
-                        // Delay selection to next frame for DOM stability
                         requestAnimationFrame(() => {
                           const newRange = document.createRange();
                           newRange.setStart(textNode, 1);
@@ -992,7 +1160,6 @@ export function PremiumEditor({
                           selection.removeAllRanges();
                           selection.addRange(newRange);
                           
-                          // Update state after selection is set
                           setHeadingStyle('');
                           isInternalUpdate.current = true;
                           if (contentEditableRef.current) {
@@ -1025,6 +1192,162 @@ export function PremiumEditor({
               />
             </div>
           </div>
+
+          {showRefinePanel && (
+            <div className="w-[360px] min-w-[320px] border-l bg-background flex flex-col shrink-0" data-testid="refine-panel">
+              <div className="flex items-center gap-2 justify-between px-4 py-3 border-b bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <Wand2 className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">Refine</span>
+                </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDiscardRefine} data-testid="button-refine-close">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="px-4 py-3 border-b shrink-0">
+                <p className="text-xs text-muted-foreground mb-2">Quick actions</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`text-xs gap-1 ${refineAction === "concise" ? "border-primary" : ""}`}
+                    onClick={() => handleRefine("concise")}
+                    disabled={isRefining}
+                    data-testid="refine-action-concise"
+                  >
+                    <Minimize2 className="h-3 w-3" />
+                    Make more concise
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`text-xs gap-1 ${refineAction === "formal" ? "border-primary" : ""}`}
+                    onClick={() => handleRefine("formal")}
+                    disabled={isRefining}
+                    data-testid="refine-action-formal"
+                  >
+                    <Scale className="h-3 w-3" />
+                    Make more formal
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`text-xs gap-1 ${refineAction === "persuasive" ? "border-primary" : ""}`}
+                    onClick={() => handleRefine("persuasive")}
+                    disabled={isRefining}
+                    data-testid="refine-action-persuasive"
+                  >
+                    <Zap className="h-3 w-3" />
+                    Make more persuasive
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`text-xs gap-1 ${refineAction === "judicial" ? "border-primary" : ""}`}
+                    onClick={() => handleRefine("judicial")}
+                    disabled={isRefining}
+                    data-testid="refine-action-judicial"
+                  >
+                    <Gavel className="h-3 w-3" />
+                    Judicial tone
+                  </Button>
+                </div>
+              </div>
+
+              <div className="px-4 py-3 border-b shrink-0">
+                <p className="text-xs text-muted-foreground mb-2">Custom instruction</p>
+                <div className="flex gap-1.5">
+                  <Input
+                    value={customRefinePrompt}
+                    onChange={(e) => setCustomRefinePrompt(e.target.value)}
+                    placeholder="e.g., Simplify for a layperson..."
+                    className="text-xs h-8"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && customRefinePrompt.trim()) {
+                        handleRefine("custom", customRefinePrompt.trim());
+                      }
+                    }}
+                    data-testid="input-refine-custom"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0"
+                    onClick={() => {
+                      if (customRefinePrompt.trim()) {
+                        handleRefine("custom", customRefinePrompt.trim());
+                      }
+                    }}
+                    disabled={!customRefinePrompt.trim() || isRefining}
+                    data-testid="button-refine-custom-submit"
+                  >
+                    <PenLine className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="px-4 py-3 border-b shrink-0">
+                <p className="text-xs text-muted-foreground mb-1.5">Original text</p>
+                <div className="bg-muted/50 rounded-md p-3 max-h-[120px] overflow-auto">
+                  <p className="text-xs leading-relaxed whitespace-pre-wrap">{selectedText}</p>
+                </div>
+              </div>
+
+              <div className="flex-1 px-4 py-3 overflow-auto min-h-0">
+                <p className="text-xs text-muted-foreground mb-1.5">Refined version</p>
+                {isRefining ? (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <p className="text-xs text-muted-foreground">Refining your text...</p>
+                  </div>
+                ) : refinedText ? (
+                  <div className="space-y-3">
+                    <Textarea
+                      value={refinedText}
+                      onChange={(e) => setRefinedText(e.target.value)}
+                      className="text-xs leading-relaxed min-h-[150px] resize-none bg-primary/5 border-primary/20"
+                      data-testid="textarea-refined-text"
+                    />
+                    {refineNote && (
+                      <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-md">
+                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                        <p className="text-xs text-muted-foreground leading-relaxed">{refineNote}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
+                    <Wand2 className="h-5 w-5 text-muted-foreground/50" />
+                    <p className="text-xs text-muted-foreground">
+                      Choose a quick action or write a custom instruction to refine the selected text.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {refinedText && !isRefining && (
+                <div className="flex gap-2 px-4 py-3 border-t shrink-0">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={handleDiscardRefine}
+                    data-testid="button-refine-discard"
+                  >
+                    <X className="h-4 w-4 mr-1.5" />
+                    Discard
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleApplyRefine}
+                    data-testid="button-refine-apply"
+                  >
+                    <Check className="h-4 w-4 mr-1.5" />
+                    Apply
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

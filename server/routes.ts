@@ -2231,5 +2231,90 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
     }
   });
 
+  app.post("/api/refine", async (req: Request, res: Response) => {
+    try {
+      const { text, action, customPrompt } = req.body;
+
+      if (!text) {
+        return res.status(400).json({ error: "Text is required" });
+      }
+
+      let refinementInstruction = "";
+      switch (action) {
+        case "concise":
+          refinementInstruction = "Make the text more concise while preserving all legal meaning. Remove redundancy and tighten the language.";
+          break;
+        case "formal":
+          refinementInstruction = "Make the text more formal and professional. Use elevated legal register appropriate for court filings.";
+          break;
+        case "persuasive":
+          refinementInstruction = "Make the text more persuasive and compelling while maintaining legal accuracy. Strengthen the argumentation.";
+          break;
+        case "judicial":
+          refinementInstruction = "Rewrite the text in a judicial tone, as if written by a judge in a court order or judgment. Use measured, authoritative language.";
+          break;
+        case "custom":
+          refinementInstruction = customPrompt || "Improve clarity and legal precision.";
+          break;
+        default:
+          refinementInstruction = "Improve clarity, structure, and professional tone.";
+      }
+
+      const systemPrompt = `You are a senior Indian legal drafting assistant.
+
+Task:
+Refine the selected text provided by the user.
+
+Rules:
+- Do not change legal meaning.
+- Improve clarity, structure, and professional tone.
+- Use formal, court-appropriate Indian legal language.
+- Do not add new facts or law.
+- Do not hallucinate statutes or cases.
+- Preserve the original document structure, headings, and sequence if the text is a full document.
+- Do not use markdown formatting - output clean text without ** symbols or # headers.
+
+Specific refinement instruction: ${refinementInstruction}
+
+Output format:
+Return ONLY a JSON object with exactly these two fields:
+{
+  "refined": "The refined version of the text here",
+  "note": "Brief 1-2 line note explaining the improvement"
+}
+
+Do not include any other text outside the JSON object.`;
+
+      const response = await openai.chat.completions.create({
+        model: MODEL_TIERS.mini,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: text },
+        ],
+        temperature: 0.3,
+      });
+
+      const raw = response.choices[0]?.message?.content || "";
+
+      try {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return res.json({
+            refined: parsed.refined || raw,
+            note: parsed.note || "",
+          });
+        }
+      } catch {
+        // If JSON parsing fails, return raw text
+      }
+
+      res.json({ refined: raw, note: "" });
+    } catch (error) {
+      console.error("Error refining text:", error);
+      res.status(500).json({ error: "Failed to refine text" });
+    }
+  });
+
   return httpServer;
 }
