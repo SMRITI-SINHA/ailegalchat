@@ -19,6 +19,7 @@ import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
 import { trainingDataLoader } from "./training-data-loader";
+import { transcribeAudio as elevenLabsTranscribe, getUncachableElevenLabsClient, DEFAULT_VOICE_ID, TTS_MODEL } from "./elevenlabs";
 
 function decodeFilename(rawName: string): string {
   try {
@@ -2313,6 +2314,46 @@ Do not include any other text outside the JSON object.`;
     } catch (error) {
       console.error("Error refining text:", error);
       res.status(500).json({ error: "Failed to refine text" });
+    }
+  });
+
+  app.post("/api/voice/transcribe", upload.single("audio"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No audio file provided" });
+      }
+      const text = await elevenLabsTranscribe(req.file.buffer, req.file.originalname || "recording.webm");
+      res.json({ text });
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      res.status(500).json({ error: "Failed to transcribe audio" });
+    }
+  });
+
+  app.post("/api/voice/speak", async (req: Request, res: Response) => {
+    try {
+      const { text, voiceId } = req.body;
+      if (!text) {
+        return res.status(400).json({ error: "Text is required" });
+      }
+
+      const client = await getUncachableElevenLabsClient();
+      const audioStream = await client.textToSpeech.convert(voiceId || DEFAULT_VOICE_ID, {
+        text: text.substring(0, 5000),
+        model_id: TTS_MODEL,
+        output_format: "mp3_44100_128",
+      });
+
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Transfer-Encoding", "chunked");
+
+      for await (const chunk of audioStream) {
+        res.write(chunk);
+      }
+      res.end();
+    } catch (error) {
+      console.error("Error generating speech:", error);
+      res.status(500).json({ error: "Failed to generate speech" });
     }
   });
 

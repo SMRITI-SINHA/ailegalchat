@@ -17,6 +17,7 @@ import {
 import { ConfidenceIndicator } from "@/components/confidence-indicator";
 import { CitationCard } from "@/components/citation-card";
 import { StreamingIndicator } from "@/components/streaming-text";
+import { VoiceAssistant } from "@/components/voice-assistant";
 import {
   Scale,
   Send,
@@ -27,6 +28,7 @@ import {
   Clock,
   Trash2,
   ArrowLeft,
+  Mic,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
@@ -56,6 +58,7 @@ export default function NyayaAIPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [voiceMode, setVoiceMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery<ChatSession[]>({
@@ -249,6 +252,15 @@ export default function NyayaAIPage() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setVoiceMode(true)}
+            data-testid="button-enable-voice"
+          >
+            <Mic className="h-4 w-4 mr-2" />
+            Enable Voice Assistant Mode
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setShowHistoryDialog(true)}
             data-testid="button-history"
           >
@@ -258,6 +270,10 @@ export default function NyayaAIPage() {
         </div>
       </div>
 
+      {voiceMode ? (
+        <VoiceAssistant onClose={() => setVoiceMode(false)} />
+      ) : (
+      <>
       <div className="flex-1 flex overflow-hidden">
         <ScrollArea className="flex-1 p-4">
           {messages.length === 0 ? (
@@ -364,6 +380,8 @@ export default function NyayaAIPage() {
           </Button>
         </div>
       </div>
+      </>
+      )}
 
       <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
         <DialogContent className="max-w-lg">
