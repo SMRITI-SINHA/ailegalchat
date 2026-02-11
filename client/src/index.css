@@ -198,203 +198,308 @@
     inset: -1px;
   }
 
-  /* Voice Assistant Styles */
+  /* Voice Assistant Styles - Premium Design */
   .voice-assistant-container {
     display: flex;
     flex-direction: column;
     height: 100%;
-    animation: voiceFadeIn 300ms ease-out;
+    animation: voiceFadeIn 400ms ease-out;
+    background: linear-gradient(145deg,
+      rgba(182, 157, 116, 0.12),
+      rgba(200, 170, 120, 0.08),
+      rgba(182, 157, 116, 0.06)
+    );
+    backdrop-filter: blur(20px);
   }
 
-  .voice-assistant-header {
+  .voice-header-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px;
-    border-bottom: 1px solid hsl(var(--border));
-    gap: 16px;
+    padding: 10px 16px;
+    background: rgba(40, 30, 20, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(182, 157, 116, 0.15);
+    gap: 12px;
   }
 
-  .voice-assistant-body {
+  .voice-header-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #c49a50, #a07830);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .voice-stop-btn {
+    font-size: 12px;
+  }
+
+  .voice-body {
     display: flex;
     flex: 1;
     overflow: hidden;
   }
 
-  .voice-left-panel {
-    width: 45%;
+  .voice-panel {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 32px;
-    background: linear-gradient(135deg, hsl(30 20% 10%), hsl(37 30% 15%), hsl(30 15% 12%));
     position: relative;
-    overflow: hidden;
   }
 
-  .voice-left-panel::before {
+  .voice-panel::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at 50% 40%, rgba(182, 157, 116, 0.08) 0%, transparent 70%);
+    background: linear-gradient(160deg,
+      rgba(182, 157, 116, 0.08) 0%,
+      rgba(200, 170, 120, 0.04) 50%,
+      rgba(160, 130, 90, 0.06) 100%
+    );
+    pointer-events: none;
   }
 
-  .voice-visual-area {
+  .voice-panel-left {
+    width: 45%;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: rgba(35, 28, 20, 0.65);
+    backdrop-filter: blur(30px);
+  }
+
+  .voice-panel-right {
+    width: 55%;
+    background: rgba(35, 28, 20, 0.55);
+    backdrop-filter: blur(30px);
+    border-left: 1px solid rgba(182, 157, 116, 0.1);
+  }
+
+  .voice-visual-center {
     position: relative;
     z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 280px;
+    min-height: 320px;
   }
 
-  .voice-controls {
+  .voice-action-area {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .voice-mic-button {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #c49a50, #a07830);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(182, 157, 116, 0.3), 0 0 40px rgba(182, 157, 116, 0.1);
+  }
+
+  .voice-mic-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 30px rgba(182, 157, 116, 0.5), 0 0 60px rgba(182, 157, 116, 0.2);
+  }
+
+  .voice-mic-active {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    box-shadow: 0 4px 20px rgba(220, 38, 38, 0.3), 0 0 40px rgba(220, 38, 38, 0.15);
+    animation: micPulse 1.5s ease-in-out infinite;
+  }
+
+  .voice-mic-active:hover {
+    box-shadow: 0 4px 30px rgba(220, 38, 38, 0.5), 0 0 60px rgba(220, 38, 38, 0.2);
+  }
+
+  .voice-mic-stop {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    box-shadow: 0 4px 20px rgba(220, 38, 38, 0.3);
+    width: 56px;
+    height: 56px;
+  }
+
+  .voice-processing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(222, 198, 155, 0.7);
+    font-size: 14px;
+  }
+
+  .voice-processing-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(182, 157, 116, 0.2);
+    border-top-color: rgba(222, 198, 155, 0.8);
+    border-radius: 50%;
+    animation: spinnerRotate 0.8s linear infinite;
+  }
+
+  .voice-error {
+    position: relative;
+    z-index: 1;
+    color: #f87171;
+    font-size: 12px;
+    text-align: center;
+    padding: 0 24px;
+    max-width: 280px;
+  }
+
+  .voice-transcript-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(182, 157, 116, 0.1);
+    color: rgba(222, 198, 155, 0.6);
+    font-size: 13px;
+    font-weight: 500;
     position: relative;
     z-index: 1;
   }
 
-  .voice-right-panel {
-    width: 55%;
+  .voice-empty-state {
     display: flex;
     flex-direction: column;
-    border-left: 1px solid hsl(var(--border));
-    overflow: hidden;
-  }
-
-  .voice-right-header {
-    padding: 12px 16px;
-    border-bottom: 1px solid hsl(var(--border));
-  }
-
-  /* Glowing Orb */
-  .voice-orb-core {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%,
-      rgba(255, 223, 160, 0.9),
-      rgba(182, 157, 116, 0.8) 40%,
-      rgba(140, 110, 70, 0.7) 70%,
-      rgba(100, 75, 45, 0.6)
-    );
-    transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
-    animation: orbFloat 4s ease-in-out infinite;
-  }
-
-  .voice-orb-ring {
-    position: absolute;
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    border: 2px solid rgba(182, 157, 116, 0.3);
-    transition: transform 0.15s ease-out, opacity 0.15s ease-out;
-  }
-
-  .voice-orb-ring-1 {
-    animation: orbRingPulse 3s ease-in-out infinite;
-  }
-
-  .voice-orb-ring-2 {
-    animation: orbRingPulse 3s ease-in-out infinite 0.5s;
-  }
-
-  .voice-orb-ring-3 {
-    animation: orbRingPulse 3s ease-in-out infinite 1s;
-  }
-
-  /* Robot Avatar */
-  .voice-robot-container {
-    position: relative;
-    width: 220px;
-    height: 260px;
-    display: flex;
     align-items: center;
     justify-content: center;
-  }
-
-  .voice-robot-image {
-    width: 200px;
-    height: auto;
-    object-fit: contain;
-    filter: drop-shadow(0 8px 24px rgba(182, 157, 116, 0.3));
-    animation: robotFloat 3s ease-in-out infinite;
+    padding: 48px 24px;
+    text-align: center;
+    gap: 12px;
     position: relative;
     z-index: 1;
   }
 
-  .voice-robot-glow {
-    position: absolute;
-    width: 180px;
-    height: 180px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(182, 157, 116, 0.25) 0%, transparent 70%);
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    z-index: 0;
+  .voice-empty-state h3 {
+    color: rgba(222, 198, 155, 0.8);
+    font-size: 16px;
+    font-weight: 600;
   }
 
-  .voice-activity-bar {
-    width: 6px;
-    min-height: 6px;
-    border-radius: 3px;
-    background: linear-gradient(to top, rgba(182, 157, 116, 0.6), rgba(255, 200, 120, 0.9));
-    transition: height 0.1s ease-out;
+  .voice-empty-state p {
+    color: rgba(222, 198, 155, 0.4);
+    font-size: 13px;
+    max-width: 280px;
+    line-height: 1.5;
   }
 
-  /* Processing dots */
-  .voice-processing-dots {
+  .voice-msg {
+    position: relative;
+    z-index: 1;
+    padding: 10px 14px;
+    border-radius: 8px;
+    animation: msgFadeIn 0.3s ease-out;
+  }
+
+  .voice-msg-user {
+    background: rgba(182, 157, 116, 0.15);
+    border: 1px solid rgba(182, 157, 116, 0.12);
+    color: rgba(255, 245, 230, 0.9);
+    margin-left: 24px;
+    font-size: 14px;
+  }
+
+  .voice-msg-ai {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 245, 230, 0.8);
+  }
+
+  .voice-msg-label {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    color: rgba(222, 198, 155, 0.6);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
-  .voice-processing-dots span {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: hsl(var(--primary));
-    animation: dotBounce 1.2s ease-in-out infinite;
+  /* Animated Orb Canvas */
+  .voice-orb-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
   }
 
-  .voice-processing-dots span:nth-child(2) {
-    animation-delay: 0.2s;
+  .voice-orb-canvas {
+    display: block;
   }
 
-  .voice-processing-dots span:nth-child(3) {
-    animation-delay: 0.4s;
+  .voice-orb-status {
+    color: rgba(222, 198, 155, 0.5);
+    font-size: 13px;
+    text-align: center;
   }
 
-  .voice-response-text {
-    animation: textFadeIn 0.3s ease-out;
+  /* 3D Avatar */
+  .voice-avatar-3d-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .voice-avatar-3d-scene {
+    width: 240px;
+    height: 320px;
+    perspective: 800px;
+    transition: transform 0.05s linear;
+  }
+
+  .voice-avatar-svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 8px 30px rgba(182, 157, 116, 0.25));
+  }
+
+  .voice-speaking-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 40px;
+  }
+
+  .voice-speak-bar {
+    width: 5px;
+    min-height: 4px;
+    border-radius: 2.5px;
+    background: linear-gradient(to top, rgba(182, 157, 116, 0.5), rgba(232, 168, 85, 0.8));
+    transition: height 0.08s ease-out;
   }
 
   @keyframes voiceFadeIn {
-    from { opacity: 0; transform: scale(0.98); }
-    to { opacity: 1; transform: scale(1); }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
-  @keyframes orbFloat {
-    0%, 100% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-12px) scale(1.02); }
+  @keyframes micPulse {
+    0%, 100% { box-shadow: 0 4px 20px rgba(220, 38, 38, 0.3), 0 0 40px rgba(220, 38, 38, 0.15); }
+    50% { box-shadow: 0 4px 30px rgba(220, 38, 38, 0.5), 0 0 60px rgba(220, 38, 38, 0.3); }
   }
 
-  @keyframes orbRingPulse {
-    0%, 100% { opacity: 0.15; }
-    50% { opacity: 0.3; }
+  @keyframes spinnerRotate {
+    to { transform: rotate(360deg); }
   }
 
-  @keyframes robotFloat {
-    0%, 100% { transform: translateY(0) rotate(-1deg); }
-    33% { transform: translateY(-8px) rotate(1deg); }
-    66% { transform: translateY(-4px) rotate(0deg); }
-  }
-
-  @keyframes dotBounce {
-    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-    40% { transform: scale(1); opacity: 1; }
-  }
-
-  @keyframes textFadeIn {
-    from { opacity: 0; transform: translateY(4px); }
+  @keyframes msgFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
