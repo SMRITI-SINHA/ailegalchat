@@ -14,7 +14,7 @@ async function getPDFParseClass() {
   return PDFParseClass;
 }
 import { storage } from "./storage";
-import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema } from "@shared/schema";
+import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema } from "@shared/schema";
 import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
@@ -2024,6 +2024,44 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
     } catch (error) {
       console.error("Error deleting CNR note:", error);
       res.status(500).json({ error: "Failed to delete CNR note" });
+    }
+  });
+
+  app.get("/api/cnr/saved-cases", async (req: Request, res: Response) => {
+    try {
+      const cases = await storage.getSavedCases();
+      res.json(cases);
+    } catch (error) {
+      console.error("Error fetching saved cases:", error);
+      res.status(500).json({ error: "Failed to fetch saved cases" });
+    }
+  });
+
+  app.post("/api/cnr/saved-cases", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertSavedCaseSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const existing = await storage.getSavedCaseByCnr(parsed.data.cnrNumber);
+      if (existing) {
+        return res.status(409).json({ error: "Case already saved", existingCase: existing });
+      }
+      const savedCase = await storage.createSavedCase(parsed.data);
+      res.status(201).json(savedCase);
+    } catch (error) {
+      console.error("Error saving case:", error);
+      res.status(500).json({ error: "Failed to save case" });
+    }
+  });
+
+  app.delete("/api/cnr/saved-cases/:id", async (req: Request, res: Response) => {
+    try {
+      await storage.deleteSavedCase(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting saved case:", error);
+      res.status(500).json({ error: "Failed to delete saved case" });
     }
   });
 

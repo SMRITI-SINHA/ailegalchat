@@ -23,6 +23,8 @@ import type {
   InsertResearchNote,
   CnrNote,
   InsertCnrNote,
+  SavedCase,
+  InsertSavedCase,
   GoogleCalendarCredentials,
   InsertGoogleCalendarCredentials,
   CalendarEvent,
@@ -93,6 +95,12 @@ export interface IStorage {
   updateCnrNote(id: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined>;
   deleteCnrNote(id: string): Promise<void>;
 
+  getSavedCases(): Promise<SavedCase[]>;
+  getSavedCase(id: string): Promise<SavedCase | undefined>;
+  getSavedCaseByCnr(cnrNumber: string): Promise<SavedCase | undefined>;
+  createSavedCase(savedCase: InsertSavedCase): Promise<SavedCase>;
+  deleteSavedCase(id: string): Promise<void>;
+
   getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined>;
   createGoogleCalendarCredentials(creds: InsertGoogleCalendarCredentials): Promise<GoogleCalendarCredentials>;
   updateGoogleCalendarCredentials(userId: string, updates: Partial<GoogleCalendarCredentials>): Promise<GoogleCalendarCredentials | undefined>;
@@ -119,6 +127,7 @@ export class MemStorage implements IStorage {
   private researchQueries: Map<string, ResearchQuery>;
   private researchNotes: Map<string, ResearchNote>;
   private cnrNotes: Map<string, CnrNote>;
+  private savedCases: Map<string, SavedCase>;
   private googleCalendarCredentials: Map<string, GoogleCalendarCredentials>;
   private calendarEvents: Map<string, CalendarEvent>;
 
@@ -135,6 +144,7 @@ export class MemStorage implements IStorage {
     this.researchQueries = new Map();
     this.researchNotes = new Map();
     this.cnrNotes = new Map();
+    this.savedCases = new Map();
     this.googleCalendarCredentials = new Map();
     this.calendarEvents = new Map();
     this.seedData();
@@ -661,6 +671,42 @@ export class MemStorage implements IStorage {
 
   async deleteCnrNote(id: string): Promise<void> {
     this.cnrNotes.delete(id);
+  }
+
+  async getSavedCases(): Promise<SavedCase[]> {
+    return Array.from(this.savedCases.values()).sort(
+      (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
+    );
+  }
+
+  async getSavedCase(id: string): Promise<SavedCase | undefined> {
+    return this.savedCases.get(id);
+  }
+
+  async getSavedCaseByCnr(cnrNumber: string): Promise<SavedCase | undefined> {
+    return Array.from(this.savedCases.values()).find(
+      (c) => c.cnrNumber === cnrNumber
+    );
+  }
+
+  async createSavedCase(savedCase: InsertSavedCase): Promise<SavedCase> {
+    const id = randomUUID();
+    const newCase: SavedCase = {
+      id,
+      cnrNumber: savedCase.cnrNumber,
+      caseTitle: savedCase.caseTitle,
+      court: savedCase.court || null,
+      caseStatus: savedCase.caseStatus || null,
+      parties: savedCase.parties || null,
+      caseDetails: savedCase.caseDetails || null,
+      savedAt: new Date(),
+    };
+    this.savedCases.set(id, newCase);
+    return newCase;
+  }
+
+  async deleteSavedCase(id: string): Promise<void> {
+    this.savedCases.delete(id);
   }
 
   async getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined> {

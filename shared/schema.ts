@@ -356,6 +356,25 @@ export const insertCnrNoteSchema = createInsertSchema(cnrNotes).omit({
 export type InsertCnrNote = z.infer<typeof insertCnrNoteSchema>;
 export type CnrNote = typeof cnrNotes.$inferSelect;
 
+export const savedCases = pgTable("saved_cases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  cnrNumber: text("cnr_number").notNull(),
+  caseTitle: text("case_title").notNull(),
+  court: text("court"),
+  caseStatus: text("case_status"),
+  parties: text("parties"),
+  caseDetails: text("case_details"),
+  savedAt: timestamp("saved_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertSavedCaseSchema = createInsertSchema(savedCases).omit({
+  id: true,
+  savedAt: true,
+});
+
+export type InsertSavedCase = z.infer<typeof insertSavedCaseSchema>;
+export type SavedCase = typeof savedCases.$inferSelect;
+
 export const googleCalendarCredentials = pgTable("google_calendar_credentials", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
