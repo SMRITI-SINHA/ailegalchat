@@ -14,7 +14,9 @@ async function getPDFParseClass() {
   return PDFParseClass;
 }
 import { storage } from "./storage";
-import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema } from "@shared/schema";
+import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema, savedCases } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
@@ -2029,7 +2031,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.get("/api/cnr/saved-cases", async (req: Request, res: Response) => {
     try {
-      const cases = await storage.getSavedCases();
+      const cases = await db.select().from(savedCases).orderBy(desc(savedCases.savedAt));
       res.json(cases);
     } catch (error) {
       console.error("Error fetching saved cases:", error);
@@ -2043,12 +2045,12 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
-      const existing = await storage.getSavedCaseByCnr(parsed.data.cnrNumber);
-      if (existing) {
-        return res.status(409).json({ error: "Case already saved", existingCase: existing });
+      const existing = await db.select().from(savedCases).where(eq(savedCases.cnrNumber, parsed.data.cnrNumber));
+      if (existing.length > 0) {
+        return res.status(409).json({ error: "Case already saved", existingCase: existing[0] });
       }
-      const savedCase = await storage.createSavedCase(parsed.data);
-      res.status(201).json(savedCase);
+      const [newCase] = await db.insert(savedCases).values(parsed.data).returning();
+      res.status(201).json(newCase);
     } catch (error) {
       console.error("Error saving case:", error);
       res.status(500).json({ error: "Failed to save case" });
@@ -2057,7 +2059,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.delete("/api/cnr/saved-cases/:id", async (req: Request, res: Response) => {
     try {
-      await storage.deleteSavedCase(req.params.id);
+      await db.delete(savedCases).where(eq(savedCases.id, req.params.id));
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting saved case:", error);
