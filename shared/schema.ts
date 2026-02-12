@@ -358,7 +358,7 @@ export type CnrNote = typeof cnrNotes.$inferSelect;
 
 export const savedCases = pgTable("saved_cases", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  cnrNumber: text("cnr_number").notNull(),
+  cnrNumber: text("cnr_number").notNull().unique(),
   caseType: text("case_type"),
   filingNumber: text("filing_number"),
   filingDate: text("filing_date"),
