@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber'
 import { useGLTF, useAnimations, Environment } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -27,23 +27,28 @@ const STATE_ANIMATION = {
   [BOT_STATE.DECISION]:  'Point_Forward',
 }
 
-const STATE_FACE = {
-  [BOT_STATE.IDLE]:      '/robot_avatar/face_happy.png',
-  [BOT_STATE.LISTENING]: '/robot_avatar/face_happy.png',
-  [BOT_STATE.THINKING]:  '/robot_avatar/face_thinking.png',
-  [BOT_STATE.SPEAKING]:  '/robot_avatar/face_talking.png',
-  [BOT_STATE.SUCCESS]:   '/robot_avatar/face_excited.png',
-  [BOT_STATE.ALERT]:     '/robot_avatar/face_surprised.png',
-  [BOT_STATE.ERROR]:     '/robot_avatar/face_surprised.png',
-  [BOT_STATE.GREETING]:  '/robot_avatar/face_happy.png',
-  [BOT_STATE.DECISION]:  '/robot_avatar/face_serious.png',
+const FACE_TEXTURES = {
+  happy:     '/robot_avatar/face_happy.png',
+  talking:   '/robot_avatar/face_talking.png',
+  thinking:  '/robot_avatar/face_thinking.png',
+  excited:   '/robot_avatar/face_excited.png',
+  surprised: '/robot_avatar/face_surprised.png',
+  serious:   '/robot_avatar/face_serious.png',
 }
 
-const SPEAKING_FACES = [
-  '/robot_avatar/face_talking.png',
-  '/robot_avatar/face_happy.png',
-  '/robot_avatar/face_excited.png',
-]
+const STATE_FACE = {
+  [BOT_STATE.IDLE]:      'happy',
+  [BOT_STATE.LISTENING]: 'happy',
+  [BOT_STATE.THINKING]:  'thinking',
+  [BOT_STATE.SPEAKING]:  'talking',
+  [BOT_STATE.SUCCESS]:   'excited',
+  [BOT_STATE.ALERT]:     'surprised',
+  [BOT_STATE.ERROR]:     'surprised',
+  [BOT_STATE.GREETING]:  'happy',
+  [BOT_STATE.DECISION]:  'serious',
+}
+
+const SPEAKING_FACE_CYCLE = ['talking', 'happy', 'excited', 'talking']
 
 const IDLE_BEHAVIORS = [
   { type: 'lookAround', duration: 2.5 },
@@ -56,14 +61,83 @@ const IDLE_BEHAVIORS = [
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
 const lerp = (a, b, t) => a + (b - a) * t
 
+function FaceDisplay({ currentFace, amplitude, botState }) {
+  const meshRef = useRef()
+  const matRef = useRef()
+  const texturesRef = useRef({})
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    const loader = new THREE.TextureLoader()
+    const entries = Object.entries(FACE_TEXTURES)
+    let loadCount = 0
+    entries.forEach(([key, path]) => {
+      loader.load(path, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace
+        tex.flipY = false
+        tex.needsUpdate = true
+        texturesRef.current[key] = tex
+        loadCount++
+        if (loadCount === entries.length) {
+          setLoaded(true)
+        }
+      }, undefined, () => {
+        loadCount++
+        if (loadCount === entries.length) setLoaded(true)
+      })
+    })
+  }, [])
+
+  useFrame((state) => {
+    if (!matRef.current || !loaded) return
+    const t = state.clock.elapsedTime
+    const tex = texturesRef.current[currentFace]
+    if (tex && matRef.current.map !== tex) {
+      matRef.current.map = tex
+      matRef.current.emissiveMap = tex
+      matRef.current.needsUpdate = true
+    }
+
+    if (botState === BOT_STATE.SPEAKING) {
+      const baseGlow = 1.5 + amplitude * 3.0
+      const pulse = Math.sin(t * 15) * amplitude * 0.8
+      matRef.current.emissiveIntensity = clamp(baseGlow + pulse, 1.0, 5.0)
+      matRef.current.opacity = 0.92 + amplitude * 0.08
+    } else if (botState === BOT_STATE.LISTENING) {
+      matRef.current.emissiveIntensity = 1.2 + amplitude * 2.0 + Math.sin(t * 4) * 0.3
+      matRef.current.opacity = 0.9
+    } else if (botState === BOT_STATE.THINKING) {
+      matRef.current.emissiveIntensity = 0.8 + Math.sin(t * 1.5) * 0.4
+      matRef.current.opacity = 0.85
+    } else {
+      matRef.current.emissiveIntensity = 1.0 + Math.sin(t * 2) * 0.3
+      matRef.current.opacity = 0.9
+    }
+  })
+
+  return (
+    <mesh ref={meshRef} position={[0, 0, 0.01]} scale={[1, 1, 1]}>
+      <planeGeometry args={[0.28, 0.22]} />
+      <meshStandardMaterial
+        ref={matRef}
+        transparent
+        opacity={0.9}
+        side={THREE.FrontSide}
+        emissive={new THREE.Color(0xd4af37)}
+        emissiveIntensity={1.0}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </mesh>
+  )
+}
+
 function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
   const group = useRef()
   const { scene, animations } = useGLTF('/robot_avatar/LexAI_Robot_Final.glb')
-  const { actions, mixer } = useAnimations(animations, group)
+  const { actions } = useAnimations(animations, group)
   
   const currentActionRef = useRef(null)
-  const faceTextureRef = useRef(null)
-  const faceMeshRef = useRef(null)
   const speechBubbleRef = useRef(null)
   const gavelRef = useRef(null)
   const auraRef = useRef(null)
@@ -78,74 +152,56 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
   const baseGroupPosY = useRef(0)
   
   const smoothAmplitudeRef = useRef(0)
-  const peakAmplitudeRef = useRef(0)
   const speakGestureRef = useRef({ nextTime: 0, active: false, type: 0, startTime: 0, duration: 0 })
   const faceSwapTimerRef = useRef(0)
   const currentFaceIdxRef = useRef(0)
-  const jawBoneRef = useRef(null)
   const headBoneRef = useRef(null)
+  const headfrontBoneRef = useRef(null)
   const spineBoneRef = useRef(null)
-  const bodyMeshesRef = useRef([])
+  const neckBoneRef = useRef(null)
   const breathPhaseRef = useRef(0)
-  const prevEmissiveRef = useRef(3.5)
   
-  const loadedTexturesRef = useRef({})
-
-  const preloadTexture = useCallback((path) => {
-    if (loadedTexturesRef.current[path]) return loadedTexturesRef.current[path]
-    const loader = new THREE.TextureLoader()
-    const tex = loader.load(path, (t) => {
-      t.encoding = THREE.sRGBEncoding
-      t.flipY = false
-    })
-    loadedTexturesRef.current[path] = tex
-    return tex
-  }, [])
-
-  useEffect(() => {
-    SPEAKING_FACES.forEach(preloadTexture)
-    Object.values(STATE_FACE).forEach(preloadTexture)
-  }, [preloadTexture])
+  const [currentFace, setCurrentFace] = useState('happy')
+  const faceGroupRef = useRef()
 
   useEffect(() => {
     if (!scene) return
-    const meshes = []
     scene.traverse((obj) => {
       if (obj.name === 'SpeechBubble') speechBubbleRef.current = obj
       if (obj.name === 'Gavel') gavelRef.current = obj
       if (obj.name === 'ParticleAura') auraRef.current = obj
       
-      if (obj.isMesh && (obj.name.toLowerCase().includes('face') || obj.name.toLowerCase().includes('screen'))) {
-        faceMeshRef.current = obj
-      }
-      
       if (obj.isBone) {
-        const n = obj.name.toLowerCase()
-        if (n.includes('jaw') || n.includes('chin') || n.includes('mouth')) {
-          jawBoneRef.current = obj
-        }
-        if (n === 'head' || n.includes('head')) {
-          headBoneRef.current = obj
-        }
-        if (n.includes('spine') || n.includes('body') || n.includes('torso') || n.includes('chest')) {
-          if (!spineBoneRef.current) spineBoneRef.current = obj
-        }
+        if (obj.name === 'Head') headBoneRef.current = obj
+        if (obj.name === 'headfront') headfrontBoneRef.current = obj
+        if (obj.name === 'neck') neckBoneRef.current = obj
+        if (obj.name === 'Spine02') spineBoneRef.current = obj
       }
-      
-      if (obj.isMesh) meshes.push(obj)
     })
-    bodyMeshesRef.current = meshes
 
     if (speechBubbleRef.current) speechBubbleRef.current.visible = false
     if (gavelRef.current) gavelRef.current.visible = false
     if (auraRef.current) auraRef.current.visible = false
 
     playAnimation('Wave_Hello', false)
-    setTimeout(() => playAnimation('Hover_Float', true), 2200)
+    setTimeout(() => {
+      playAnimation('Hover_Float', true)
+      setCurrentFace('happy')
+    }, 2200)
     
     if (actions['ParticleAura_Spin']) auraActionRef.current = actions['ParticleAura_Spin']
     if (actions['Gavel_Swing']) gavelActionRef.current = actions['Gavel_Swing']
   }, [scene, actions])
+
+  useEffect(() => {
+    if (!headfrontBoneRef.current || !faceGroupRef.current) return
+    headfrontBoneRef.current.add(faceGroupRef.current)
+    return () => {
+      if (headfrontBoneRef.current && faceGroupRef.current) {
+        headfrontBoneRef.current.remove(faceGroupRef.current)
+      }
+    }
+  }, [scene])
 
   const playAnimation = useCallback((name, loop = true) => {
     const action = actions[name]
@@ -162,37 +218,6 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
     currentActionRef.current = action
   }, [actions])
 
-  const applyFaceTexture = useCallback((tex) => {
-    if (!faceMeshRef.current) return
-    if (faceMeshRef.current.material) {
-      if (!faceTextureRef.current) {
-        faceMeshRef.current.material = faceMeshRef.current.material.clone()
-      }
-      faceMeshRef.current.material.map = tex
-      faceMeshRef.current.material.emissiveMap = tex
-      faceMeshRef.current.material.emissive = new THREE.Color(0xd4af37) 
-      faceMeshRef.current.material.emissiveIntensity = 3.5
-      faceMeshRef.current.material.transparent = true
-      faceMeshRef.current.material.needsUpdate = true
-      faceTextureRef.current = tex
-    }
-  }, [])
-
-  const updateFace = useCallback((texturePath) => {
-    const tex = preloadTexture(texturePath)
-    if (tex.image) {
-      applyFaceTexture(tex)
-    } else {
-      const loader = new THREE.TextureLoader()
-      loader.load(texturePath, (t) => {
-        t.encoding = THREE.sRGBEncoding
-        t.flipY = false
-        loadedTexturesRef.current[texturePath] = t
-        applyFaceTexture(t)
-      })
-    }
-  }, [preloadTexture, applyFaceTexture])
-
   useEffect(() => {
     if (!actions || botState === prevStateRef.current) return
     prevStateRef.current = botState
@@ -201,8 +226,8 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
     const isLoop = [BOT_STATE.IDLE, BOT_STATE.SPEAKING, BOT_STATE.LISTENING].includes(botState)
     if (animName) playAnimation(animName, isLoop)
 
-    const faceTex = STATE_FACE[botState]
-    if (faceTex) updateFace(faceTex)
+    const face = STATE_FACE[botState]
+    if (face) setCurrentFace(face)
 
     if (botState !== BOT_STATE.IDLE) {
       idleBehaviorRef.current.active = false
@@ -237,14 +262,13 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
         auraActionRef.current.stop()
       }
     }
-  }, [botState, actions, playAnimation, updateFace])
+  }, [botState, actions, playAnimation])
 
   useFrame((state, delta) => {
     if (!group.current) return
     const t = state.clock.elapsedTime
 
     smoothAmplitudeRef.current = lerp(smoothAmplitudeRef.current, audioAmplitude, 0.15)
-    peakAmplitudeRef.current = Math.max(peakAmplitudeRef.current * 0.97, smoothAmplitudeRef.current)
     const amp = smoothAmplitudeRef.current
 
     const mx = clamp(mousePos?.x ?? 0, -1, 1)
@@ -264,50 +288,25 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
     group.current.scale.set(breathScale, breathScale, breathScale)
 
     if (botState === BOT_STATE.SPEAKING) {
-      const headNod = Math.sin(t * 3.5) * amp * 0.12 + Math.sin(t * 5.2) * amp * 0.06
-      const headTilt = Math.sin(t * 2.1) * amp * 0.05
-      const bodySway = Math.sin(t * 1.8) * amp * 0.04
-
       if (headBoneRef.current) {
-        headBoneRef.current.rotation.x += headNod
-        headBoneRef.current.rotation.z += headTilt
+        headBoneRef.current.rotation.x += Math.sin(t * 3.5) * amp * 0.1
+        headBoneRef.current.rotation.z += Math.sin(t * 2.1) * amp * 0.04
       }
-
-      group.current.rotation.x = bodySway * 0.3
-      group.current.position.y = Math.sin(t * 2.5) * amp * 0.02
-      
-      baseGroupRotY.current += Math.sin(t * 1.2) * amp * 0.02
-
-      if (jawBoneRef.current) {
-        const jawOpen = amp * 0.4 + Math.sin(t * 15) * amp * 0.15
-        jawBoneRef.current.rotation.x = clamp(jawOpen, 0, 0.5)
+      if (neckBoneRef.current) {
+        neckBoneRef.current.rotation.y += Math.sin(t * 1.2) * amp * 0.03
       }
-
       if (spineBoneRef.current) {
         spineBoneRef.current.rotation.z = Math.sin(t * 1.5) * amp * 0.03
-        spineBoneRef.current.rotation.y = Math.sin(t * 0.8) * amp * 0.02
       }
+
+      group.current.position.y = Math.sin(t * 2.5) * amp * 0.02
 
       faceSwapTimerRef.current += delta
-      const swapInterval = amp > 0.3 ? 0.15 : amp > 0.1 ? 0.25 : 0.4
-      if (faceSwapTimerRef.current > swapInterval && amp > 0.05) {
+      const swapInterval = amp > 0.3 ? 0.12 : amp > 0.1 ? 0.22 : 0.35
+      if (faceSwapTimerRef.current > swapInterval && amp > 0.03) {
         faceSwapTimerRef.current = 0
-        const nextIdx = amp > 0.2 ? 0 : (currentFaceIdxRef.current + 1) % SPEAKING_FACES.length
-        currentFaceIdxRef.current = nextIdx
-        const tex = loadedTexturesRef.current[SPEAKING_FACES[nextIdx]]
-        if (tex) applyFaceTexture(tex)
-      }
-
-      if (faceMeshRef.current?.material) {
-        const baseEmissive = 2.5
-        const ampPulse = amp * 4.0
-        const rapidPulse = Math.sin(t * 18) * amp * 1.5
-        const targetEmissive = clamp(baseEmissive + ampPulse + rapidPulse, 1.5, 8.0)
-        prevEmissiveRef.current = lerp(prevEmissiveRef.current, targetEmissive, 0.2)
-        faceMeshRef.current.material.emissiveIntensity = prevEmissiveRef.current
-        
-        const hueShift = amp * 0.15
-        faceMeshRef.current.material.emissive.setHSL(0.12 + hueShift, 0.8, 0.5)
+        currentFaceIdxRef.current = (currentFaceIdxRef.current + 1) % SPEAKING_FACE_CYCLE.length
+        setCurrentFace(SPEAKING_FACE_CYCLE[currentFaceIdxRef.current])
       }
 
       const gesture = speakGestureRef.current
@@ -326,19 +325,19 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
           const gEase = Math.sin(gProgress * Math.PI)
           switch (gesture.type) {
             case 0:
-              baseGroupRotY.current += Math.sin(gProgress * Math.PI) * 0.08 * gEase
+              baseGroupRotY.current += Math.sin(gProgress * Math.PI) * 0.06 * gEase
               break
             case 1:
               if (headBoneRef.current) {
-                headBoneRef.current.rotation.x += Math.sin(gProgress * Math.PI * 2) * 0.06 * gEase
+                headBoneRef.current.rotation.x += Math.sin(gProgress * Math.PI * 2) * 0.05 * gEase
               }
               break
             case 2:
-              group.current.position.y += Math.sin(gProgress * Math.PI * 2) * 0.015 * gEase
+              group.current.position.y += Math.sin(gProgress * Math.PI * 2) * 0.012 * gEase
               break
             case 3:
               if (headBoneRef.current) {
-                headBoneRef.current.rotation.z += Math.sin(gProgress * Math.PI) * 0.08 * gEase
+                headBoneRef.current.rotation.z += Math.sin(gProgress * Math.PI) * 0.06 * gEase
               }
               break
           }
@@ -346,30 +345,17 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
       }
 
     } else if (botState === BOT_STATE.LISTENING) {
-      const listenPulse = Math.sin(t * 2) * 0.01 + amp * 0.02
-      group.current.position.y = listenPulse
-      
+      group.current.position.y = Math.sin(t * 2) * 0.01 + amp * 0.02
       if (headBoneRef.current) {
         headBoneRef.current.rotation.x += Math.sin(t * 1.5) * 0.03
         headBoneRef.current.rotation.z += Math.sin(t * 0.8) * 0.02
-      }
-
-      if (faceMeshRef.current?.material) {
-        const listenGlow = 2.5 + amp * 3.0 + Math.sin(t * 4) * amp * 1.0
-        prevEmissiveRef.current = lerp(prevEmissiveRef.current, listenGlow, 0.1)
-        faceMeshRef.current.material.emissiveIntensity = prevEmissiveRef.current
       }
 
     } else if (botState === BOT_STATE.THINKING) {
       group.current.position.y = Math.sin(t * 0.6) * 0.01
       if (headBoneRef.current) {
         headBoneRef.current.rotation.z = Math.sin(t * 0.5) * 0.04
-        headBoneRef.current.rotation.x = -0.05 + Math.sin(t * 0.3) * 0.02
-      }
-      if (faceMeshRef.current?.material) {
-        const thinkPulse = 2.0 + Math.sin(t * 1.5) * 0.8
-        prevEmissiveRef.current = lerp(prevEmissiveRef.current, thinkPulse, 0.05)
-        faceMeshRef.current.material.emissiveIntensity = prevEmissiveRef.current
+        headBoneRef.current.rotation.x = -0.04 + Math.sin(t * 0.3) * 0.02
       }
 
     } else if (botState === BOT_STATE.IDLE) {
@@ -397,60 +383,39 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
           const ease = Math.sin(progress * Math.PI)
           
           switch (idle.type) {
-            case 'lookAround': {
-              const lookOffset = Math.sin(progress * Math.PI * 2) * 0.15 * ease
-              baseGroupRotY.current += lookOffset * 0.3
+            case 'lookAround':
+              baseGroupRotY.current += Math.sin(progress * Math.PI * 2) * 0.15 * ease * 0.3
               break
-            }
-            case 'tiltHead': {
+            case 'tiltHead':
               group.current.rotation.z = Math.sin(progress * Math.PI) * 0.06
               break
-            }
-            case 'swirl': {
+            case 'swirl':
               baseGroupRotY.current += Math.sin(progress * Math.PI * 2) * 0.015
               baseGroupPosY.current = Math.sin(progress * Math.PI * 3) * 0.04
               break
-            }
-            case 'nod': {
+            case 'nod':
               group.current.rotation.x = Math.sin(progress * Math.PI * 3) * 0.04 * ease
               break
-            }
-            case 'bounce': {
+            case 'bounce':
               baseGroupPosY.current = Math.sin(progress * Math.PI * 4) * 0.03 * ease
               break
-            }
           }
           group.current.position.y = baseGroupPosY.current
         }
       }
 
       group.current.position.y += Math.sin(t * 0.8) * 0.003
-
-      if (faceMeshRef.current?.material) {
-        const idlePulse = 2.0 + Math.sin(t * 2) * 0.5
-        prevEmissiveRef.current = lerp(prevEmissiveRef.current, idlePulse, 0.05)
-        faceMeshRef.current.material.emissiveIntensity = prevEmissiveRef.current
-      }
-
-    } else {
-      if (faceMeshRef.current?.material) {
-        const defaultPulse = 2.5 + Math.sin(t * 2) * 0.5
-        prevEmissiveRef.current = lerp(prevEmissiveRef.current, defaultPulse, 0.05)
-        faceMeshRef.current.material.emissiveIntensity = prevEmissiveRef.current
-      }
     }
 
     const blinkCycle = Math.sin(t * 0.7) * Math.sin(t * 1.3)
     const isBlinking = blinkCycle > 0.97 && botState !== BOT_STATE.SPEAKING
-    scene.traverse((obj) => {
-      if (obj.name === 'headfront') {
-        if (isBlinking) {
-          obj.scale.y = lerp(obj.scale.y, 0.1, 0.4)
-        } else {
-          obj.scale.y = lerp(obj.scale.y, 1.0, 0.2)
-        }
+    if (headfrontBoneRef.current) {
+      if (isBlinking) {
+        headfrontBoneRef.current.scale.y = lerp(headfrontBoneRef.current.scale.y, 0.1, 0.4)
+      } else {
+        headfrontBoneRef.current.scale.y = lerp(headfrontBoneRef.current.scale.y, 1.0, 0.2)
       }
-    })
+    }
 
     if (speechBubbleRef.current && speechBubbleRef.current.visible) {
       speechBubbleRef.current.position.y = 0.6 + Math.sin(t * 2) * 0.03
@@ -461,6 +426,9 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
   return (
     <group ref={group}>
       <primitive object={scene} />
+      <group ref={faceGroupRef}>
+        <FaceDisplay currentFace={currentFace} amplitude={smoothAmplitudeRef.current} botState={botState} />
+      </group>
     </group>
   )
 }
@@ -509,7 +477,7 @@ export default function LexAIRobot({
   return (
     <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '320px' }}>
       <Canvas
-        camera={{ position: [0, 0.6, 2.0], fov: 50 }}
+        camera={{ position: [0, 1.0, 3.5], fov: 40 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace
