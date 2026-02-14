@@ -31,21 +31,21 @@ const STATE_ANIMATION = {
 
 // ─── STATE → FACE MAP ────────────────────────────────────────────────────────
 const STATE_FACE = {
-  [BOT_STATE.IDLE]:      '/face_happy.png',
-  [BOT_STATE.LISTENING]: '/face_happy.png',
-  [BOT_STATE.THINKING]:  '/face_thinking.png',
-  [BOT_STATE.SPEAKING]:  '/face_talking.png',
-  [BOT_STATE.SUCCESS]:   '/face_excited.png',
-  [BOT_STATE.ALERT]:     '/face_surprised.png',
-  [BOT_STATE.ERROR]:     '/face_surprised.png',
-  [BOT_STATE.GREETING]:  '/face_happy.png',
-  [BOT_STATE.DECISION]:  '/face_serious.png',
+  [BOT_STATE.IDLE]:      '/robot_avatar/face_happy.png',
+  [BOT_STATE.LISTENING]: '/robot_avatar/face_happy.png',
+  [BOT_STATE.THINKING]:  '/robot_avatar/face_thinking.png',
+  [BOT_STATE.SPEAKING]:  '/robot_avatar/face_talking.png',
+  [BOT_STATE.SUCCESS]:   '/robot_avatar/face_excited.png',
+  [BOT_STATE.ALERT]:     '/robot_avatar/face_surprised.png',
+  [BOT_STATE.ERROR]:     '/robot_avatar/face_surprised.png',
+  [BOT_STATE.GREETING]:  '/robot_avatar/face_happy.png',
+  [BOT_STATE.DECISION]:  '/robot_avatar/face_serious.png',
 }
 
 // ─── ROBOT INNER COMPONENT ───────────────────────────────────────────────────
 function RobotModel({ botState, audioAmplitude = 0 }) {
   const group = useRef()
-  const { scene, animations } = useGLTF('/LexAI_Robot_Final.glb')
+  const { scene, animations } = useGLTF('/robot_avatar/LexAI_Robot_Final.glb')
   const { actions, mixer } = useAnimations(animations, group)
   
   const currentActionRef = useRef(null)
@@ -259,4 +259,4 @@ export default function LexAIRobot({
   )
 }
 
-useGLTF.preload('/LexAI_Robot_Final.glb')
+useGLTF.preload('/robot_avatar/LexAI_Robot_Final.glb')
