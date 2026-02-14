@@ -25,7 +25,8 @@ interface VoiceAssistantProps {
   onClose: () => void;
 }
 
-function AnimatedOrb({ amplitude, state }: { amplitude: number; state: VoiceState }) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _AnimatedOrb({ amplitude, state }: { amplitude: number; state: VoiceState }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const timeRef = useRef(0);

@@ -237,6 +237,7 @@ export default function NyayaAIPage() {
 
   return (
     <div className="h-full flex flex-col">
+      {!voiceMode && (
       <div className="p-4 border-b flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <BackButton />
@@ -269,6 +270,7 @@ export default function NyayaAIPage() {
           </Button>
         </div>
       </div>
+      )}
 
       {voiceMode ? (
         <VoiceAssistant onClose={() => setVoiceMode(false)} />
