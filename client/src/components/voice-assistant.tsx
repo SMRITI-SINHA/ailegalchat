@@ -55,7 +55,7 @@ function AnimatedOrb({ amplitude, state }: { amplitude: number; state: VoiceStat
 
       ctx.clearRect(0, 0, size, size);
 
-      const isActive = state === "listening" || isSpeaking;
+      const isActive = state === "listening" || state === "speaking";
       const baseRadius = 70 + (isActive ? amp * 30 : 0);
 
       for (let layer = 4; layer >= 0; layer--) {
