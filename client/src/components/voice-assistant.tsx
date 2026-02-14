@@ -738,16 +738,12 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
       <div className="voice-body">
         <div className="voice-panel voice-panel-left">
           <div className="voice-visual-center">
-            {state === "speaking" ? (
-              <div className="voice-assistant-avatar-container">
-        <LexAIRobot 
-          botState={VOICE_TO_BOT_STATE[state]} 
-          audioAmplitude={state === "speaking" ? speakingAmplitude : amplitude} 
-        />
-      </div>
-            ) : (
-              <AnimatedOrb amplitude={amplitude} state={state} />
-            )}
+            <div className="voice-assistant-avatar-container">
+              <LexAIRobot 
+                botState={VOICE_TO_BOT_STATE[state]} 
+                audioAmplitude={state === "speaking" ? speakingAmplitude : amplitude} 
+              />
+            </div>
           </div>
 
           <div className="voice-action-area">

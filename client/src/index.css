@@ -262,16 +262,16 @@
   }
 
   .voice-panel-left {
-    width: 45%;
+    width: 70%;
     align-items: center;
     justify-content: center;
-    gap: 24px;
+    gap: 16px;
     background: rgba(35, 28, 20, 0.65);
     backdrop-filter: blur(30px);
   }
 
   .voice-panel-right {
-    width: 55%;
+    width: 30%;
     background: rgba(35, 28, 20, 0.55);
     backdrop-filter: blur(30px);
     border-left: 1px solid rgba(182, 157, 116, 0.1);
@@ -283,7 +283,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 320px;
+    flex: 1;
+    width: 100%;
+    min-height: 400px;
+  }
+
+  .voice-assistant-avatar-container {
+    width: 100%;
+    height: 100%;
+    min-height: 400px;
   }
 
   .voice-action-area {
