@@ -4,7 +4,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Scale, X, Mic, MicOff, Square } from "lucide-react";
 import { markdownToHtml } from "@/lib/utils";
 
+import LexAIRobot, { BOT_STATE } from "./LexAIRobot";
+
 type VoiceState = "idle" | "listening" | "processing" | "speaking";
+
+const VOICE_TO_BOT_STATE: Record<VoiceState, string> = {
+  idle: BOT_STATE.IDLE,
+  listening: BOT_STATE.LISTENING,
+  processing: BOT_STATE.THINKING,
+  speaking: BOT_STATE.SPEAKING,
+};
 
 interface VoiceMessage {
   id: string;
@@ -46,7 +55,7 @@ function AnimatedOrb({ amplitude, state }: { amplitude: number; state: VoiceStat
 
       ctx.clearRect(0, 0, size, size);
 
-      const isActive = state === "listening" || state === "speaking";
+      const isActive = state === "listening" || isSpeaking;
       const baseRadius = 70 + (isActive ? amp * 30 : 0);
 
       for (let layer = 4; layer >= 0; layer--) {
@@ -730,7 +739,12 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
         <div className="voice-panel voice-panel-left">
           <div className="voice-visual-center">
             {state === "speaking" ? (
-              <Avatar3D speakingAmplitude={speakingAmplitude} state={state} />
+              <div className="voice-assistant-avatar-container">
+        <LexAIRobot 
+          botState={VOICE_TO_BOT_STATE[state]} 
+          audioAmplitude={state === "speaking" ? speakingAmplitude : amplitude} 
+        />
+      </div>
             ) : (
               <AnimatedOrb amplitude={amplitude} state={state} />
             )}
