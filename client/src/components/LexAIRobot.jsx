@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react'
-import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber'
+import { useRef, useEffect, useState, useCallback } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, useAnimations, Environment } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -132,7 +132,7 @@ function FaceDisplay({ currentFace, amplitude, botState }) {
   )
 }
 
-function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
+function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   const group = useRef()
   const { scene, animations } = useGLTF('/robot_avatar/LexAI_Robot_Final.glb')
   const { actions } = useAnimations(animations, group)
@@ -148,8 +148,6 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
   const idleBehaviorRef = useRef({ active: false, type: null, startTime: 0, duration: 0 })
   const nextIdleTimeRef = useRef(3)
   const smoothMouseRef = useRef({ x: 0, y: 0 })
-  const baseGroupRotY = useRef(0)
-  const baseGroupPosY = useRef(0)
   
   const smoothAmplitudeRef = useRef(0)
   const speakGestureRef = useRef({ nextTime: 0, active: false, type: 0, startTime: 0, duration: 0 })
@@ -161,7 +159,13 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
   const neckBoneRef = useRef(null)
   const breathPhaseRef = useRef(0)
   
+  const headBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
+  const neckBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
+  const spineBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
+  const bonesInitializedRef = useRef(false)
+  
   const [currentFace, setCurrentFace] = useState('happy')
+  const [smoothAmp, setSmoothAmp] = useState(0)
   const faceGroupRef = useRef()
 
   useEffect(() => {
@@ -172,10 +176,19 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
       if (obj.name === 'ParticleAura') auraRef.current = obj
       
       if (obj.isBone) {
-        if (obj.name === 'Head') headBoneRef.current = obj
+        if (obj.name === 'Head') {
+          headBoneRef.current = obj
+          headBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
+        }
         if (obj.name === 'headfront') headfrontBoneRef.current = obj
-        if (obj.name === 'neck') neckBoneRef.current = obj
-        if (obj.name === 'Spine02') spineBoneRef.current = obj
+        if (obj.name === 'neck') {
+          neckBoneRef.current = obj
+          neckBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
+        }
+        if (obj.name === 'Spine02') {
+          spineBoneRef.current = obj
+          spineBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
+        }
       }
     })
 
@@ -216,6 +229,10 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
     action.clampWhenFinished = !loop
     action.fadeIn(0.35).play()
     currentActionRef.current = action
+    
+    if (!bonesInitializedRef.current) {
+      bonesInitializedRef.current = true
+    }
   }, [actions])
 
   useEffect(() => {
@@ -271,39 +288,39 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
     smoothAmplitudeRef.current = lerp(smoothAmplitudeRef.current, audioAmplitude, 0.15)
     const amp = smoothAmplitudeRef.current
 
+    if (Math.abs(amp - smoothAmp) > 0.01) {
+      setSmoothAmp(amp)
+    }
+
     const mx = clamp(mousePos?.x ?? 0, -1, 1)
     const my = clamp(mousePos?.y ?? 0, -1, 1)
-    const mouseInfluence = isHovering ? 1.0 : 0.0
-    const targetX = mx * 0.25 * mouseInfluence
-    const targetY = my * 0.12 * mouseInfluence
-    smoothMouseRef.current.x += (targetX - smoothMouseRef.current.x) * 0.05
-    smoothMouseRef.current.y += (targetY - smoothMouseRef.current.y) * 0.05
+    smoothMouseRef.current.x = lerp(smoothMouseRef.current.x, mx * 0.3, 0.06)
+    smoothMouseRef.current.y = lerp(smoothMouseRef.current.y, my * 0.15, 0.06)
 
-    const bodyRotTarget = smoothMouseRef.current.x * 0.25
-    baseGroupRotY.current += (bodyRotTarget - baseGroupRotY.current) * 0.03
-    group.current.rotation.y = baseGroupRotY.current
+    group.current.rotation.y = smoothMouseRef.current.x
 
     breathPhaseRef.current += delta * 1.2
     const breathScale = 1.0 + Math.sin(breathPhaseRef.current) * 0.003
     group.current.scale.set(breathScale, breathScale, breathScale)
 
-    if (botState === BOT_STATE.SPEAKING) {
-      if (headBoneRef.current) {
-        headBoneRef.current.rotation.x += Math.sin(t * 3.5) * amp * 0.1
-        headBoneRef.current.rotation.z += Math.sin(t * 2.1) * amp * 0.04
-      }
-      if (neckBoneRef.current) {
-        neckBoneRef.current.rotation.y += Math.sin(t * 1.2) * amp * 0.03
-      }
-      if (spineBoneRef.current) {
-        spineBoneRef.current.rotation.z = Math.sin(t * 1.5) * amp * 0.03
-      }
+    let headExtraX = 0
+    let headExtraY = 0
+    let headExtraZ = 0
+    let neckExtraY = 0
+    let spineExtraZ = 0
+    let posY = 0
 
-      group.current.position.y = Math.sin(t * 2.5) * amp * 0.02
+    if (botState === BOT_STATE.SPEAKING) {
+      headExtraX = Math.sin(t * 3.5) * amp * 0.08
+      headExtraZ = Math.sin(t * 2.1) * amp * 0.03
+      neckExtraY = Math.sin(t * 1.2) * amp * 0.025
+      spineExtraZ = Math.sin(t * 1.5) * amp * 0.02
+
+      posY = Math.sin(t * 2.5) * amp * 0.015
 
       faceSwapTimerRef.current += delta
-      const swapInterval = amp > 0.3 ? 0.12 : amp > 0.1 ? 0.22 : 0.35
-      if (faceSwapTimerRef.current > swapInterval && amp > 0.03) {
+      const swapInterval = amp > 0.3 ? 0.15 : amp > 0.1 ? 0.25 : 0.4
+      if (faceSwapTimerRef.current > swapInterval && amp > 0.02) {
         faceSwapTimerRef.current = 0
         currentFaceIdxRef.current = (currentFaceIdxRef.current + 1) % SPEAKING_FACE_CYCLE.length
         setCurrentFace(SPEAKING_FACE_CYCLE[currentFaceIdxRef.current])
@@ -325,38 +342,30 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
           const gEase = Math.sin(gProgress * Math.PI)
           switch (gesture.type) {
             case 0:
-              baseGroupRotY.current += Math.sin(gProgress * Math.PI) * 0.06 * gEase
+              group.current.rotation.y += Math.sin(gProgress * Math.PI) * 0.04 * gEase
               break
             case 1:
-              if (headBoneRef.current) {
-                headBoneRef.current.rotation.x += Math.sin(gProgress * Math.PI * 2) * 0.05 * gEase
-              }
+              headExtraX += Math.sin(gProgress * Math.PI * 2) * 0.04 * gEase
               break
             case 2:
-              group.current.position.y += Math.sin(gProgress * Math.PI * 2) * 0.012 * gEase
+              posY += Math.sin(gProgress * Math.PI * 2) * 0.01 * gEase
               break
             case 3:
-              if (headBoneRef.current) {
-                headBoneRef.current.rotation.z += Math.sin(gProgress * Math.PI) * 0.06 * gEase
-              }
+              headExtraZ += Math.sin(gProgress * Math.PI) * 0.04 * gEase
               break
           }
         }
       }
 
     } else if (botState === BOT_STATE.LISTENING) {
-      group.current.position.y = Math.sin(t * 2) * 0.01 + amp * 0.02
-      if (headBoneRef.current) {
-        headBoneRef.current.rotation.x += Math.sin(t * 1.5) * 0.03
-        headBoneRef.current.rotation.z += Math.sin(t * 0.8) * 0.02
-      }
+      posY = Math.sin(t * 2) * 0.01 + amp * 0.015
+      headExtraX = Math.sin(t * 1.5) * 0.025
+      headExtraZ = Math.sin(t * 0.8) * 0.015
 
     } else if (botState === BOT_STATE.THINKING) {
-      group.current.position.y = Math.sin(t * 0.6) * 0.01
-      if (headBoneRef.current) {
-        headBoneRef.current.rotation.z = Math.sin(t * 0.5) * 0.04
-        headBoneRef.current.rotation.x = -0.04 + Math.sin(t * 0.3) * 0.02
-      }
+      posY = Math.sin(t * 0.6) * 0.008
+      headExtraZ = Math.sin(t * 0.5) * 0.03
+      headExtraX = -0.03 + Math.sin(t * 0.3) * 0.015
 
     } else if (botState === BOT_STATE.IDLE) {
       const idle = idleBehaviorRef.current
@@ -375,46 +384,56 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
         
         if (progress >= 1) {
           idle.active = false
-          baseGroupPosY.current = 0
-          group.current.rotation.z = 0
-          group.current.rotation.x = 0
           nextIdleTimeRef.current = t + 2 + Math.random() * 4
         } else {
           const ease = Math.sin(progress * Math.PI)
           
           switch (idle.type) {
             case 'lookAround':
-              baseGroupRotY.current += Math.sin(progress * Math.PI * 2) * 0.15 * ease * 0.3
+              headExtraY = Math.sin(progress * Math.PI * 2) * 0.1 * ease
               break
             case 'tiltHead':
-              group.current.rotation.z = Math.sin(progress * Math.PI) * 0.06
+              headExtraZ = Math.sin(progress * Math.PI) * 0.04
               break
             case 'swirl':
-              baseGroupRotY.current += Math.sin(progress * Math.PI * 2) * 0.015
-              baseGroupPosY.current = Math.sin(progress * Math.PI * 3) * 0.04
+              group.current.rotation.y += Math.sin(progress * Math.PI * 2) * 0.01
+              posY = Math.sin(progress * Math.PI * 3) * 0.03
               break
             case 'nod':
-              group.current.rotation.x = Math.sin(progress * Math.PI * 3) * 0.04 * ease
+              headExtraX = Math.sin(progress * Math.PI * 3) * 0.03 * ease
               break
             case 'bounce':
-              baseGroupPosY.current = Math.sin(progress * Math.PI * 4) * 0.03 * ease
+              posY = Math.sin(progress * Math.PI * 4) * 0.02 * ease
               break
           }
-          group.current.position.y = baseGroupPosY.current
         }
       }
 
-      group.current.position.y += Math.sin(t * 0.8) * 0.003
+      posY += Math.sin(t * 0.8) * 0.003
+    }
+
+    group.current.position.y = posY
+
+    headExtraY += -smoothMouseRef.current.x * 0.4
+    headExtraX += smoothMouseRef.current.y * 0.2
+
+    if (headBoneRef.current) {
+      headBoneRef.current.rotation.x = headBaseRotRef.current.x + headExtraX
+      headBoneRef.current.rotation.y = headBaseRotRef.current.y + headExtraY
+      headBoneRef.current.rotation.z = headBaseRotRef.current.z + headExtraZ
+    }
+    if (neckBoneRef.current) {
+      neckBoneRef.current.rotation.y = neckBaseRotRef.current.y + neckExtraY
+    }
+    if (spineBoneRef.current) {
+      spineBoneRef.current.rotation.z = spineBaseRotRef.current.z + spineExtraZ
     }
 
     const blinkCycle = Math.sin(t * 0.7) * Math.sin(t * 1.3)
     const isBlinking = blinkCycle > 0.97 && botState !== BOT_STATE.SPEAKING
     if (headfrontBoneRef.current) {
-      if (isBlinking) {
-        headfrontBoneRef.current.scale.y = lerp(headfrontBoneRef.current.scale.y, 0.1, 0.4)
-      } else {
-        headfrontBoneRef.current.scale.y = lerp(headfrontBoneRef.current.scale.y, 1.0, 0.2)
-      }
+      const targetScaleY = isBlinking ? 0.1 : 1.0
+      headfrontBoneRef.current.scale.y = lerp(headfrontBoneRef.current.scale.y, targetScaleY, isBlinking ? 0.4 : 0.2)
     }
 
     if (speechBubbleRef.current && speechBubbleRef.current.visible) {
@@ -427,39 +446,29 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos, isHovering }) {
     <group ref={group}>
       <primitive object={scene} />
       <group ref={faceGroupRef}>
-        <FaceDisplay currentFace={currentFace} amplitude={smoothAmplitudeRef.current} botState={botState} />
+        <FaceDisplay currentFace={currentFace} amplitude={smoothAmp} botState={botState} />
       </group>
     </group>
   )
 }
 
-function MouseTracker({ onMouseMove, onHoverChange }) {
+function MouseTracker({ onMouseMove }) {
   const { gl } = useThree()
   
   useEffect(() => {
-    const canvas = gl.domElement
-    const parentEl = canvas.parentElement
-    
     const handleMove = (e) => {
-      const rect = parentEl.getBoundingClientRect()
+      const rect = gl.domElement.getBoundingClientRect()
       const x = clamp(((e.clientX - rect.left) / rect.width) * 2 - 1, -1, 1)
       const y = clamp(-((e.clientY - rect.top) / rect.height) * 2 + 1, -1, 1)
       onMouseMove({ x, y })
     }
     
-    const handleEnter = () => onHoverChange(true)
-    const handleLeave = () => onHoverChange(false)
-    
-    parentEl.addEventListener('mousemove', handleMove)
-    parentEl.addEventListener('mouseenter', handleEnter)
-    parentEl.addEventListener('mouseleave', handleLeave)
+    window.addEventListener('mousemove', handleMove)
     
     return () => {
-      parentEl.removeEventListener('mousemove', handleMove)
-      parentEl.removeEventListener('mouseenter', handleEnter)
-      parentEl.removeEventListener('mouseleave', handleLeave)
+      window.removeEventListener('mousemove', handleMove)
     }
-  }, [gl, onMouseMove, onHoverChange])
+  }, [gl, onMouseMove])
   
   return null
 }
@@ -470,14 +479,12 @@ export default function LexAIRobot({
   className = ''
 }) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
-  const [isHovering, setIsHovering] = useState(false)
   const mouseCb = useCallback((pos) => setMousePos(pos), [])
-  const hoverCb = useCallback((v) => setIsHovering(v), [])
 
   return (
     <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '320px' }}>
       <Canvas
-        camera={{ position: [0, 1.0, 3.5], fov: 40 }}
+        camera={{ position: [0, 0.4, 3.5], fov: 40 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace
@@ -489,8 +496,8 @@ export default function LexAIRobot({
         <spotLight position={[5, 10, 5]} angle={0.15} penumbra={1} intensity={2} castShadow />
         <pointLight position={[-5, -5, -5]} intensity={1} color="#b69d74" />
         
-        <MouseTracker onMouseMove={mouseCb} onHoverChange={hoverCb} />
-        <RobotModel botState={botState} audioAmplitude={audioAmplitude} mousePos={mousePos} isHovering={isHovering} />
+        <MouseTracker onMouseMove={mouseCb} />
+        <RobotModel botState={botState} audioAmplitude={audioAmplitude} mousePos={mousePos} />
         
         <Environment preset="studio" />
       </Canvas>
