@@ -21,6 +21,7 @@ import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
 import { trainingDataLoader } from "./training-data-loader";
+import { inLegalBERT } from "./huggingface";
 import { transcribeAudio as elevenLabsTranscribe, getUncachableElevenLabsClient, DEFAULT_VOICE_ID, TTS_MODEL } from "./elevenlabs";
 
 function decodeFilename(rawName: string): string {
@@ -443,6 +444,23 @@ export async function registerRoutes(
             amount: cost,
             modelUsed: "mini",
           });
+
+          if (inLegalBERT.isConfigured() && extracted.text.length > 100) {
+            try {
+              const segments = await inLegalBERT.classifySegments(extracted.text);
+              if (segments.length > 0) {
+                const segmentSummary = segments.map(s => `[${s.label}] ${s.text.substring(0, 100)}`).join("\n");
+                const existingText = extracted.text;
+                const enhancedText = `=== DOCUMENT STRUCTURE (InLegalBERT Analysis) ===\n${segmentSummary}\n=== END STRUCTURE ===\n\n${existingText}`;
+                await storage.updateDocument(doc.id, {
+                  extractedText: enhancedText,
+                });
+                console.log(`[DOC UPLOAD] InLegalBERT classified ${segments.length} segments in ${decodedName}`);
+              }
+            } catch (e) {
+              console.log(`[DOC UPLOAD] InLegalBERT segmentation failed for ${decodedName}, keeping original text`);
+            }
+          }
 
           return doc;
         })
@@ -1057,28 +1075,85 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
       // ============================================
       // LEGAL RESEARCH LAYER (MANDATORY PIPELINE)
       // ============================================
+      // Layer 0: InLegalBERT (Statute Pre-Identification - AI-Powered)
       // Layer 1: Indian Kanoon (Primary Authority - Binding case law & statutes)
       // Layer 2: Perplexity (Advisory - Currency & Risk signals only)
       
       let indianKanoonContext = "";
       let perplexityRiskContext = "";
+      let inLegalBERTContext = "";
       
-      // Extract search terms from facts and document type for research
-      const searchTerms = `${type} ${facts.substring(0, 300)} ${jurisdiction || ""} ${documentTypeDetails?.subtypeLabel || ""}`.trim();
+      // Layer 0: InLegalBERT - Pre-identify relevant statutes from facts
+      let bertEnhancedQueries: string[] = [];
+      if (inLegalBERT.isConfigured()) {
+        try {
+          console.log("[DRAFTING PIPELINE] InLegalBERT analyzing facts for statute identification...");
+          const identifiedStatutes = await inLegalBERT.identifyStatutes(facts);
+          if (identifiedStatutes.length > 0) {
+            bertEnhancedQueries = identifiedStatutes.slice(0, 3).map(s => s.statute);
+            inLegalBERTContext = `\n\n=== InLegalBERT STATUTE ANALYSIS (AI Pre-Identification) ===\nThe following statutes were identified as potentially relevant to the facts:\n`;
+            identifiedStatutes.forEach((s, i) => {
+              inLegalBERTContext += `${i + 1}. ${s.statute} (confidence: ${(s.confidence * 100).toFixed(1)}%)\n`;
+            });
+            inLegalBERTContext += `\nUse these as guidance for which statutes to cite. All citations must still be verified from Indian Kanoon results below.\n===`;
+            console.log(`[DRAFTING PIPELINE] InLegalBERT identified ${identifiedStatutes.length} relevant statutes`);
+          }
+        } catch (e) {
+          console.log("[DRAFTING PIPELINE] InLegalBERT analysis failed, continuing with keyword-based search");
+        }
+      }
       
-      // Layer 1: Indian Kanoon - Primary Authority Search
+      // Extract search terms - enhanced with InLegalBERT statute identification
+      const baseSearchTerms = `${type} ${facts.substring(0, 300)} ${jurisdiction || ""} ${documentTypeDetails?.subtypeLabel || ""}`.trim();
+      
+      // Layer 1: Indian Kanoon - Primary Authority Search (with InLegalBERT-enhanced queries)
       if (indianKanoon.isConfigured()) {
         try {
           console.log("[DRAFTING PIPELINE] Searching Indian Kanoon for primary authority...");
-          const kanoonResults = await indianKanoon.search(searchTerms, 0);
-          if (kanoonResults && kanoonResults.length > 0) {
+          
+          const allSearchQueries = [baseSearchTerms, ...bertEnhancedQueries];
+          const allResults: any[] = [];
+          const seenDocIds = new Set<string>();
+          
+          for (const query of allSearchQueries) {
+            const kanoonResults = await indianKanoon.search(query, 0);
+            if (kanoonResults) {
+              for (const r of kanoonResults) {
+                if (!seenDocIds.has(r.docId)) {
+                  seenDocIds.add(r.docId);
+                  allResults.push(r);
+                }
+              }
+            }
+          }
+          
+          if (allResults.length > 0) {
+            let rankedResults = allResults;
+            if (inLegalBERT.isConfigured() && allResults.length > 3) {
+              try {
+                const docsToRank = allResults.slice(0, 15).map(r => ({
+                  id: r.docId,
+                  title: r.title,
+                  text: r.headline?.replace(/<[^>]*>/g, "") || r.title,
+                }));
+                const ranked = await inLegalBERT.rankByRelevance(facts.substring(0, 500), docsToRank);
+                rankedResults = ranked.map(rd => {
+                  const original = allResults.find(r => r.docId === rd.id);
+                  return { ...original, relevanceScore: rd.relevanceScore };
+                });
+              } catch {
+                console.log("[DRAFTING PIPELINE] InLegalBERT ranking failed, using default order");
+              }
+            }
+
             indianKanoonContext = `\n\n=== PRIMARY LEGAL AUTHORITY (Indian Kanoon - Verified Sources) ===
 USE THESE CITATIONS ONLY. Do not invent or modify these references.
 
 `;
-            kanoonResults.slice(0, 8).forEach((result: any, index: number) => {
+            rankedResults.slice(0, 10).forEach((result: any, index: number) => {
               const cleanSnippet = result.headline?.replace(/<[^>]*>/g, "").substring(0, 250) || "";
-              indianKanoonContext += `[${index + 1}] ${result.title}
+              const relevanceTag = result.relevanceScore ? ` [Relevance: ${(result.relevanceScore * 100).toFixed(0)}%]` : "";
+              indianKanoonContext += `[${index + 1}] ${result.title}${relevanceTag}
    Source: Indian Kanoon DocID ${result.docId}
    Excerpt: ${cleanSnippet}...
    URL: https://indiankanoon.org/doc/${result.docId}/
@@ -1119,8 +1194,8 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
         }
       }
       
-      // Combine research context into prompt
-      const researchContext = indianKanoonContext + perplexityRiskContext;
+      // Combine research context into prompt (Layer 0 + Layer 1 + Layer 2)
+      const researchContext = inLegalBERTContext + indianKanoonContext + perplexityRiskContext;
       
       let systemPrompt = selectedLanguage !== "English"
         ? `${expertDraftingPrompt}\n\nCRITICAL LANGUAGE REQUIREMENT: You are completely fluent in ${selectedLanguage} and must generate the ENTIRE document in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations (like "AIR 2023 SC 456"), or official statute names. All section headings, content, and legal arguments must be in ${selectedLanguage}.`
@@ -1418,8 +1493,39 @@ Generate the requested content now:`;
       if (!query) {
         return res.status(400).json({ error: "Query is required" });
       }
-      const results = await indianKanoon.search(query, page);
-      res.json({ results, isConfigured: indianKanoon.isConfigured() });
+      
+      let results = await indianKanoon.search(query, page);
+      
+      let bertStatutes: { statute: string; confidence: number }[] = [];
+      if (inLegalBERT.isConfigured() && page === 0) {
+        try {
+          bertStatutes = await inLegalBERT.identifyStatutes(query);
+          
+          if (bertStatutes.length > 0 && results.length > 2) {
+            const docsToRank = results.slice(0, 10).map(r => ({
+              id: r.docId,
+              title: r.title,
+              text: r.headline?.replace(/<[^>]*>/g, "") || r.title,
+            }));
+            const ranked = await inLegalBERT.rankByRelevance(query, docsToRank);
+            results = ranked.map(rd => {
+              const original = results.find(r => r.docId === rd.id);
+              return original ? { ...original, relevanceScore: rd.relevanceScore } : original!;
+            }).filter(Boolean);
+          }
+        } catch (e) {
+          console.log("[RESEARCH] InLegalBERT ranking failed, using default order");
+        }
+      }
+      
+      res.json({ 
+        results, 
+        isConfigured: indianKanoon.isConfigured(),
+        bertAnalysis: bertStatutes.length > 0 ? {
+          identifiedStatutes: bertStatutes,
+          enhanced: true,
+        } : undefined,
+      });
     } catch (error) {
       console.error("Research search error:", error);
       res.status(500).json({ error: "Failed to search" });
@@ -1492,25 +1598,62 @@ Generate the requested content now:`;
       // ============================================
       // LEGAL RESEARCH LAYER (MANDATORY PIPELINE)
       // ============================================
+      // Layer 0: InLegalBERT (Statute Pre-Identification - AI-Powered)
       // Layer 1: Indian Kanoon (Primary Authority - Binding case law & statutes)
       // Layer 2: Perplexity (Advisory - Currency & Risk signals only)
       
       let indianKanoonContext = "";
       let perplexityRiskContext = "";
+      let inLegalBERTContext = "";
       
-      const searchTerms = (issues || facts).substring(0, 300);
+      const memoSearchBase = (issues || facts).substring(0, 300);
       
-      // Layer 1: Indian Kanoon - Primary Authority Search
+      // Layer 0: InLegalBERT - Pre-identify relevant statutes from memo facts/issues
+      let memoBertQueries: string[] = [];
+      if (inLegalBERT.isConfigured()) {
+        try {
+          console.log("[MEMO PIPELINE] InLegalBERT analyzing facts for statute identification...");
+          const identifiedStatutes = await inLegalBERT.identifyStatutes(facts);
+          if (identifiedStatutes.length > 0) {
+            memoBertQueries = identifiedStatutes.slice(0, 3).map(s => s.statute);
+            inLegalBERTContext = `\n\n=== InLegalBERT STATUTE ANALYSIS (AI Pre-Identification) ===\nThe following statutes were identified as potentially relevant:\n`;
+            identifiedStatutes.forEach((s, i) => {
+              inLegalBERTContext += `${i + 1}. ${s.statute} (confidence: ${(s.confidence * 100).toFixed(1)}%)\n`;
+            });
+            inLegalBERTContext += `\nUse these as guidance. All citations must still be verified from Indian Kanoon results below.\n===`;
+          }
+        } catch (e) {
+          console.log("[MEMO PIPELINE] InLegalBERT analysis failed, continuing with keyword-based search");
+        }
+      }
+      
+      // Layer 1: Indian Kanoon - Primary Authority Search (with InLegalBERT-enhanced queries)
       if (indianKanoon.isConfigured()) {
         try {
           console.log("[MEMO PIPELINE] Searching Indian Kanoon for primary authority...");
-          const kanoonResults = await indianKanoon.search(searchTerms, 0);
-          if (kanoonResults && kanoonResults.length > 0) {
+          
+          const allMemoQueries = [memoSearchBase, ...memoBertQueries];
+          const allMemoResults: any[] = [];
+          const seenMemoDocIds = new Set<string>();
+          
+          for (const query of allMemoQueries) {
+            const kanoonResults = await indianKanoon.search(query, 0);
+            if (kanoonResults) {
+              for (const r of kanoonResults) {
+                if (!seenMemoDocIds.has(r.docId)) {
+                  seenMemoDocIds.add(r.docId);
+                  allMemoResults.push(r);
+                }
+              }
+            }
+          }
+          
+          if (allMemoResults.length > 0) {
             indianKanoonContext = `\n\n=== PRIMARY LEGAL AUTHORITY (Indian Kanoon - Verified Sources) ===
 USE THESE CITATIONS ONLY. Do not invent or modify these references.
 
 `;
-            kanoonResults.slice(0, 8).forEach((result: any, index: number) => {
+            allMemoResults.slice(0, 10).forEach((result: any, index: number) => {
               const cleanSnippet = result.headline?.replace(/<[^>]*>/g, "").substring(0, 250) || "";
               indianKanoonContext += `[${index + 1}] ${result.title}
    Source: Indian Kanoon DocID ${result.docId}
@@ -1553,8 +1696,8 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
         }
       }
       
-      // Combine research context
-      const researchContext = indianKanoonContext + perplexityRiskContext;
+      // Combine research context (Layer 0 + Layer 1 + Layer 2)
+      const researchContext = inLegalBERTContext + indianKanoonContext + perplexityRiskContext;
 
       // Load Chakshi's 2000+ document training context for memo drafting standards
       let memoTrainingContext = "";

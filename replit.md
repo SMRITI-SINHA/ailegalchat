@@ -44,11 +44,22 @@ The user interface is structured around a central "Chakshi AI Hub" with distinct
 - **Perplexity API:** Used for currency and risk signals - recent amendments, notifications, and judicial developments (advisory layer, not primary authority).
 
 ### Legal Research Layer (Mandatory Pipeline)
-The drafting and memo generation endpoints implement a two-layer research pipeline:
+The drafting and memo generation endpoints implement a three-layer research pipeline:
+
+**Layer 0: InLegalBERT (AI Statute Pre-Identification)**
+- Uses law-ai/InLegalBERT model via HuggingFace Inference API for semantic analysis
+- Identifies relevant statutes from user's facts using embedding similarity
+- Generates enhanced search queries for Indian Kanoon based on identified statutes
+- Ranks search results by semantic relevance using cosine similarity
+- Classifies uploaded document segments (Facts/Arguments/Ruling/Statute/etc.)
+- Falls back to keyword-based identification if HuggingFace API is unavailable
+- Service module: `server/huggingface.ts`
 
 **Layer 1: Indian Kanoon (Primary Authority)**
 - Searches for relevant statutes and case law BEFORE drafting
+- Now uses InLegalBERT-enhanced queries for more targeted search
 - Returns verified sources with DocID, title, and excerpt
+- Results ranked by InLegalBERT semantic relevance when available
 - AI is instructed to ONLY cite from this verified list
 - Non-verified citations must be marked as "[CITATION NEEDED - VERIFY]"
 
@@ -57,11 +68,12 @@ The drafting and memo generation endpoints implement a two-layer research pipeli
 - Results are marked as advisory only - not to be cited as authority
 - Warns user to verify from official gazettes
 
-Both layers fail safely - if a search fails, the pipeline continues without that context.
+All layers fail safely - if any layer fails, the pipeline continues without that context.
 
 ### Pipeline Flow
 ```
-User Input → Pre-Draft Validation (types) → Legal Research Layer (Indian Kanoon + Perplexity)
+User Input → Pre-Draft Validation (types) → InLegalBERT Statute Analysis (Layer 0)
+           → Legal Research Layer (Indian Kanoon + Perplexity, Layers 1-2)
            → Document DNA Engine (prompts) → Drafting Engine (LLM) → Self-Validation Quality Gate
            → Final Output
 ```
