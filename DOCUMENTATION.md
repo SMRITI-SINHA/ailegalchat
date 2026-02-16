@@ -47,7 +47,7 @@ The platform supports **22 Indian languages** for AI-generated content (drafting
 
 1. **Anti-Hallucination First**: Every citation must be verified. Unverified citations are explicitly marked as `[CITATION NEEDED - VERIFY]`.
 2. **Multi-Tier AI Routing**: Queries are automatically routed to the optimal model (gpt-4o-mini, gpt-4.1, or o3) based on complexity.
-3. **Two-Layer Legal Research**: Indian Kanoon for primary authority, Perplexity for currency/risk signals.
+3. **Three-Layer Legal Research**: InLegalBERT for AI-powered statute identification, Indian Kanoon for primary authority, Perplexity for currency/risk signals.
 4. **Fail-Safe Design**: If any research layer fails, the pipeline continues without that context rather than crashing.
 
 ---
@@ -77,16 +77,18 @@ The platform supports **22 Indian languages** for AI-generated content (drafting
 │  │  o3)        │  │              │  │                   │     │
 │  └─────────────┘  └──────────────┘  └───────────────────┘     │
 │         │                                                       │
-│  ┌──────▼──────────────────────────────────────────────┐       │
-│  │              LEGAL RESEARCH LAYER                    │       │
-│  │  ┌─────────────────┐    ┌────────────────────┐      │       │
-│  │  │ Indian Kanoon   │    │ Perplexity API     │      │       │
-│  │  │ (Primary Auth)  │    │ (Currency/Risk)    │      │       │
-│  │  │ - Statutes      │    │ - Amendments       │      │       │
-│  │  │ - Case Law      │    │ - Notifications    │      │       │
-│  │  │ - Court Orders  │    │ - Recent judgments  │      │       │
-│  │  └─────────────────┘    └────────────────────┘      │       │
-│  └─────────────────────────────────────────────────────┘       │
+│  ┌──────▼──────────────────────────────────────────────────────┐│
+│  │              LEGAL RESEARCH LAYER                           ││
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐││
+│  │  │ InLegalBERT     │  │ Indian Kanoon   │  │ Perplexity  │││
+│  │  │ (HuggingFace)   │  │ (Primary Auth)  │  │ (Currency/  │││
+│  │  │ - Statute ID    │  │ - Statutes      │  │  Risk)      │││
+│  │  │ - Segmentation  │  │ - Case Law      │  │ - Amendments│││
+│  │  │ - Relevance     │  │ - Court Orders  │  │ - Notific.  │││
+│  │  │   Ranking       │  │                 │  │ - Recent    │││
+│  │  │                 │  │                 │  │   judgments  │││
+│  │  └─────────────────┘  └─────────────────┘  └─────────────┘││
+│  └────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -142,6 +144,7 @@ The platform supports **22 Indian languages** for AI-generated content (drafting
 | **OpenAI o3** | Complex reasoning (constitutional law, precedent analysis) |
 | **Indian Kanoon API** | Primary legal authority search (statutes, case law) |
 | **Perplexity API** | Currency and risk signals (recent amendments, notifications) |
+| **HuggingFace Inference API** | InLegalBERT (law-ai/InLegalBERT) for statute identification, document segmentation, and relevance ranking |
 | **ElevenLabs** | Text-to-speech and speech-to-text for voice assistant |
 | **Google Calendar API** | Bidirectional calendar synchronization |
 
@@ -212,6 +215,7 @@ chakshi/
 │   ├── legal-web-search.ts          # Perplexity API integration
 │   ├── google-calendar.ts           # Google Calendar sync service
 │   ├── elevenlabs.ts                # ElevenLabs voice API integration
+│   ├── huggingface.ts               # InLegalBERT via HuggingFace API
 │   ├── training-data-loader.ts      # Firm SOP training data loader
 │   ├── static.ts                    # Static file serving
 │   └── vite.ts                      # Vite dev server integration
@@ -465,7 +469,7 @@ The frontend displays running totals in the `CostDisplay` component.
 
 ## 8. Legal Research Pipeline
 
-This is the most critical differentiator. Every AI-generated response goes through a **mandatory two-layer research pipeline** before the AI model generates content.
+This is the most critical differentiator. Every AI-generated response goes through a **mandatory three-layer research pipeline** before the AI model generates content.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -475,11 +479,33 @@ This is the most critical differentiator. Every AI-generated response goes throu
 │      │                                                           │
 │      ▼                                                           │
 │  ┌───────────────────────────────────────────────────────┐      │
+│  │ LAYER 0: InLegalBERT (AI Statute Pre-Identification)  │      │
+│  │                                                       │      │
+│  │ • Uses law-ai/InLegalBERT model via HuggingFace       │      │
+│  │   Inference API                                       │      │
+│  │ • Analyzes facts to identify relevant statutes via    │      │
+│  │   embedding similarity                                │      │
+│  │ • Generates enhanced search queries for Indian Kanoon │      │
+│  │ • Classifies document segments (Facts/Arguments/      │      │
+│  │   Ruling/Statute/etc.)                                │      │
+│  │ • Ranks search results by semantic relevance          │      │
+│  │   (cosine similarity)                                 │      │
+│  │ • Falls back to keyword-based identification if       │      │
+│  │   HuggingFace unavailable                             │      │
+│  │ • Pre-computes and caches statute/label embeddings    │      │
+│  │   at startup                                          │      │
+│  └──────────────────────┬────────────────────────────────┘      │
+│                         │                                        │
+│                         ▼                                        │
+│  ┌───────────────────────────────────────────────────────┐      │
 │  │ LAYER 1: Indian Kanoon (Primary Authority)            │      │
 │  │                                                       │      │
-│  │ • Searches Indian Kanoon API for relevant statutes    │      │
-│  │   and case law                                        │      │
+│  │ • Searches both base query AND InLegalBERT-identified │      │
+│  │   statutes for comprehensive coverage                 │      │
+│  │ • Deduplicates results by docId                       │      │
 │  │ • Returns verified sources with DocID, title, excerpt │      │
+│  │ • Results ranked by InLegalBERT relevance when        │      │
+│  │   available                                           │      │
 │  │ • Top 5-8 results injected into AI prompt             │      │
 │  │ • AI MUST only cite from this verified list           │      │
 │  │ • Non-verified citations marked [CITATION NEEDED]     │      │
@@ -519,7 +545,7 @@ The Perplexity search layer uses a curated list of trusted Indian legal sources:
 
 ### Fail-Safe Behavior
 
-Both research layers are wrapped in try-catch blocks. If Indian Kanoon is down, the pipeline continues without primary authority context. If Perplexity fails, it continues without currency signals. The AI will still generate a response but with appropriate warnings about unverified citations.
+All three research layers are wrapped in try-catch blocks. If InLegalBERT is unavailable, the pipeline falls back to keyword-based statute identification. If Indian Kanoon is down, the pipeline continues without primary authority context. If Perplexity fails, it continues without currency signals. The AI will still generate a response but with appropriate warnings about unverified citations.
 
 ---
 
@@ -543,7 +569,16 @@ User Input (type, facts, parties, jurisdiction)
                │
                ▼
 ┌─────────────────────────────────────┐
+│ 1.5. InLegalBERT ANALYSIS           │
+│    • Identify relevant statutes      │
+│    • Generate enhanced search queries│
+│    • Results feed into Layer 1 search│
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
 │ 2. LEGAL RESEARCH LAYER             │
+│    • InLegalBERT-enhanced queries    │
 │    • Indian Kanoon search            │
 │    • Perplexity risk signals         │
 │    (Same pipeline as described above)│
@@ -663,6 +698,24 @@ All HTML from uploaded documents is sanitized using `sanitize-html` with a white
 Allowed: p, br, strong, b, em, i, u, h1-h6, ul, ol, li, div, span, table, thead, tbody, tr, td, th, hr
 Allowed styles: text-align, font-weight only
 ```
+
+### InLegalBERT Document Segmentation
+
+When documents are uploaded, InLegalBERT classifies paragraphs into semantic categories:
+
+| Segment Type | Description |
+|---|---|
+| **Facts** | Factual statements and background |
+| **Arguments** | Legal arguments and submissions |
+| **Ruling/Order** | Court orders, directions, dispositions |
+| **Statute Reference** | References to legislative provisions |
+| **Case Law Citation** | References to judicial precedents |
+| **Ratio Decidendi** | Core legal reasoning of a judgment |
+| **Obiter Dicta** | Incidental remarks by the court |
+| **Prayer/Relief** | Reliefs sought by the petitioner |
+| **Procedural History** | Timeline of procedural events |
+
+This structured classification is prepended to the extracted text, giving the AI better context when the document is used in chat or drafting sessions.
 
 ---
 
@@ -806,7 +859,7 @@ Generates structured legal memorandums using three methodology options:
 ### Generation Pipeline
 
 1. User provides: facts, issues, jurisdiction, parties, title, language
-2. Legal Research Layer runs (Indian Kanoon + Perplexity)
+2. Legal Research Layer runs (InLegalBERT statute identification → Indian Kanoon + Perplexity)
 3. Chakshi training data injected for memo formatting standards
 4. AI generates structured memo with all sections
 5. Sources attached with confidence indicators
@@ -1094,13 +1147,15 @@ The platform implements strict rules to prevent AI from generating false legal c
 
 2. **Verified Citation List**: AI receives a pre-searched list of verified Indian Kanoon results and is instructed to ONLY cite from that list.
 
-3. **Unverified Marking**: Any citation not from the verified list must be marked as `[CITATION NEEDED - VERIFY]`.
+3. **InLegalBERT Advisory Context**: InLegalBERT's statute identification results are presented as guidance only - the AI must still verify all citations against the Indian Kanoon verified list. InLegalBERT never overrides the citation verification requirement.
 
-4. **Missing Information Placeholders**: Instead of fabricating details, the AI uses:
+4. **Unverified Marking**: Any citation not from the verified list must be marked as `[CITATION NEEDED - VERIFY]`.
+
+5. **Missing Information Placeholders**: Instead of fabricating details, the AI uses:
    - `[BLANK]` for missing factual information
    - `[TO BE FILLED BY USER]` for information the user needs to provide
 
-5. **Authority Hierarchy**: Strict ordering enforced:
+6. **Authority Hierarchy**: Strict ordering enforced:
    - Statute (primary) > Case Law (secondary) > Commentary (tertiary)
 
 ### XSS Protection
@@ -1132,6 +1187,7 @@ The platform implements strict rules to prevent AI from generating false legal c
 | `SESSION_SECRET` | Express session encryption | Yes |
 | `GOOGLE_CLIENT_ID` | Google OAuth (Calendar) | Optional |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth (Calendar) | Optional |
+| `HUGGINGFACE_API_TOKEN` | HuggingFace API for InLegalBERT | Optional (falls back to keywords) |
 | ElevenLabs | Managed via connector integration | Optional |
 
 ### Running the Application
