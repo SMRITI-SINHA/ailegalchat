@@ -305,7 +305,7 @@ export default function EmbedNyayaPage() {
             <Scale size={48} color="#d4b896" style={{ marginBottom: 16, opacity: 0.5 }} />
             <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 6 }}>Welcome to Nyaya AI</h2>
             <p style={{ fontSize: 14, color: "#7a7060", maxWidth: 400, marginBottom: 8, lineHeight: 1.5 }}>
-              Ask any legal question and get accurate, citation-backed answers about Indian law.
+              Ask any legal question and get accurate, citation-backed answers instantly. Trained on Indian law, statutes, case precedents and live trusted legal sources.
             </p>
             <div
               style={{
