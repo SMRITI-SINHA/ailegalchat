@@ -20,6 +20,7 @@ import ResearchNotesPage from "@/pages/hub/research-notes";
 import CasePredictPage from "@/pages/hub/study-case-predict";
 import CounterArgsPage from "@/pages/hub/study-counter-args";
 import LegalSandboxPage from "@/pages/hub/study-sandbox";
+import EmbedNyayaPage from "@/pages/embed-nyaya";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -33,27 +34,32 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 function Router() {
   return (
-    <AppLayout>
-      <Switch>
-        <Route path="/" component={HubPage} />
-        <Route path="/hub" component={HubPage} />
-        <Route path="/hub/drafting/ai" component={AIDraftingPage} />
-        <Route path="/hub/drafting/empty" component={EmptyDraftPage} />
-        <Route path="/hub/drafting/custom" component={CustomDraftPage} />
-        <Route path="/hub/drafting/train" component={TrainDraftsPage} />
-        <Route path="/hub/chat/cnr" component={CNRChatPage} />
-        <Route path="/hub/chat/pdf" component={ChatWithPDFPage} />
-        <Route path="/hub/chat/nyaya" component={NyayaAIPage} />
-        <Route path="/hub/research/assistant" component={ResearchAssistantPage} />
-        <Route path="/hub/research/memo" component={LegalMemoPage} />
-        <Route path="/hub/research/compliance" component={ComplianceChecklistPage} />
-        <Route path="/hub/research/notes" component={ResearchNotesPage} />
-        <Route path="/hub/study/case-predict" component={CasePredictPage} />
-        <Route path="/hub/study/counter-args" component={CounterArgsPage} />
-        <Route path="/hub/study/sandbox" component={LegalSandboxPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </AppLayout>
+    <Switch>
+      <Route path="/embed/nyaya" component={EmbedNyayaPage} />
+      <Route>
+        <AppLayout>
+          <Switch>
+            <Route path="/" component={HubPage} />
+            <Route path="/hub" component={HubPage} />
+            <Route path="/hub/drafting/ai" component={AIDraftingPage} />
+            <Route path="/hub/drafting/empty" component={EmptyDraftPage} />
+            <Route path="/hub/drafting/custom" component={CustomDraftPage} />
+            <Route path="/hub/drafting/train" component={TrainDraftsPage} />
+            <Route path="/hub/chat/cnr" component={CNRChatPage} />
+            <Route path="/hub/chat/pdf" component={ChatWithPDFPage} />
+            <Route path="/hub/chat/nyaya" component={NyayaAIPage} />
+            <Route path="/hub/research/assistant" component={ResearchAssistantPage} />
+            <Route path="/hub/research/memo" component={LegalMemoPage} />
+            <Route path="/hub/research/compliance" component={ComplianceChecklistPage} />
+            <Route path="/hub/research/notes" component={ResearchNotesPage} />
+            <Route path="/hub/study/case-predict" component={CasePredictPage} />
+            <Route path="/hub/study/counter-args" component={CounterArgsPage} />
+            <Route path="/hub/study/sandbox" component={LegalSandboxPage} />
+            <Route component={NotFound} />
+          </Switch>
+        </AppLayout>
+      </Route>
+    </Switch>
   );
 }
 

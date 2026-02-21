@@ -14,9 +14,9 @@ async function getPDFParseClass() {
   return PDFParseClass;
 }
 import { storage } from "./storage";
-import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema, savedCases } from "@shared/schema";
+import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema, savedCases, embedUsage } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
@@ -2537,6 +2537,192 @@ Do not include any other text outside the JSON object.`;
     } catch (error) {
       console.error("Error generating speech:", error);
       res.status(500).json({ error: "Failed to generate speech" });
+    }
+  });
+
+  const EMBED_DAILY_LIMIT = 5;
+  const { createHash, randomBytes } = await import("crypto");
+
+  function getISTDateString(): string {
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(now.getTime() + istOffset);
+    return istDate.toISOString().split("T")[0];
+  }
+
+  function getEmbedVisitorId(req: Request, res: Response): string {
+    const ip = req.socket.remoteAddress || "unknown";
+
+    let cookieId = "";
+    const cookies = req.headers.cookie?.split(";") || [];
+    for (const c of cookies) {
+      const [key, val] = c.trim().split("=");
+      if (key === "chakshi_embed_vid") {
+        cookieId = val || "";
+        break;
+      }
+    }
+
+    if (!cookieId) {
+      cookieId = "vid_" + randomBytes(16).toString("hex");
+      res.setHeader("Set-Cookie", `chakshi_embed_vid=${cookieId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
+    }
+
+    const combined = `${cookieId}_${ip}`;
+    return createHash("sha256").update(combined).digest("hex").substring(0, 40);
+  }
+
+  app.get("/api/embed/usage", async (req: Request, res: Response) => {
+    try {
+      const visitorId = getEmbedVisitorId(req, res);
+      const today = getISTDateString();
+
+      const existing = await db
+        .select()
+        .from(embedUsage)
+        .where(and(eq(embedUsage.visitorFingerprint, visitorId), eq(embedUsage.usageDate, today)))
+        .limit(1);
+
+      const usageCount = existing.length > 0 ? existing[0].usageCount : 0;
+      res.json({ used: usageCount, limit: EMBED_DAILY_LIMIT, remaining: Math.max(0, EMBED_DAILY_LIMIT - usageCount) });
+    } catch (error) {
+      console.error("Error checking embed usage:", error);
+      res.json({ used: 0, limit: EMBED_DAILY_LIMIT, remaining: EMBED_DAILY_LIMIT });
+    }
+  });
+
+  app.post("/api/embed/chat", async (req: Request, res: Response) => {
+    try {
+      const { message } = req.body;
+      if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      const visitorId = getEmbedVisitorId(req, res);
+      const ip = req.socket.remoteAddress || "unknown";
+      const today = getISTDateString();
+
+      const existing = await db
+        .select()
+        .from(embedUsage)
+        .where(and(eq(embedUsage.visitorFingerprint, visitorId), eq(embedUsage.usageDate, today)))
+        .limit(1);
+
+      const currentCount = existing.length > 0 ? existing[0].usageCount : 0;
+
+      if (currentCount >= EMBED_DAILY_LIMIT) {
+        return res.status(429).json({
+          error: "Daily usage limit reached",
+          message: `You have used all ${EMBED_DAILY_LIMIT} free queries for today. Please try again tomorrow.`,
+          used: currentCount,
+          limit: EMBED_DAILY_LIMIT,
+          remaining: 0,
+        });
+      }
+
+      if (existing.length > 0) {
+        await db
+          .update(embedUsage)
+          .set({ usageCount: currentCount + 1, updatedAt: new Date() })
+          .where(eq(embedUsage.id, existing[0].id));
+      } else {
+        await db.insert(embedUsage).values({
+          visitorFingerprint: visitorId,
+          ipAddress: ip,
+          usageCount: 1,
+          usageDate: today,
+        });
+      }
+
+      const tier = determineModelTier(message);
+      const model = MODEL_TIERS[tier];
+      const cost = MODEL_COSTS[tier];
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+
+      let kanoonContext = "";
+      try {
+        const searchResults = await indianKanoon.search(message);
+        if (searchResults && searchResults.length > 0) {
+          const top5 = searchResults.slice(0, 5);
+          kanoonContext = "\n\n--- VERIFIED LEGAL SOURCES (Indian Kanoon) ---\n" +
+            top5.map((r: any, i: number) => `[${i + 1}] DocID: ${r.tid || r.docId || "N/A"} | ${r.title}\n${(r.headline || "").replace(/<[^>]*>/g, "").substring(0, 200)}`).join("\n\n");
+        }
+      } catch (e) {
+        console.error("Indian Kanoon search failed for embed:", e);
+      }
+
+      const systemPrompt = `You are Nyaya AI, Chakshi's legal research assistant for Indian law. You provide accurate, citation-backed answers about Indian legal matters.
+
+IMPORTANT RULES:
+- Provide clear, well-structured answers about Indian law
+- Cite specific statutes (Act Name + Year + Section) and case law when relevant
+- Only cite from verified sources provided below. Mark any unverified citation as [CITATION NEEDED - VERIFY]
+- Use [BLANK] or [TO BE FILLED BY USER] for missing information instead of making up details
+- Add this disclaimer where appropriate: "This is legal research information only. No legal opinion or advice is provided. Consult a qualified legal professional."
+${kanoonContext}`;
+
+      const openai = new OpenAI();
+      const stream = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message },
+        ],
+        stream: true,
+        max_tokens: 2000,
+      });
+
+      let fullResponse = "";
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) {
+          fullResponse += content;
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        }
+      }
+
+      const newUsed = currentCount + 1;
+      const citations = kanoonContext
+        ? (await indianKanoon.search(message))?.slice(0, 3).map((r: any, i: number) => ({
+            id: `embed-cite-${i}`,
+            source: r.title || "Indian Kanoon",
+            text: (r.headline || "").replace(/<[^>]*>/g, "").substring(0, 200),
+          })) || []
+        : [];
+
+      res.write(`data: ${JSON.stringify({
+        done: true,
+        modelUsed: tier,
+        confidence: tier === "pro" ? 0.92 : tier === "standard" ? 0.85 : 0.78,
+        cost,
+        citations,
+        usage: { used: newUsed, limit: EMBED_DAILY_LIMIT, remaining: EMBED_DAILY_LIMIT - newUsed },
+      })}\n\n`);
+
+      res.end();
+
+      try {
+        await storage.addCostEntry({
+          type: "embed_chat",
+          description: `Embed Nyaya AI chat query`,
+          amount: cost,
+          modelUsed: model,
+        });
+      } catch (e) {
+        console.error("Failed to log embed cost:", e);
+      }
+    } catch (error) {
+      console.error("Embed chat error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to process query" });
+      } else {
+        res.write(`data: ${JSON.stringify({ error: "An error occurred while processing your query." })}\n\n`);
+        res.end();
+      }
     }
   });
 

@@ -431,6 +431,18 @@ export const insertCalendarEventSchema = createInsertSchema(calendarEvents).omit
 export type InsertCalendarEvent = z.infer<typeof insertCalendarEventSchema>;
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
 
+export const embedUsage = pgTable("embed_usage", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  visitorFingerprint: text("visitor_fingerprint").notNull(),
+  ipAddress: text("ip_address"),
+  usageCount: integer("usage_count").notNull().default(0),
+  usageDate: text("usage_date").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type EmbedUsage = typeof embedUsage.$inferSelect;
+
 export const calendarEventTypes = ["academic", "exam", "career", "court", "professional"] as const;
 export type CalendarEventType = typeof calendarEventTypes[number];
 
