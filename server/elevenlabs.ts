@@ -62,5 +62,5 @@ export async function transcribeAudio(audioBuffer: Buffer, filename: string): Pr
   return { text: result.text || '', language_code: result.language_code || 'eng' };
 }
 
-export const DEFAULT_VOICE_ID = 'jBpfAFp2vXU8TQd3SOng';
-export const TTS_MODEL = 'eleven_multilingual_v2';
+export const DEFAULT_VOICE_ID = 'cgSgspJ2msm6clMCkdW9';
+export const TTS_MODEL = 'eleven_v3';
