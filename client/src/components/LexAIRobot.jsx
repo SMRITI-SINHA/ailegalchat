@@ -159,9 +159,6 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   const neckBoneRef = useRef(null)
   const breathPhaseRef = useRef(0)
   
-  const headBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
-  const neckBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
-  const spineBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
   const bonesInitializedRef = useRef(false)
   
   const [currentFace, setCurrentFace] = useState('happy')
@@ -176,19 +173,10 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
       if (obj.name === 'ParticleAura') auraRef.current = obj
       
       if (obj.isBone) {
-        if (obj.name === 'Head') {
-          headBoneRef.current = obj
-          headBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
-        }
+        if (obj.name === 'Head') headBoneRef.current = obj
         if (obj.name === 'headfront') headfrontBoneRef.current = obj
-        if (obj.name === 'neck') {
-          neckBoneRef.current = obj
-          neckBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
-        }
-        if (obj.name === 'Spine02') {
-          spineBoneRef.current = obj
-          spineBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
-        }
+        if (obj.name === 'neck') neckBoneRef.current = obj
+        if (obj.name === 'Spine02') spineBoneRef.current = obj
       }
     })
 
@@ -422,16 +410,16 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
     headExtraX += smoothMouseRef.current.y * 0.5
 
     if (headBoneRef.current) {
-      headBoneRef.current.rotation.x = headBaseRotRef.current.x + headExtraX
-      headBoneRef.current.rotation.y = headBaseRotRef.current.y + headExtraY
-      headBoneRef.current.rotation.z = headBaseRotRef.current.z + headExtraZ
+      headBoneRef.current.rotation.x += headExtraX
+      headBoneRef.current.rotation.y += headExtraY
+      headBoneRef.current.rotation.z += headExtraZ
     }
     neckExtraY += -smoothMouseRef.current.x * 0.35
     if (neckBoneRef.current) {
-      neckBoneRef.current.rotation.y = neckBaseRotRef.current.y + neckExtraY
+      neckBoneRef.current.rotation.y += neckExtraY
     }
     if (spineBoneRef.current) {
-      spineBoneRef.current.rotation.z = spineBaseRotRef.current.z + spineExtraZ
+      spineBoneRef.current.rotation.z += spineExtraZ
     }
 
     const blinkCycle = Math.sin(t * 0.7) * Math.sin(t * 1.3)
