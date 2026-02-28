@@ -535,7 +535,15 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
 
           const data = await res.json();
           const text = (data.text || "").trim();
-          const langCode = data.language_code || "eng";
+          const rawLang = data.language_code || "eng";
+
+          const SUPPORTED_LANGS = new Set([
+            "eng", "en", "hin", "hi", "ben", "bn", "tam", "ta", "tel", "te",
+            "mar", "mr", "guj", "gu", "kan", "kn", "mal", "ml", "pan", "pa",
+            "ori", "or", "asm", "as", "urd", "ur", "nep", "ne", "kas", "ks",
+            "kok", "mai", "mni", "bod", "doi", "san", "sa", "sat", "snd", "sd",
+          ]);
+          const langCode = SUPPORTED_LANGS.has(rawLang) ? rawLang : "eng";
           setDetectedLanguage(langCode);
 
           if (!text) {

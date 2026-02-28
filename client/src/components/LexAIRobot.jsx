@@ -159,6 +159,9 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   const neckBoneRef = useRef(null)
   const breathPhaseRef = useRef(0)
   
+  const headBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
+  const neckBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
+  const spineBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
   const bonesInitializedRef = useRef(false)
   
   const [currentFace, setCurrentFace] = useState('happy')
@@ -173,10 +176,19 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
       if (obj.name === 'ParticleAura') auraRef.current = obj
       
       if (obj.isBone) {
-        if (obj.name === 'Head') headBoneRef.current = obj
+        if (obj.name === 'Head') {
+          headBoneRef.current = obj
+          headBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
+        }
         if (obj.name === 'headfront') headfrontBoneRef.current = obj
-        if (obj.name === 'neck') neckBoneRef.current = obj
-        if (obj.name === 'Spine02') spineBoneRef.current = obj
+        if (obj.name === 'neck') {
+          neckBoneRef.current = obj
+          neckBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
+        }
+        if (obj.name === 'Spine02') {
+          spineBoneRef.current = obj
+          spineBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
+        }
       }
     })
 
@@ -282,18 +294,14 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
 
     const mx = clamp(mousePos?.x ?? 0, -1, 1)
     const my = clamp(mousePos?.y ?? 0, -1, 1)
-    smoothMouseRef.current.x = lerp(smoothMouseRef.current.x, mx * 0.6, 0.08)
-    smoothMouseRef.current.y = lerp(smoothMouseRef.current.y, my * 0.4, 0.08)
+    smoothMouseRef.current.x = lerp(smoothMouseRef.current.x, mx * 0.3, 0.06)
+    smoothMouseRef.current.y = lerp(smoothMouseRef.current.y, my * 0.15, 0.06)
 
     group.current.rotation.y = smoothMouseRef.current.x
-    group.current.rotation.x = -smoothMouseRef.current.y * 0.2
 
-    breathPhaseRef.current += delta * 2.0
-    const breathBase = Math.sin(breathPhaseRef.current) * 0.06
-    const breathMicro = Math.sin(breathPhaseRef.current * 3.2) * 0.015
-    const breathScaleXZ = 1.0 + breathBase + breathMicro
-    const breathScaleY = 1.0 + (breathBase + breathMicro) * 1.4
-    group.current.scale.set(breathScaleXZ, breathScaleY, breathScaleXZ)
+    breathPhaseRef.current += delta * 1.2
+    const breathScale = 1.0 + Math.sin(breathPhaseRef.current) * 0.003
+    group.current.scale.set(breathScale, breathScale, breathScale)
 
     let headExtraX = 0
     let headExtraY = 0
@@ -303,12 +311,12 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
     let posY = 0
 
     if (botState === BOT_STATE.SPEAKING) {
-      headExtraX = Math.sin(t * 3.5) * amp * 0.15
-      headExtraZ = Math.sin(t * 2.1) * amp * 0.08
-      neckExtraY = Math.sin(t * 1.2) * amp * 0.06
-      spineExtraZ = Math.sin(t * 1.5) * amp * 0.05
+      headExtraX = Math.sin(t * 3.5) * amp * 0.08
+      headExtraZ = Math.sin(t * 2.1) * amp * 0.03
+      neckExtraY = Math.sin(t * 1.2) * amp * 0.025
+      spineExtraZ = Math.sin(t * 1.5) * amp * 0.02
 
-      posY = Math.sin(t * 2.5) * amp * 0.06 + Math.sin(t * 1.2) * 0.05
+      posY = Math.sin(t * 2.5) * amp * 0.015
 
       faceSwapTimerRef.current += delta
       const swapInterval = amp > 0.3 ? 0.15 : amp > 0.1 ? 0.25 : 0.4
@@ -334,30 +342,30 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
           const gEase = Math.sin(gProgress * Math.PI)
           switch (gesture.type) {
             case 0:
-              group.current.rotation.y += Math.sin(gProgress * Math.PI) * 0.1 * gEase
+              group.current.rotation.y += Math.sin(gProgress * Math.PI) * 0.04 * gEase
               break
             case 1:
-              headExtraX += Math.sin(gProgress * Math.PI * 2) * 0.1 * gEase
+              headExtraX += Math.sin(gProgress * Math.PI * 2) * 0.04 * gEase
               break
             case 2:
-              posY += Math.sin(gProgress * Math.PI * 2) * 0.04 * gEase
+              posY += Math.sin(gProgress * Math.PI * 2) * 0.01 * gEase
               break
             case 3:
-              headExtraZ += Math.sin(gProgress * Math.PI) * 0.1 * gEase
+              headExtraZ += Math.sin(gProgress * Math.PI) * 0.04 * gEase
               break
           }
         }
       }
 
     } else if (botState === BOT_STATE.LISTENING) {
-      posY = Math.sin(t * 1.8) * 0.06 + Math.sin(t * 3.2) * 0.02 + amp * 0.04
-      headExtraX = Math.sin(t * 1.5) * 0.08
-      headExtraZ = Math.sin(t * 0.8) * 0.05
+      posY = Math.sin(t * 2) * 0.01 + amp * 0.015
+      headExtraX = Math.sin(t * 1.5) * 0.025
+      headExtraZ = Math.sin(t * 0.8) * 0.015
 
     } else if (botState === BOT_STATE.THINKING) {
-      posY = Math.sin(t * 0.6) * 0.05 + Math.sin(t * 1.4) * 0.02
-      headExtraZ = Math.sin(t * 0.5) * 0.08
-      headExtraX = -0.06 + Math.sin(t * 0.3) * 0.04
+      posY = Math.sin(t * 0.6) * 0.008
+      headExtraZ = Math.sin(t * 0.5) * 0.03
+      headExtraX = -0.03 + Math.sin(t * 0.3) * 0.015
 
     } else if (botState === BOT_STATE.IDLE) {
       const idle = idleBehaviorRef.current
@@ -376,50 +384,49 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
         
         if (progress >= 1) {
           idle.active = false
-          nextIdleTimeRef.current = t + 1 + Math.random() * 2.5
+          nextIdleTimeRef.current = t + 2 + Math.random() * 4
         } else {
           const ease = Math.sin(progress * Math.PI)
           
           switch (idle.type) {
             case 'lookAround':
-              headExtraY = Math.sin(progress * Math.PI * 2) * 0.2 * ease
+              headExtraY = Math.sin(progress * Math.PI * 2) * 0.1 * ease
               break
             case 'tiltHead':
-              headExtraZ = Math.sin(progress * Math.PI) * 0.12
+              headExtraZ = Math.sin(progress * Math.PI) * 0.04
               break
             case 'swirl':
-              group.current.rotation.y += Math.sin(progress * Math.PI * 2) * 0.06
-              posY = Math.sin(progress * Math.PI * 3) * 0.1
+              group.current.rotation.y += Math.sin(progress * Math.PI * 2) * 0.01
+              posY = Math.sin(progress * Math.PI * 3) * 0.03
               break
             case 'nod':
-              headExtraX = Math.sin(progress * Math.PI * 3) * 0.1 * ease
+              headExtraX = Math.sin(progress * Math.PI * 3) * 0.03 * ease
               break
             case 'bounce':
-              posY = Math.sin(progress * Math.PI * 4) * 0.1 * ease
+              posY = Math.sin(progress * Math.PI * 4) * 0.02 * ease
               break
           }
         }
       }
 
-      posY += Math.sin(t * 1.1) * 0.06 + Math.sin(t * 2.3) * 0.025 + Math.cos(t * 0.7) * 0.03
+      posY += Math.sin(t * 0.8) * 0.003
     }
 
     group.current.position.y = posY
 
-    headExtraY += -smoothMouseRef.current.x * 0.8
-    headExtraX += smoothMouseRef.current.y * 0.5
+    headExtraY += -smoothMouseRef.current.x * 0.4
+    headExtraX += smoothMouseRef.current.y * 0.2
 
     if (headBoneRef.current) {
-      headBoneRef.current.rotation.x += headExtraX
-      headBoneRef.current.rotation.y += headExtraY
-      headBoneRef.current.rotation.z += headExtraZ
+      headBoneRef.current.rotation.x = headBaseRotRef.current.x + headExtraX
+      headBoneRef.current.rotation.y = headBaseRotRef.current.y + headExtraY
+      headBoneRef.current.rotation.z = headBaseRotRef.current.z + headExtraZ
     }
-    neckExtraY += -smoothMouseRef.current.x * 0.35
     if (neckBoneRef.current) {
-      neckBoneRef.current.rotation.y += neckExtraY
+      neckBoneRef.current.rotation.y = neckBaseRotRef.current.y + neckExtraY
     }
     if (spineBoneRef.current) {
-      spineBoneRef.current.rotation.z += spineExtraZ
+      spineBoneRef.current.rotation.z = spineBaseRotRef.current.z + spineExtraZ
     }
 
     const blinkCycle = Math.sin(t * 0.7) * Math.sin(t * 1.3)
@@ -449,28 +456,17 @@ function MouseTracker({ onMouseMove }) {
   const { gl } = useThree()
   
   useEffect(() => {
-    const canvas = gl.domElement
-    let isOver = false
-
     const handleMove = (e) => {
-      const rect = canvas.getBoundingClientRect()
+      const rect = gl.domElement.getBoundingClientRect()
       const x = clamp(((e.clientX - rect.left) / rect.width) * 2 - 1, -1, 1)
       const y = clamp(-((e.clientY - rect.top) / rect.height) * 2 + 1, -1, 1)
-      isOver = true
       onMouseMove({ x, y })
     }
-
-    const handleLeave = () => {
-      isOver = false
-      onMouseMove({ x: 0, y: 0 })
-    }
     
-    canvas.addEventListener('mousemove', handleMove)
-    canvas.addEventListener('mouseleave', handleLeave)
+    window.addEventListener('mousemove', handleMove)
     
     return () => {
-      canvas.removeEventListener('mousemove', handleMove)
-      canvas.removeEventListener('mouseleave', handleLeave)
+      window.removeEventListener('mousemove', handleMove)
     }
   }, [gl, onMouseMove])
   
