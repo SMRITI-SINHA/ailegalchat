@@ -380,6 +380,8 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
   const [speakingAmplitude, setSpeakingAmplitude] = useState(0);
   const [error, setError] = useState("");
 
+  const [detectedLanguage, setDetectedLanguage] = useState<string>("eng");
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -392,6 +394,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
   const playbackSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silenceCountRef = useRef(0);
+  const hasSpeechRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const stopFnRef = useRef<() => void>(() => {});
 
@@ -420,6 +423,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
     if (!analyser) return;
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     silenceCountRef.current = 0;
+    hasSpeechRef.current = false;
 
     const update = () => {
       analyser.getByteFrequencyData(dataArray);
@@ -427,9 +431,13 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
       const normalized = avg / 255;
       setAmplitude(normalized);
 
-      if (normalized < 0.02) {
+      if (normalized > 0.04) {
+        hasSpeechRef.current = true;
+        silenceCountRef.current = 0;
+      } else if (normalized < 0.02) {
         silenceCountRef.current++;
-        if (silenceCountRef.current > 120) {
+        const silenceThreshold = hasSpeechRef.current ? 360 : 600;
+        if (silenceCountRef.current > silenceThreshold && hasSpeechRef.current) {
           silenceCountRef.current = 0;
           const recorder = mediaRecorderRef.current;
           if (recorder && recorder.state === "recording") {
@@ -440,7 +448,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
           }
         }
       } else {
-        silenceCountRef.current = 0;
+        if (silenceCountRef.current > 0) silenceCountRef.current--;
       }
 
       animFrameRef.current = requestAnimationFrame(update);
@@ -527,6 +535,8 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
 
           const data = await res.json();
           const text = (data.text || "").trim();
+          const langCode = data.language_code || "eng";
+          setDetectedLanguage(langCode);
 
           if (!text) {
             setState("idle");
@@ -537,7 +547,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
           const userMsg: VoiceMessage = { id: Date.now().toString(), role: "user", content: text };
           setMessages(prev => [...prev, userMsg]);
 
-          await getAIResponse(text);
+          await getAIResponse(text, langCode);
         } catch (err) {
           console.error("Transcription error:", err);
           setError("Failed to transcribe audio. Please try again.");
@@ -551,7 +561,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
 
   stopFnRef.current = stopListeningAndProcess;
 
-  const getAIResponse = async (query: string) => {
+  const getAIResponse = async (query: string, langCode?: string) => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -559,7 +569,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
       const response = await fetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: query }),
+        body: JSON.stringify({ message: query, voiceLanguage: langCode || detectedLanguage }),
         signal: controller.signal,
       });
 

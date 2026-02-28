@@ -41,7 +41,7 @@ export async function getElevenLabsApiKey() {
   return await getCredentials();
 }
 
-export async function transcribeAudio(audioBuffer: Buffer, filename: string): Promise<string> {
+export async function transcribeAudio(audioBuffer: Buffer, filename: string): Promise<{ text: string; language_code: string }> {
   const apiKey = await getCredentials();
 
   const formData = new FormData();
@@ -59,8 +59,8 @@ export async function transcribeAudio(audioBuffer: Buffer, filename: string): Pr
   }
 
   const result = await response.json();
-  return result.text;
+  return { text: result.text || '', language_code: result.language_code || 'eng' };
 }
 
-export const DEFAULT_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL';
-export const TTS_MODEL = 'eleven_flash_v2_5';
+export const DEFAULT_VOICE_ID = 'jBpfAFp2vXU8TQd3SOng';
+export const TTS_MODEL = 'eleven_multilingual_v2';

@@ -546,7 +546,7 @@ export async function registerRoutes(
 
   app.post("/api/chat/query", async (req: Request, res: Response) => {
     try {
-      const { message, sessionId, documentIds, includeSources } = req.body;
+      const { message, sessionId, documentIds, includeSources, voiceLanguage } = req.body;
 
       if (!message) {
         return res.status(400).json({ error: "Message is required" });
@@ -761,6 +761,19 @@ ${documentContext}`;
       // Add Chakshi's comprehensive training knowledge
       if (chakshiTrainingKnowledge) {
         systemPrompt += chakshiTrainingKnowledge;
+      }
+
+      const LANG_CODE_TO_NAME: Record<string, string> = {
+        asm: "Assamese", ben: "Bengali", bod: "Bodo", doi: "Dogri",
+        guj: "Gujarati", hin: "Hindi", kan: "Kannada", kas: "Kashmiri",
+        kok: "Konkani", mai: "Maithili", mal: "Malayalam", mni: "Manipuri",
+        mar: "Marathi", nep: "Nepali", ori: "Odia", pan: "Punjabi",
+        san: "Sanskrit", sat: "Santali", snd: "Sindhi", tam: "Tamil",
+        tel: "Telugu", urd: "Urdu",
+      };
+      if (voiceLanguage && voiceLanguage !== "eng" && voiceLanguage !== "en") {
+        const langName = LANG_CODE_TO_NAME[voiceLanguage] || voiceLanguage;
+        systemPrompt += `\n\nCRITICAL LANGUAGE REQUIREMENT: The user is speaking to you in ${langName}. You MUST respond ENTIRELY in ${langName}. Every word of your response must be in ${langName}. Only keep English for: proper nouns, case citations (like "AIR 2023 SC 456"), statute names (like "Indian Contract Act, 1872"), and section numbers. All explanations, analysis, and legal advice must be in ${langName} using appropriate legal terminology.`;
       }
 
       try {
@@ -2505,8 +2518,8 @@ Do not include any other text outside the JSON object.`;
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
       }
-      const text = await elevenLabsTranscribe(req.file.buffer, req.file.originalname || "recording.webm");
-      res.json({ text });
+      const result = await elevenLabsTranscribe(req.file.buffer, req.file.originalname || "recording.webm");
+      res.json({ text: result.text, language_code: result.language_code });
     } catch (error) {
       console.error("Error transcribing audio:", error);
       res.status(500).json({ error: "Failed to transcribe audio" });
