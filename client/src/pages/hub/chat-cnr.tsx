@@ -48,69 +48,6 @@ interface SavedCase {
   savedAt: string;
 }
 
-const MOCK_CASES: SavedCase[] = [
-  {
-    id: "mock-1",
-    cnrNumber: "DLHC010023456782023",
-    caseType: "Civil Suit (CS)",
-    filingNumber: "CS/1234/2023",
-    filingDate: "15-03-2023",
-    registrationNumber: "CS/567/2023",
-    registrationDate: "22-03-2023",
-    caseStatus: "Pending",
-    firstHearingDate: "10-04-2023",
-    nextHearingDate: "18-03-2026",
-    caseStage: "Arguments",
-    courtNumberAndJudge: "Court No. 12, Hon'ble Justice Rajesh Kumar",
-    petitioners: "M/s Sharma Industries Pvt. Ltd.\nAdvocate: Mr. Arun Mehta (Bar Council No. D/1234/2020)",
-    respondents: "Union of India through Secretary, Ministry of Commerce\nAdvocate: Mr. Priya Verma, Additional Solicitor General",
-    actsAndSections: "Indian Contract Act, 1872 - Section 73, Section 74\nArbitration and Conciliation Act, 1996 - Section 11, Section 34\nCommercial Courts Act, 2015 - Section 12A",
-    caseTransferDetails: "Transferred from District Court Saket to Delhi High Court on 15-06-2023 (Order No. TC/456/2023)",
-    caseHistory: "10-04-2023 | First hearing, notices issued to respondents\n25-05-2023 | Respondent filed vakalatnama and sought time\n15-06-2023 | Case transferred to High Court on petitioner's application\n20-07-2023 | Written statement filed by respondent\n14-09-2023 | Replication filed by petitioner\n22-11-2023 | Issues framed by the court\n15-01-2024 | Petitioner's evidence commenced\n12-03-2024 | Cross-examination of PW-1 completed\n20-06-2024 | PW-2 examined, adjourned for PW-3\n18-09-2024 | Petitioner's evidence closed\n10-12-2024 | Respondent's evidence commenced\n15-02-2025 | RW-1 cross-examination completed\n20-05-2025 | Respondent evidence closed\n10-09-2025 | Arguments by petitioner commenced\n15-12-2025 | Arguments by petitioner continued\n18-03-2026 | Next date for respondent's arguments",
-    savedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: "mock-2",
-    cnrNumber: "MHBM010098765432024",
-    caseType: "Criminal Case (CC)",
-    filingNumber: "CC/789/2024",
-    filingDate: "08-01-2024",
-    registrationNumber: "CC/234/2024",
-    registrationDate: "15-01-2024",
-    caseStatus: "Disposed",
-    firstHearingDate: "01-02-2024",
-    nextHearingDate: null,
-    caseStage: "Judgment Delivered",
-    courtNumberAndJudge: "Court No. 5, Hon'ble Shri V.K. Patil, Metropolitan Magistrate",
-    petitioners: "State of Maharashtra\nPublic Prosecutor: Mrs. Sunita Deshmukh",
-    respondents: "Mr. Rahul Vinod Joshi\nAdvocate: Mr. Sanjay Kulkarni (Bar Council No. MH/5678/2018)",
-    actsAndSections: "Indian Penal Code, 1860 - Section 420, Section 467, Section 468\nInformation Technology Act, 2000 - Section 66C, Section 66D\nPrevention of Money Laundering Act, 2002 - Section 3",
-    caseTransferDetails: null,
-    caseHistory: "01-02-2024 | Accused produced, charges read over\n15-03-2024 | Charge sheet filed by prosecution\n20-04-2024 | Charges framed, accused pleaded not guilty\n10-06-2024 | PW-1 (Complainant) examined\n25-07-2024 | PW-2 and PW-3 (IO and FSL expert) examined\n15-09-2024 | Prosecution evidence closed\n10-10-2024 | Statement of accused recorded under Section 313 CrPC\n20-11-2024 | Defence evidence - DW-1 examined\n15-12-2024 | Final arguments by prosecution\n10-01-2025 | Final arguments by defence\n25-01-2025 | Judgment reserved\n10-02-2025 | Judgment delivered - Accused acquitted on all charges",
-    savedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-  {
-    id: "mock-3",
-    cnrNumber: "KARN010045678902024",
-    caseType: "Writ Petition (WP)",
-    filingNumber: "WP/4567/2024",
-    filingDate: "20-06-2024",
-    registrationNumber: "WP/1890/2024",
-    registrationDate: "25-06-2024",
-    caseStatus: "Pending",
-    firstHearingDate: "15-07-2024",
-    nextHearingDate: "22-02-2026",
-    caseStage: "Counter Affidavit Stage",
-    courtNumberAndJudge: "Court No. 8, Hon'ble Justice S. Nanjundaswamy & Hon'ble Justice P.N. Desai (Division Bench)",
-    petitioners: "Karnataka State IT Employees Association (Regd.)\nRepresented by its President, Mr. Deepak Rao\nAdvocate: Ms. Kavitha Hegde, Senior Advocate\nAdvocate-on-Record: Mr. Naveen Shetty",
-    respondents: "1. State of Karnataka through Chief Secretary\n2. Department of Labour, Government of Karnataka\n3. Software Technology Parks of India (STPI)\nAdvocate: Mr. Raghuveer Prasad, Additional Advocate General",
-    actsAndSections: "Constitution of India - Article 14, Article 19(1)(g), Article 21\nIndustrial Disputes Act, 1947 - Section 2(j), Section 25F\nKarnataka Shops and Commercial Establishments Act, 1961 - Section 14",
-    caseTransferDetails: null,
-    caseHistory: "15-07-2024 | Interim application heard, notice issued\n20-08-2024 | Counter affidavit by Respondent 1 filed\n15-09-2024 | Respondent 2 & 3 sought time to file counter\n10-11-2024 | Counter affidavits filed by all respondents\n15-01-2025 | Rejoinder filed by petitioner\n20-03-2025 | Matter posted for admission hearing\n22-02-2026 | Next date for final hearing",
-    savedAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-  },
-];
-
 export default function CNRChatPage() {
   const { toast } = useToast();
   const [selectedNote, setSelectedNote] = useState<CnrNote | null>(null);
@@ -132,7 +69,7 @@ export default function CNRChatPage() {
     queryKey: ["/api/cnr/saved-cases"],
   });
 
-  const allCases = [...apiCases, ...MOCK_CASES.filter(m => !apiCases.some(a => a.cnrNumber === m.cnrNumber))];
+  const allCases = apiCases;
 
   const createNoteMutation = useMutation({
     mutationFn: async (data: { title: string; content: string; cnrNumber?: string }) => {
@@ -254,7 +191,6 @@ export default function CNRChatPage() {
     return "outline";
   };
 
-  const isMockCase = (id: string) => id.startsWith("mock-");
 
   const parseHistoryEntries = (history: string | null) => {
     if (!history) return [];
@@ -293,21 +229,16 @@ export default function CNRChatPage() {
             <ArrowLeft className="h-3 w-3 mr-1" />
             Back to list
           </Button>
-          {!isMockCase(c.id) && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => deleteCaseMutation.mutate(c.id)}
-              disabled={deleteCaseMutation.isPending}
-              data-testid="button-delete-case"
-            >
-              <Trash2 className="h-3 w-3 mr-1" />
-              Remove
-            </Button>
-          )}
-          {isMockCase(c.id) && (
-            <Badge variant="outline" className="text-xs">Sample Data</Badge>
-          )}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => deleteCaseMutation.mutate(c.id)}
+            disabled={deleteCaseMutation.isPending}
+            data-testid="button-delete-case"
+          >
+            <Trash2 className="h-3 w-3 mr-1" />
+            Remove
+          </Button>
         </div>
 
         <ScrollArea className="flex-1">
@@ -502,9 +433,6 @@ export default function CNRChatPage() {
                                   {c.caseType && (
                                     <span className="text-sm font-medium">{c.caseType}</span>
                                   )}
-                                  {isMockCase(c.id) && (
-                                    <Badge variant="outline" className="text-xs">Sample</Badge>
-                                  )}
                                 </div>
                                 <div className="text-xs font-mono text-muted-foreground mt-1">
                                   CNR: {c.cnrNumber}
@@ -544,20 +472,18 @@ export default function CNRChatPage() {
                                 <Clock className="h-3 w-3" />
                                 {formatDate(c.savedAt)}
                               </div>
-                              {!isMockCase(c.id) && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteCaseMutation.mutate(c.id);
-                                  }}
-                                  disabled={deleteCaseMutation.isPending}
-                                  data-testid={`button-remove-case-${c.id}`}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteCaseMutation.mutate(c.id);
+                                }}
+                                disabled={deleteCaseMutation.isPending}
+                                data-testid={`button-remove-case-${c.id}`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
                             </div>
                           </div>
                         ))}
