@@ -21,6 +21,7 @@ import CasePredictPage from "@/pages/hub/study-case-predict";
 import CounterArgsPage from "@/pages/hub/study-counter-args";
 import LegalSandboxPage from "@/pages/hub/study-sandbox";
 import EmbedNyayaPage from "@/pages/embed-nyaya";
+import EmbedCNRCasesPage from "@/pages/embed-cnr-cases";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -36,6 +37,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/embed/nyaya" component={EmbedNyayaPage} />
+      <Route path="/embed/cnr-cases" component={EmbedCNRCasesPage} />
       <Route>
         <AppLayout>
           <Switch>
