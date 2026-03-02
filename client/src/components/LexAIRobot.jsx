@@ -473,13 +473,32 @@ function MouseTracker({ onMouseMove }) {
   return null
 }
 
+function hasWebGL() {
+  try {
+    const c = document.createElement('canvas')
+    return !!(c.getContext('webgl2') || c.getContext('webgl'))
+  } catch { return false }
+}
+
 export default function LexAIRobot({ 
   botState = BOT_STATE.IDLE,
   audioAmplitude = 0,
-  className = ''
+  className = '',
+  onWebGLFail,
+  onLoaded
 }) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const mouseCb = useCallback((pos) => setMousePos(pos), [])
+  const [webglOk, setWebglOk] = useState(null)
+
+  useEffect(() => {
+    const ok = hasWebGL()
+    setWebglOk(ok)
+    if (!ok && onWebGLFail) onWebGLFail()
+  }, [])
+
+  if (webglOk === null) return null
+  if (!webglOk) return null
 
   return (
     <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '320px' }}>
@@ -490,6 +509,7 @@ export default function LexAIRobot({
           gl.outputColorSpace = THREE.SRGBColorSpace
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.2
+          if (onLoaded) onLoaded()
         }}
       >
         <ambientLight intensity={0.8} color="#ffffff" />

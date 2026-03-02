@@ -2,6 +2,7 @@ import { ElevenLabsClient } from 'elevenlabs';
 import WebSocket from 'ws';
 
 let cachedApiKey: string | null = null;
+let cachedClient: ElevenLabsClient | null = null;
 
 async function getCredentials(): Promise<string> {
   if (cachedApiKey) return cachedApiKey;
@@ -41,8 +42,10 @@ async function getCredentials(): Promise<string> {
 }
 
 export async function getUncachableElevenLabsClient() {
+  if (cachedClient) return cachedClient;
   const apiKey = await getCredentials();
-  return new ElevenLabsClient({ apiKey });
+  cachedClient = new ElevenLabsClient({ apiKey });
+  return cachedClient;
 }
 
 export async function getElevenLabsApiKey() {

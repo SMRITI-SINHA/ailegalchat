@@ -1,10 +1,24 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Scale, X, Mic, MicOff, Square } from "lucide-react";
 import { markdownToHtml } from "@/lib/utils";
 
-import LexAIRobot, { BOT_STATE } from "./LexAIRobot";
+import { lazy, Suspense } from "react";
+const LexAIRobot = lazy(() => import("./LexAIRobot"));
+import { BOT_STATE } from "./LexAIRobot";
+
+class RobotErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.warn("3D robot failed to load, using SVG fallback:", error.message);
+  }
+  render() { return this.state.hasError ? this.props.fallback : this.props.children; }
+}
 
 type VoiceState = "idle" | "listening" | "processing" | "speaking";
 
@@ -373,12 +387,41 @@ function Avatar3D({ speakingAmplitude, state }: { speakingAmplitude: number; sta
   );
 }
 
+function RobotWithFallback({ state, speakingAmplitude, amplitude }: { state: VoiceState; speakingAmplitude: number; amplitude: number }) {
+  const [use3D, setUse3D] = useState(true);
+  const [robotLoaded, setRobotLoaded] = useState(false);
+  const amp = state === "speaking" ? speakingAmplitude : amplitude;
+  
+  const svgFallback = (
+    <div className="flex items-center justify-center w-full h-full min-h-[320px]">
+      <Avatar3D speakingAmplitude={amp} state={state} />
+    </div>
+  );
+
+  if (!use3D) return svgFallback;
+
+  return (
+    <>
+      {!robotLoaded && svgFallback}
+      <div style={{ display: robotLoaded ? 'block' : 'none', width: '100%', height: '100%' }}>
+        <LexAIRobot 
+          botState={VOICE_TO_BOT_STATE[state]} 
+          audioAmplitude={amp}
+          onWebGLFail={() => setUse3D(false)}
+          onLoaded={() => setRobotLoaded(true)}
+        />
+      </div>
+    </>
+  );
+}
+
 export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
   const [state, setState] = useState<VoiceState>("idle");
   const [messages, setMessages] = useState<VoiceMessage[]>([]);
   const [amplitude, setAmplitude] = useState(0);
   const [speakingAmplitude, setSpeakingAmplitude] = useState(0);
   const [error, setError] = useState("");
+  const [micReady, setMicReady] = useState(false);
 
   const [detectedLanguage, setDetectedLanguage] = useState<string>("eng");
 
@@ -397,6 +440,21 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
   const hasSpeechRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const stopFnRef = useRef<() => void>(() => {});
+  const prewarmedStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    }).then(stream => {
+      prewarmedStreamRef.current = stream;
+      setMicReady(true);
+    }).catch(() => {
+      setMicReady(true);
+    });
+    return () => {
+      prewarmedStreamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -459,13 +517,15 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
   const startListening = async () => {
     setError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      let stream: MediaStream;
+      if (prewarmedStreamRef.current && prewarmedStreamRef.current.getTracks().some(t => t.readyState === "live")) {
+        stream = prewarmedStreamRef.current;
+        prewarmedStreamRef.current = null;
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+      }
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
@@ -715,6 +775,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
     cancelAnimationFrame(animFrameRef.current);
     cancelAnimationFrame(speakAnimFrameRef.current);
     streamRef.current?.getTracks().forEach(t => t.stop());
+    prewarmedStreamRef.current?.getTracks().forEach(t => t.stop());
     audioContextRef.current?.close();
     if (playbackSourceRef.current) {
       try { playbackSourceRef.current.stop(); } catch {}
@@ -763,10 +824,19 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
         <div className="voice-panel voice-panel-left">
           <div className="voice-visual-center">
             <div className="voice-assistant-avatar-container">
-              <LexAIRobot 
-                botState={VOICE_TO_BOT_STATE[state]} 
-                audioAmplitude={state === "speaking" ? speakingAmplitude : amplitude} 
-              />
+              <RobotErrorBoundary fallback={
+                <div className="flex items-center justify-center w-full h-full min-h-[320px]">
+                  <Avatar3D speakingAmplitude={state === "speaking" ? speakingAmplitude : amplitude} state={state} />
+                </div>
+              }>
+                <Suspense fallback={
+                  <div className="flex items-center justify-center w-full h-full min-h-[320px]">
+                    <Avatar3D speakingAmplitude={state === "speaking" ? speakingAmplitude : amplitude} state={state} />
+                  </div>
+                }>
+                  <RobotWithFallback state={state} speakingAmplitude={speakingAmplitude} amplitude={amplitude} />
+                </Suspense>
+              </RobotErrorBoundary>
             </div>
           </div>
 

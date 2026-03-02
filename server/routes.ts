@@ -2535,6 +2535,7 @@ Do not include any other text outside the JSON object.`;
       }
 
       const client = await getUncachableElevenLabsClient();
+      console.log(`TTS request: ${text.length} chars, voice=${voiceId || DEFAULT_VOICE_ID}`);
       const audioStream = await client.textToSpeech.convert(voiceId || DEFAULT_VOICE_ID, {
         text: text.substring(0, 5000),
         model_id: TTS_MODEL,
@@ -2548,9 +2549,9 @@ Do not include any other text outside the JSON object.`;
         res.write(chunk);
       }
       res.end();
-    } catch (error) {
-      console.error("Error generating speech:", error);
-      res.status(500).json({ error: "Failed to generate speech" });
+    } catch (error: any) {
+      console.error("Error generating speech:", error?.message || error);
+      res.status(500).json({ error: "Failed to generate speech", detail: error?.message || "Unknown error" });
     }
   });
 
