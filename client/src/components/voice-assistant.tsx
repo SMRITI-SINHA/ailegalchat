@@ -556,9 +556,14 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
           setMessages(prev => [...prev, userMsg]);
 
           await getAIResponse(text, langCode);
-        } catch (err) {
+        } catch (err: any) {
           console.error("Transcription error:", err);
-          setError("Failed to transcribe audio. Please try again.");
+          const detail = err?.detail || err?.message || "";
+          if (detail.includes("X_REPLIT_TOKEN") || detail.includes("ElevenLabs not connected")) {
+            setError("Voice service not configured. ElevenLabs API key is required.");
+          } else {
+            setError("Failed to transcribe audio. Please try again.");
+          }
           setState("idle");
         }
         resolve();

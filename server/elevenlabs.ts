@@ -55,7 +55,9 @@ export async function transcribeAudio(audioBuffer: Buffer, filename: string): Pr
   });
 
   if (!response.ok) {
-    throw new Error('Transcription failed: ' + response.statusText);
+    const errorBody = await response.text().catch(() => 'no body');
+    console.error('ElevenLabs transcription error:', response.status, response.statusText, errorBody);
+    throw new Error('Transcription failed: ' + response.status + ' ' + errorBody);
   }
 
   const result = await response.json();

@@ -2518,11 +2518,12 @@ Do not include any other text outside the JSON object.`;
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
       }
+      console.log(`Transcription request: file size=${req.file.size} bytes, name=${req.file.originalname}`);
       const result = await elevenLabsTranscribe(req.file.buffer, req.file.originalname || "recording.webm");
       res.json({ text: result.text, language_code: result.language_code });
-    } catch (error) {
-      console.error("Error transcribing audio:", error);
-      res.status(500).json({ error: "Failed to transcribe audio" });
+    } catch (error: any) {
+      console.error("Error transcribing audio:", error?.message || error);
+      res.status(500).json({ error: "Failed to transcribe audio", detail: error?.message || "Unknown error" });
     }
   });
 
