@@ -1,10 +1,16 @@
-// ElevenLabs integration - uses Replit connector for API key management
 import { ElevenLabsClient } from 'elevenlabs';
 import WebSocket from 'ws';
 
-let connectionSettings: any;
+let cachedApiKey: string | null = null;
 
-async function getCredentials() {
+async function getCredentials(): Promise<string> {
+  if (cachedApiKey) return cachedApiKey;
+
+  if (process.env.ELEVENLABS_API_KEY) {
+    cachedApiKey = process.env.ELEVENLABS_API_KEY;
+    return cachedApiKey;
+  }
+
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
     ? 'repl ' + process.env.REPL_IDENTITY
@@ -12,11 +18,11 @@ async function getCredentials() {
     ? 'depl ' + process.env.WEB_REPL_RENEWAL
     : null;
 
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+  if (!xReplitToken || !hostname) {
+    throw new Error('ElevenLabs not configured. Set ELEVENLABS_API_KEY in your .env file.');
   }
 
-  connectionSettings = await fetch(
+  const connectionSettings = await fetch(
     'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=elevenlabs',
     {
       headers: {
@@ -27,9 +33,11 @@ async function getCredentials() {
   ).then(res => res.json()).then(data => data.items?.[0]);
 
   if (!connectionSettings || !connectionSettings.settings.api_key) {
-    throw new Error('ElevenLabs not connected');
+    throw new Error('ElevenLabs not connected. Set ELEVENLABS_API_KEY in your .env file.');
   }
-  return connectionSettings.settings.api_key;
+
+  cachedApiKey = connectionSettings.settings.api_key;
+  return cachedApiKey!;
 }
 
 export async function getUncachableElevenLabsClient() {
