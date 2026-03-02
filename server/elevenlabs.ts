@@ -53,11 +53,21 @@ export async function getElevenLabsApiKey() {
 }
 
 export async function transcribeAudio(audioBuffer: Buffer, filename: string): Promise<{ text: string; language_code: string }> {
+  if (!audioBuffer || audioBuffer.length < 100) {
+    throw new Error('Audio file is empty or too small');
+  }
+
   const apiKey = await getCredentials();
 
   const formData = new FormData();
-  formData.append('file', new Blob([audioBuffer]), filename);
+  const mimeType = filename.endsWith('.wav') ? 'audio/wav'
+    : filename.endsWith('.mp3') ? 'audio/mpeg'
+    : filename.endsWith('.ogg') ? 'audio/ogg'
+    : 'audio/webm';
+  formData.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
   formData.append('model_id', 'scribe_v1');
+
+  console.log(`Transcription: sending ${audioBuffer.length} bytes, mime=${mimeType}, file=${filename}`);
 
   const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
     method: 'POST',
@@ -72,6 +82,7 @@ export async function transcribeAudio(audioBuffer: Buffer, filename: string): Pr
   }
 
   const result = await response.json();
+  console.log(`Transcription result: "${(result.text || '').substring(0, 50)}..." lang=${result.language_code}`);
   return { text: result.text || '', language_code: result.language_code || 'eng' };
 }
 

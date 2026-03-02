@@ -514,19 +514,27 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
     animFrameRef.current = requestAnimationFrame(update);
   }, []);
 
+  const ensureMicStream = async (): Promise<MediaStream> => {
+    if (streamRef.current && streamRef.current.getTracks().some(t => t.readyState === "live")) {
+      return streamRef.current;
+    }
+    if (prewarmedStreamRef.current && prewarmedStreamRef.current.getTracks().some(t => t.readyState === "live")) {
+      const s = prewarmedStreamRef.current;
+      prewarmedStreamRef.current = null;
+      streamRef.current = s;
+      return s;
+    }
+    const s = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    streamRef.current = s;
+    return s;
+  };
+
   const startListening = async () => {
     setError("");
     try {
-      let stream: MediaStream;
-      if (prewarmedStreamRef.current && prewarmedStreamRef.current.getTracks().some(t => t.readyState === "live")) {
-        stream = prewarmedStreamRef.current;
-        prewarmedStreamRef.current = null;
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        });
-      }
-      streamRef.current = stream;
+      const stream = await ensureMicStream();
 
       const audioCtx = new AudioContext();
       const source = audioCtx.createMediaStreamSource(stream);
@@ -569,14 +577,14 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
       recorder.onstop = async () => {
         setState("processing");
 
-        streamRef.current?.getTracks().forEach(t => t.stop());
         audioContextRef.current?.close();
         audioContextRef.current = null;
         analyserRef.current = null;
 
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
 
-        if (blob.size < 1000) {
+        if (blob.size < 500) {
+          setError("No speech detected. Please speak clearly and try again.");
           setState("idle");
           resolve();
           return;
@@ -591,9 +599,20 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
             body: formData,
           });
 
-          if (!res.ok) throw new Error("Transcription failed");
-
           const data = await res.json();
+
+          if (!res.ok) {
+            const detail = data?.detail || data?.error || "";
+            console.error("Transcription API error:", res.status, detail);
+            if (typeof detail === "string" && (detail.includes("empty") || detail.includes("corrupted"))) {
+              throw new Error("EMPTY_AUDIO");
+            }
+            if (typeof detail === "string" && (detail.includes("X_REPLIT_TOKEN") || detail.includes("ElevenLabs not connected") || detail.includes("not configured"))) {
+              throw new Error("NOT_CONFIGURED");
+            }
+            throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+          }
+
           const text = (data.text || "").trim();
           const rawLang = data.language_code || "eng";
 
@@ -607,6 +626,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
           setDetectedLanguage(langCode);
 
           if (!text) {
+            setError("Could not detect any speech. Please try again.");
             setState("idle");
             resolve();
             return;
@@ -618,9 +638,11 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
           await getAIResponse(text, langCode);
         } catch (err: any) {
           console.error("Transcription error:", err);
-          const detail = err?.detail || err?.message || "";
-          if (detail.includes("X_REPLIT_TOKEN") || detail.includes("ElevenLabs not connected")) {
+          const msg = err?.message || "";
+          if (msg === "NOT_CONFIGURED") {
             setError("Voice service not configured. ElevenLabs API key is required.");
+          } else if (msg === "EMPTY_AUDIO") {
+            setError("No speech detected. Please speak louder and try again.");
           } else {
             setError("Failed to transcribe audio. Please try again.");
           }
