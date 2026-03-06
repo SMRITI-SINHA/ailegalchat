@@ -1,8 +1,9 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useGLTF, useAnimations, Environment, ContactShadows } from '@react-three/drei'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { useGLTF, useAnimations, Environment } from '@react-three/drei'
 import * as THREE from 'three'
 
+// ─── BOT STATES ──────────────────────────────────────────────────────────────
 export const BOT_STATE = {
   IDLE:       'idle',
   LISTENING:  'listening',
@@ -15,6 +16,7 @@ export const BOT_STATE = {
   DECISION:   'decision',
 }
 
+// ─── STATE → ANIMATION MAP ───────────────────────────────────────────────────
 const STATE_ANIMATION = {
   [BOT_STATE.IDLE]:      'Hover_Float',
   [BOT_STATE.LISTENING]: 'Head_Listen',
@@ -27,6 +29,7 @@ const STATE_ANIMATION = {
   [BOT_STATE.DECISION]:  'Point_Forward',
 }
 
+// ─── STATE → FACE MAP ────────────────────────────────────────────────────────
 const STATE_FACE = {
   [BOT_STATE.IDLE]:      '/robot_avatar/face_happy.png',
   [BOT_STATE.LISTENING]: '/robot_avatar/face_happy.png',
@@ -39,62 +42,12 @@ const STATE_FACE = {
   [BOT_STATE.DECISION]:  '/robot_avatar/face_serious.png',
 }
 
-const SPEAKING_FACE_PATHS = [
-  '/robot_avatar/face_talking.png',
-  '/robot_avatar/face_happy.png',
-  '/robot_avatar/face_excited.png',
-  '/robot_avatar/face_talking.png',
-]
-
-const IDLE_BEHAVIORS = [
-  { type: 'lookAround', duration: 2.5 },
-  { type: 'tiltHead', duration: 2.0 },
-  { type: 'swirl', duration: 3.0 },
-  { type: 'nod', duration: 1.5 },
-  { type: 'bounce', duration: 2.0 },
-]
-
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
-const lerp = (a, b, t) => a + (b - a) * t
-
-function SceneEnvFallback() {
-  const { gl, scene } = useThree()
-  const appliedRef = useRef(false)
-
-  useEffect(() => {
-    if (appliedRef.current) return
-    const timer = setTimeout(() => {
-      if (!scene.environment) {
-        const pmremGen = new THREE.PMREMGenerator(gl)
-        pmremGen.compileEquirectangularShader()
-        const neutralScene = new THREE.Scene()
-        neutralScene.background = new THREE.Color(0.75, 0.73, 0.7)
-        const l1 = new THREE.DirectionalLight(0xffffff, 2)
-        l1.position.set(5, 10, 5)
-        neutralScene.add(l1)
-        const l2 = new THREE.DirectionalLight(0xe8dcc8, 1)
-        l2.position.set(-5, 5, -3)
-        neutralScene.add(l2)
-        const l3 = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5)
-        neutralScene.add(l3)
-        const envMap = pmremGen.fromScene(neutralScene, 0.04).texture
-        scene.environment = envMap
-        pmremGen.dispose()
-        neutralScene.traverse((c) => { if (c.dispose) c.dispose() })
-        appliedRef.current = true
-      }
-    }, 3000)
-    return () => clearTimeout(timer)
-  }, [gl, scene])
-
-  return null
-}
-
-function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
+// ─── ROBOT INNER COMPONENT ───────────────────────────────────────────────────
+function RobotModel({ botState, audioAmplitude = 0 }) {
   const group = useRef()
   const { scene, animations } = useGLTF('/robot_avatar/LexAI_Robot_Final.glb')
-  const { actions } = useAnimations(animations, group)
-
+  const { actions, mixer } = useAnimations(animations, group)
+  
   const currentActionRef = useRef(null)
   const faceTextureRef = useRef(null)
   const faceMeshRef = useRef(null)
@@ -105,105 +58,71 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   const gavelActionRef = useRef(null)
   const prevStateRef = useRef(null)
 
-  const idleBehaviorRef = useRef({ active: false, type: null, startTime: 0, duration: 0 })
-  const nextIdleTimeRef = useRef(3)
-  const smoothMouseRef = useRef({ x: 0, y: 0 })
-
-  const smoothAmplitudeRef = useRef(0)
-  const speakGestureRef = useRef({ nextTime: 0, active: false, type: 0, startTime: 0, duration: 0 })
-  const faceSwapTimerRef = useRef(0)
-  const currentFaceIdxRef = useRef(0)
-  const headBoneRef = useRef(null)
-  const headfrontBoneRef = useRef(null)
-  const spineBoneRef = useRef(null)
-  const neckBoneRef = useRef(null)
-  const breathPhaseRef = useRef(0)
-
-  const headBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
-  const neckBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
-  const spineBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
-  const bonesInitializedRef = useRef(false)
-
+  // ── Find prop nodes on mount ──────────────────────────────────────────────
   useEffect(() => {
     if (!scene) return
     scene.traverse((obj) => {
       if (obj.name === 'SpeechBubble') speechBubbleRef.current = obj
       if (obj.name === 'Gavel') gavelRef.current = obj
       if (obj.name === 'ParticleAura') auraRef.current = obj
-
-      if (obj.isMesh && obj.name === 'char1') {
+      
+      // Improved face mesh detection
+      if (obj.isMesh && (obj.name.toLowerCase().includes('face') || obj.name.toLowerCase().includes('screen'))) {
         faceMeshRef.current = obj
-        if (obj.material) {
-          obj.material.envMapIntensity = 1.5
-          obj.material.needsUpdate = true
-        }
-      }
-
-      if (obj.isBone) {
-        if (obj.name === 'Head') {
-          headBoneRef.current = obj
-          headBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
-        }
-        if (obj.name === 'headfront') headfrontBoneRef.current = obj
-        if (obj.name === 'neck') {
-          neckBoneRef.current = obj
-          neckBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
-        }
-        if (obj.name === 'Spine02') {
-          spineBoneRef.current = obj
-          spineBaseRotRef.current = { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z }
-        }
       }
     })
 
+    // Hide all props initially
     if (speechBubbleRef.current) speechBubbleRef.current.visible = false
     if (gavelRef.current) gavelRef.current.visible = false
     if (auraRef.current) auraRef.current.visible = false
 
+    // Start with greeting
     playAnimation('Wave_Hello', false)
-    setTimeout(() => {
-      playAnimation('Hover_Float', true)
-    }, 2200)
-
+    setTimeout(() => playAnimation('Hover_Float', true), 2200)
+    
+    // Setup aura animation ref
     if (actions['ParticleAura_Spin']) auraActionRef.current = actions['ParticleAura_Spin']
     if (actions['Gavel_Swing']) gavelActionRef.current = actions['Gavel_Swing']
   }, [scene, actions])
 
+  // ── Play animation with crossfade ─────────────────────────────────────────
   const playAnimation = useCallback((name, loop = true) => {
     const action = actions[name]
     if (!action) return
-
+    
     if (currentActionRef.current && currentActionRef.current !== action) {
       currentActionRef.current.fadeOut(0.35)
     }
-
+    
     action.reset()
     action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1)
     action.clampWhenFinished = !loop
     action.fadeIn(0.35).play()
     currentActionRef.current = action
-
-    if (!bonesInitializedRef.current) {
-      bonesInitializedRef.current = true
-    }
   }, [actions])
 
+  // ── Update face texture with improved LED glow ────────────────────────────
   const updateFace = useCallback((texturePath) => {
     if (!faceMeshRef.current) return
     const loader = new THREE.TextureLoader()
     loader.load(texturePath, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace
-      tex.flipY = false
-
+      tex.encoding = THREE.sRGBEncoding
+      tex.flipY = false // GLTF textures usually need this
+      
       if (faceMeshRef.current.material) {
+        // Create a clone to avoid modifying shared material
         if (!faceTextureRef.current) {
           faceMeshRef.current.material = faceMeshRef.current.material.clone()
         }
-
+        
+        // Enhance LED expression visibility
         faceMeshRef.current.material.map = tex
         faceMeshRef.current.material.emissiveMap = tex
-        faceMeshRef.current.material.emissive = new THREE.Color(0xd4af37)
-        faceMeshRef.current.material.emissiveIntensity = 3.5
+        
+        // Golden/Amber glow to match Chakshi theme
+        faceMeshRef.current.material.emissive = new THREE.Color(0xd4af37) 
+        faceMeshRef.current.material.emissiveIntensity = 3.5 // Increased for better visibility
         faceMeshRef.current.material.transparent = true
         faceMeshRef.current.material.needsUpdate = true
         faceTextureRef.current = tex
@@ -211,27 +130,21 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
     })
   }, [])
 
+  // ── React to bot state changes ────────────────────────────────────────────
   useEffect(() => {
     if (!actions || botState === prevStateRef.current) return
     prevStateRef.current = botState
 
+    // Play animation
     const animName = STATE_ANIMATION[botState]
     const isLoop = [BOT_STATE.IDLE, BOT_STATE.SPEAKING, BOT_STATE.LISTENING].includes(botState)
     if (animName) playAnimation(animName, isLoop)
 
+    // Update face texture
     const faceTex = STATE_FACE[botState]
     if (faceTex) updateFace(faceTex)
 
-    if (botState !== BOT_STATE.IDLE) {
-      idleBehaviorRef.current.active = false
-    }
-
-    if (botState === BOT_STATE.SPEAKING) {
-      speakGestureRef.current = { nextTime: 0, active: false, type: 0, startTime: 0, duration: 0 }
-      faceSwapTimerRef.current = 0
-      currentFaceIdxRef.current = 0
-    }
-
+    // Handle props
     if (speechBubbleRef.current) {
       speechBubbleRef.current.visible = botState === BOT_STATE.SPEAKING
     }
@@ -257,162 +170,51 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
     }
   }, [botState, actions, playAnimation, updateFace])
 
-  useFrame((state, delta) => {
+  // ── Procedural animation frame ────────────────────────────────────────────
+  useFrame((state) => {
     if (!group.current) return
     const t = state.clock.elapsedTime
 
-    smoothAmplitudeRef.current = lerp(smoothAmplitudeRef.current, audioAmplitude, 0.15)
-    const amp = smoothAmplitudeRef.current
-
-    const mx = clamp(mousePos?.x ?? 0, -1, 1)
-    const my = clamp(mousePos?.y ?? 0, -1, 1)
-    smoothMouseRef.current.x = lerp(smoothMouseRef.current.x, mx * 0.3, 0.06)
-    smoothMouseRef.current.y = lerp(smoothMouseRef.current.y, my * 0.15, 0.06)
-
-    group.current.rotation.y = smoothMouseRef.current.x
-
-    breathPhaseRef.current += delta * 1.2
-    const breathScale = 1.0 + Math.sin(breathPhaseRef.current) * 0.003
-    group.current.scale.set(breathScale, breathScale, breathScale)
-
-    let headExtraX = 0
-    let headExtraY = 0
-    let headExtraZ = 0
-    let neckExtraY = 0
-    let spineExtraZ = 0
-    let posY = 0
-
-    if (botState === BOT_STATE.SPEAKING) {
-      headExtraX = Math.sin(t * 3.5) * amp * 0.08
-      headExtraZ = Math.sin(t * 2.1) * amp * 0.03
-      neckExtraY = Math.sin(t * 1.2) * amp * 0.025
-      spineExtraZ = Math.sin(t * 1.5) * amp * 0.02
-      posY = Math.sin(t * 2.5) * amp * 0.015
-
-      faceSwapTimerRef.current += delta
-      const swapInterval = amp > 0.3 ? 0.15 : amp > 0.1 ? 0.25 : 0.4
-      if (faceSwapTimerRef.current > swapInterval && amp > 0.02) {
-        faceSwapTimerRef.current = 0
-        currentFaceIdxRef.current = (currentFaceIdxRef.current + 1) % SPEAKING_FACE_PATHS.length
-        updateFace(SPEAKING_FACE_PATHS[currentFaceIdxRef.current])
+    // Head tracking toward cursor (subtle)
+    const mx = (state.mouse.x * 0.15)
+    const my = (state.mouse.y * 0.08)
+    
+    scene.traverse((obj) => {
+      if (obj.name === 'Head' && obj.isBone) {
+        obj.rotation.y += (mx - obj.rotation.y) * 0.05
+        obj.rotation.x += (my - obj.rotation.x) * 0.05
       }
+    })
 
-      const gesture = speakGestureRef.current
-      if (!gesture.active && t > gesture.nextTime) {
-        gesture.active = true
-        gesture.type = Math.floor(Math.random() * 4)
-        gesture.startTime = t
-        gesture.duration = 1.0 + Math.random() * 1.5
-      }
-      if (gesture.active) {
-        const gProgress = (t - gesture.startTime) / gesture.duration
-        if (gProgress >= 1) {
-          gesture.active = false
-          gesture.nextTime = t + 0.5 + Math.random() * 2.0
-        } else {
-          const gEase = Math.sin(gProgress * Math.PI)
-          switch (gesture.type) {
-            case 0:
-              group.current.rotation.y += Math.sin(gProgress * Math.PI) * 0.04 * gEase
-              break
-            case 1:
-              headExtraX += Math.sin(gProgress * Math.PI * 2) * 0.04 * gEase
-              break
-            case 2:
-              posY += Math.sin(gProgress * Math.PI * 2) * 0.01 * gEase
-              break
-            case 3:
-              headExtraZ += Math.sin(gProgress * Math.PI) * 0.04 * gEase
-              break
-          }
+    // Voice amplitude drives head bob and subtle emissive pulsing
+    if (botState === BOT_STATE.SPEAKING && audioAmplitude > 0) {
+      scene.traverse((obj) => {
+        if (obj.name === 'Head' && obj.isBone) {
+          obj.rotation.x += Math.sin(t * 12) * audioAmplitude * 0.06
         }
-      }
-
+      })
       if (faceMeshRef.current?.material) {
-        faceMeshRef.current.material.emissiveIntensity = 2.0 + Math.sin(t * 20) * amp * 2.0
+        faceMeshRef.current.material.emissiveIntensity = 2.0 + Math.sin(t * 20) * audioAmplitude * 2.0
       }
-
-    } else if (botState === BOT_STATE.LISTENING) {
-      posY = Math.sin(t * 2) * 0.01 + amp * 0.015
-      headExtraX = Math.sin(t * 1.5) * 0.025
-      headExtraZ = Math.sin(t * 0.8) * 0.015
-
-    } else if (botState === BOT_STATE.THINKING) {
-      posY = Math.sin(t * 0.6) * 0.008
-      headExtraZ = Math.sin(t * 0.5) * 0.03
-      headExtraX = -0.03 + Math.sin(t * 0.3) * 0.015
-
-    } else if (botState === BOT_STATE.IDLE) {
-      const idle = idleBehaviorRef.current
-
-      if (!idle.active && t > nextIdleTimeRef.current) {
-        const behavior = IDLE_BEHAVIORS[Math.floor(Math.random() * IDLE_BEHAVIORS.length)]
-        idle.active = true
-        idle.type = behavior.type
-        idle.startTime = t
-        idle.duration = behavior.duration
-      }
-
-      if (idle.active) {
-        const elapsed = t - idle.startTime
-        const progress = elapsed / idle.duration
-
-        if (progress >= 1) {
-          idle.active = false
-          nextIdleTimeRef.current = t + 2 + Math.random() * 4
-        } else {
-          const ease = Math.sin(progress * Math.PI)
-
-          switch (idle.type) {
-            case 'lookAround':
-              headExtraY = Math.sin(progress * Math.PI * 2) * 0.1 * ease
-              break
-            case 'tiltHead':
-              headExtraZ = Math.sin(progress * Math.PI) * 0.04
-              break
-            case 'swirl':
-              group.current.rotation.y += Math.sin(progress * Math.PI * 2) * 0.01
-              posY = Math.sin(progress * Math.PI * 3) * 0.03
-              break
-            case 'nod':
-              headExtraX = Math.sin(progress * Math.PI * 3) * 0.03 * ease
-              break
-            case 'bounce':
-              posY = Math.sin(progress * Math.PI * 4) * 0.02 * ease
-              break
-          }
-        }
-      }
-
-      posY += Math.sin(t * 0.8) * 0.003
-
-      if (faceMeshRef.current?.material) {
-        faceMeshRef.current.material.emissiveIntensity = 2.0 + Math.sin(t * 2) * 0.5
-      }
+    } else if (faceMeshRef.current?.material) {
+      // Subtle pulse when idle
+      faceMeshRef.current.material.emissiveIntensity = 2.0 + Math.sin(t * 2) * 0.5
     }
 
-    group.current.position.y = posY
-
-    headExtraY += -smoothMouseRef.current.x * 0.4
-    headExtraX += smoothMouseRef.current.y * 0.2
-
-    if (headBoneRef.current) {
-      headBoneRef.current.rotation.x = headBaseRotRef.current.x + headExtraX
-      headBoneRef.current.rotation.y = headBaseRotRef.current.y + headExtraY
-      headBoneRef.current.rotation.z = headBaseRotRef.current.z + headExtraZ
-    }
-    if (neckBoneRef.current) {
-      neckBoneRef.current.rotation.y = neckBaseRotRef.current.y + neckExtraY
-    }
-    if (spineBoneRef.current) {
-      spineBoneRef.current.rotation.z = spineBaseRotRef.current.z + spineExtraZ
-    }
-
+    // Random blink via headfront bone scale
     const blinkCycle = Math.sin(t * 0.7) * Math.sin(t * 1.3)
-    const isBlinking = blinkCycle > 0.97 && botState !== BOT_STATE.SPEAKING
-    if (headfrontBoneRef.current) {
-      const targetScaleY = isBlinking ? 0.1 : 1.0
-      headfrontBoneRef.current.scale.y = lerp(headfrontBoneRef.current.scale.y, targetScaleY, isBlinking ? 0.4 : 0.2)
+    if (blinkCycle > 0.98) {
+      scene.traverse((obj) => {
+        if (obj.name === 'headfront') {
+          obj.scale.y = 0.1
+        }
+      })
+    } else {
+      scene.traverse((obj) => {
+        if (obj.name === 'headfront') {
+          obj.scale.y += (1.0 - obj.scale.y) * 0.3
+        }
+      })
     }
 
     if (speechBubbleRef.current && speechBubbleRef.current.visible) {
@@ -428,49 +230,26 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   )
 }
 
-function MouseTracker({ onMouseMove }) {
-  const { gl } = useThree()
-
-  useEffect(() => {
-    const handleMove = (e) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      const x = clamp(((e.clientX - rect.left) / rect.width) * 2 - 1, -1, 1)
-      const y = clamp(-((e.clientY - rect.top) / rect.height) * 2 + 1, -1, 1)
-      onMouseMove({ x, y })
-    }
-
-    window.addEventListener('mousemove', handleMove)
-
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-    }
-  }, [gl, onMouseMove])
-
-  return null
-}
-
-function hasWebGL() {
-  try {
-    const c = document.createElement('canvas')
-    return !!(c.getContext('webgl2') || c.getContext('webgl'))
-  } catch { return false }
-}
-
-export default function LexAIRobot({
+// ─── MAIN EXPORT COMPONENT ───────────────────────────────────────────────────
+export default function LexAIRobot({ 
   botState = BOT_STATE.IDLE,
   audioAmplitude = 0,
   className = '',
   onWebGLFail,
   onLoaded
 }) {
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
-  const mouseCb = useCallback((pos) => setMousePos(pos), [])
   const [webglOk, setWebglOk] = useState(null)
 
   useEffect(() => {
-    const ok = hasWebGL()
-    setWebglOk(ok)
-    if (!ok && onWebGLFail) onWebGLFail()
+    try {
+      const c = document.createElement('canvas')
+      const ok = !!(c.getContext('webgl2') || c.getContext('webgl'))
+      setWebglOk(ok)
+      if (!ok && onWebGLFail) onWebGLFail()
+    } catch {
+      setWebglOk(false)
+      if (onWebGLFail) onWebGLFail()
+    }
   }, [])
 
   if (webglOk === null) return null
@@ -480,28 +259,21 @@ export default function LexAIRobot({
     <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '300px' }}>
       <Canvas
         camera={{ position: [0, 1.2, 3.2], fov: 40 }}
-        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+        gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace
           gl.toneMapping = THREE.ACESFilmicToneMapping
-          gl.toneMappingExposure = 1.4
-          gl.physicallyCorrectLights = true
+          gl.toneMappingExposure = 1.2
           if (onLoaded) onLoaded()
         }}
       >
-        <ambientLight intensity={1.0} color="#ffffff" />
-        <directionalLight position={[5, 8, 5]} intensity={2.5} color="#ffffff" castShadow />
-        <directionalLight position={[-3, 5, -3]} intensity={1.0} color="#e8dcc8" />
-        <spotLight position={[0, 10, 5]} angle={0.2} penumbra={1} intensity={3} castShadow />
-        <pointLight position={[-5, -2, -5]} intensity={0.8} color="#b69d74" />
-        <pointLight position={[3, 0, 4]} intensity={0.6} color="#ffffff" />
-
-        <MouseTracker onMouseMove={mouseCb} />
-        <RobotModel botState={botState} audioAmplitude={audioAmplitude} mousePos={mousePos} />
-
-        <ContactShadows position={[0, -1.2, 0]} opacity={0.4} scale={5} blur={2.5} />
+        <ambientLight intensity={0.8} color="#ffffff" />
+        <spotLight position={[5, 10, 5]} angle={0.15} penumbra={1} intensity={2} castShadow />
+        <pointLight position={[-5, -5, -5]} intensity={1} color="#b69d74" />
+        
+        <RobotModel botState={botState} audioAmplitude={audioAmplitude} />
+        
         <Environment preset="studio" />
-        <SceneEnvFallback />
       </Canvas>
     </div>
   )
