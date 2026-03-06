@@ -645,7 +645,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
             if (detailStr.includes("empty") || detailStr.includes("corrupted")) {
               throw new Error("EMPTY_AUDIO");
             }
-            if (detailStr.includes("X_REPLIT_TOKEN") || detailStr.includes("ElevenLabs not connected") || detailStr.includes("not configured")) {
+            if (detailStr.includes("not configured") || detailStr.includes("not connected") || detailStr.includes("API key")) {
               throw new Error("NOT_CONFIGURED");
             }
             throw new Error(detailStr);
@@ -679,7 +679,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
           console.error("Transcription error:", err?.message || err);
           const msg = err?.message || "";
           if (msg === "NOT_CONFIGURED") {
-            setError("Voice service not configured. ElevenLabs API key is required.");
+            setError("Voice service not configured. Please check your API setup.");
           } else if (msg === "EMPTY_AUDIO") {
             setError("No speech detected. Please speak louder and try again.");
           } else {

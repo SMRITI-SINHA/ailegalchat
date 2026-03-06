@@ -60,8 +60,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const { warmupElevenLabs } = await import("./elevenlabs");
-  warmupElevenLabs();
+  console.log('Voice service: using OpenAI Whisper (transcription) + OpenAI TTS (speech)');
 
   await registerRoutes(httpServer, app);
 

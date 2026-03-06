@@ -36,7 +36,7 @@ The user interface is structured around a central "Chakshi AI Hub" with distinct
 - **Security & Compliance:** SOC 2 compliant, zero data retention, and XSS protection.
 
 ### External Dependencies
-- **OpenAI:** Used for various AI models (gpt-4o-mini, gpt-4.1, o3) via Replit AI Integrations for natural language processing, content generation, and intelligent reasoning.
+- **OpenAI:** Used for various AI models (gpt-4o-mini, gpt-4.1, o3) via Replit AI Integrations for natural language processing, content generation, and intelligent reasoning. Also used for voice assistant: Whisper (speech-to-text transcription) and TTS API (text-to-speech with "nova" voice). Voice service module: `server/voice-service.ts`.
 - **Indian Kanoon API:** Integrated for comprehensive statute and case law search and document retrieval specific to Indian legal contexts.
 - **Google Calendar API:** Utilized for bidirectional synchronization of legal events, enabling users to manage their academic and professional schedules within the platform and externally.
 - **`mammoth.js`:** Library used for converting `.docx` files to HTML, preserving document structure during upload and processing.

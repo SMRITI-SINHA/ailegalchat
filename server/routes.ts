@@ -22,7 +22,7 @@ import { legalWebSearch } from "./legal-web-search";
 import { GoogleCalendarService } from "./google-calendar";
 import { trainingDataLoader } from "./training-data-loader";
 import { inLegalBERT } from "./huggingface";
-import { transcribeAudio as elevenLabsTranscribe, getUncachableElevenLabsClient, DEFAULT_VOICE_ID, TTS_MODEL } from "./elevenlabs";
+import { transcribeAudio as openaiTranscribe, generateSpeech as openaiTTS, DEFAULT_VOICE as OPENAI_DEFAULT_VOICE } from "./voice-service";
 
 function decodeFilename(rawName: string): string {
   try {
@@ -2519,7 +2519,7 @@ Do not include any other text outside the JSON object.`;
         return res.status(400).json({ error: "No audio file provided" });
       }
       console.log(`Transcription request: file size=${req.file.size} bytes, name=${req.file.originalname}`);
-      const result = await elevenLabsTranscribe(req.file.buffer, req.file.originalname || "recording.webm");
+      const result = await openaiTranscribe(req.file.buffer, req.file.originalname || "recording.webm");
       res.json({ text: result.text, language_code: result.language_code });
     } catch (error: any) {
       console.error("Error transcribing audio:", error?.message || error);
@@ -2534,21 +2534,13 @@ Do not include any other text outside the JSON object.`;
         return res.status(400).json({ error: "Text is required" });
       }
 
-      const client = await getUncachableElevenLabsClient();
-      console.log(`TTS request: ${text.length} chars, voice=${voiceId || DEFAULT_VOICE_ID}`);
-      const audioStream = await client.textToSpeech.convert(voiceId || DEFAULT_VOICE_ID, {
-        text: text.substring(0, 5000),
-        model_id: TTS_MODEL,
-        output_format: "mp3_44100_128",
-      });
+      const validVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+      const voice = (voiceId && validVoices.includes(voiceId)) ? voiceId : OPENAI_DEFAULT_VOICE;
+      const audioBuffer = await openaiTTS(text, voice);
 
       res.setHeader("Content-Type", "audio/mpeg");
-      res.setHeader("Transfer-Encoding", "chunked");
-
-      for await (const chunk of audioStream) {
-        res.write(chunk);
-      }
-      res.end();
+      res.setHeader("Content-Length", audioBuffer.length.toString());
+      res.end(audioBuffer);
     } catch (error: any) {
       console.error("Error generating speech:", error?.message || error);
       res.status(500).json({ error: "Failed to generate speech", detail: error?.message || "Unknown error" });
