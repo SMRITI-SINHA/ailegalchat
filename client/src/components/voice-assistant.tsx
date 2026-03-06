@@ -1,24 +1,10 @@
-import { useState, useRef, useEffect, useCallback, Component, type ErrorInfo, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Scale, X, Mic, MicOff, Square } from "lucide-react";
 import { markdownToHtml } from "@/lib/utils";
 
-import { lazy, Suspense } from "react";
-const LexAIRobot = lazy(() => import("./LexAIRobot"));
-import { BOT_STATE } from "./LexAIRobot";
-
-class RobotErrorBoundary extends Component<
-  { children: ReactNode; fallback: ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.warn("3D robot failed to load, using SVG fallback:", error.message);
-  }
-  render() { return this.state.hasError ? this.props.fallback : this.props.children; }
-}
+import LexAIRobot, { BOT_STATE } from "./LexAIRobot";
 
 type VoiceState = "idle" | "listening" | "processing" | "speaking";
 
@@ -178,7 +164,7 @@ function _AnimatedOrb({ amplitude, state }: { amplitude: number; state: VoiceSta
   );
 }
 
-function Avatar3D({ speakingAmplitude, state }: { speakingAmplitude: number; state: VoiceState }) {
+function _Avatar3D_unused({ speakingAmplitude, state }: { speakingAmplitude: number; state: VoiceState }) {
   const sceneRef = useRef<HTMLDivElement>(null);
   const leftArmRef = useRef<SVGGElement>(null);
   const rightArmRef = useRef<SVGGElement>(null);
@@ -387,33 +373,6 @@ function Avatar3D({ speakingAmplitude, state }: { speakingAmplitude: number; sta
   );
 }
 
-function RobotWithFallback({ state, speakingAmplitude, amplitude }: { state: VoiceState; speakingAmplitude: number; amplitude: number }) {
-  const [use3D, setUse3D] = useState(true);
-  const [robotLoaded, setRobotLoaded] = useState(false);
-  const amp = state === "speaking" ? speakingAmplitude : amplitude;
-  
-  const svgFallback = (
-    <div className="flex items-center justify-center w-full h-full min-h-[320px]">
-      <Avatar3D speakingAmplitude={amp} state={state} />
-    </div>
-  );
-
-  if (!use3D) return svgFallback;
-
-  return (
-    <>
-      {!robotLoaded && svgFallback}
-      <div style={{ display: robotLoaded ? 'block' : 'none', width: '100%', height: '100%' }}>
-        <LexAIRobot 
-          botState={VOICE_TO_BOT_STATE[state]} 
-          audioAmplitude={amp}
-          onWebGLFail={() => setUse3D(false)}
-          onLoaded={() => setRobotLoaded(true)}
-        />
-      </div>
-    </>
-  );
-}
 
 export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
   const [state, setState] = useState<VoiceState>("idle");
@@ -892,19 +851,10 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
         <div className="voice-panel voice-panel-left">
           <div className="voice-visual-center">
             <div className="voice-assistant-avatar-container">
-              <RobotErrorBoundary fallback={
-                <div className="flex items-center justify-center w-full h-full min-h-[320px]">
-                  <Avatar3D speakingAmplitude={state === "speaking" ? speakingAmplitude : amplitude} state={state} />
-                </div>
-              }>
-                <Suspense fallback={
-                  <div className="flex items-center justify-center w-full h-full min-h-[320px]">
-                    <Avatar3D speakingAmplitude={state === "speaking" ? speakingAmplitude : amplitude} state={state} />
-                  </div>
-                }>
-                  <RobotWithFallback state={state} speakingAmplitude={speakingAmplitude} amplitude={amplitude} />
-                </Suspense>
-              </RobotErrorBoundary>
+              <LexAIRobot 
+                botState={VOICE_TO_BOT_STATE[state]} 
+                audioAmplitude={state === "speaking" ? speakingAmplitude : amplitude} 
+              />
             </div>
           </div>
 
