@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useGLTF, useAnimations, Environment } from '@react-three/drei'
+import { useGLTF, useAnimations, Environment, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 
 export const BOT_STATE = {
@@ -57,6 +57,39 @@ const IDLE_BEHAVIORS = [
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
 const lerp = (a, b, t) => a + (b - a) * t
 
+function SceneEnvFallback() {
+  const { gl, scene } = useThree()
+  const appliedRef = useRef(false)
+
+  useEffect(() => {
+    if (appliedRef.current) return
+    const timer = setTimeout(() => {
+      if (!scene.environment) {
+        const pmremGen = new THREE.PMREMGenerator(gl)
+        pmremGen.compileEquirectangularShader()
+        const neutralScene = new THREE.Scene()
+        neutralScene.background = new THREE.Color(0.75, 0.73, 0.7)
+        const l1 = new THREE.DirectionalLight(0xffffff, 2)
+        l1.position.set(5, 10, 5)
+        neutralScene.add(l1)
+        const l2 = new THREE.DirectionalLight(0xe8dcc8, 1)
+        l2.position.set(-5, 5, -3)
+        neutralScene.add(l2)
+        const l3 = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5)
+        neutralScene.add(l3)
+        const envMap = pmremGen.fromScene(neutralScene, 0.04).texture
+        scene.environment = envMap
+        pmremGen.dispose()
+        neutralScene.traverse((c) => { if (c.dispose) c.dispose() })
+        appliedRef.current = true
+      }
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [gl, scene])
+
+  return null
+}
+
 function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   const group = useRef()
   const { scene, animations } = useGLTF('/robot_avatar/LexAI_Robot_Final.glb')
@@ -98,8 +131,12 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
       if (obj.name === 'Gavel') gavelRef.current = obj
       if (obj.name === 'ParticleAura') auraRef.current = obj
 
-      if (obj.isMesh && (obj.name.toLowerCase().includes('face') || obj.name.toLowerCase().includes('screen'))) {
+      if (obj.isMesh && obj.name === 'char1') {
         faceMeshRef.current = obj
+        if (obj.material) {
+          obj.material.envMapIntensity = 1.5
+          obj.material.needsUpdate = true
+        }
       }
 
       if (obj.isBone) {
@@ -443,22 +480,28 @@ export default function LexAIRobot({
     <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '300px' }}>
       <Canvas
         camera={{ position: [0, 1.2, 3.2], fov: 40 }}
-        gl={{ antialias: true, alpha: true }}
+        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace
           gl.toneMapping = THREE.ACESFilmicToneMapping
-          gl.toneMappingExposure = 1.2
+          gl.toneMappingExposure = 1.4
+          gl.physicallyCorrectLights = true
           if (onLoaded) onLoaded()
         }}
       >
-        <ambientLight intensity={0.8} color="#ffffff" />
-        <spotLight position={[5, 10, 5]} angle={0.15} penumbra={1} intensity={2} castShadow />
-        <pointLight position={[-5, -5, -5]} intensity={1} color="#b69d74" />
+        <ambientLight intensity={1.0} color="#ffffff" />
+        <directionalLight position={[5, 8, 5]} intensity={2.5} color="#ffffff" castShadow />
+        <directionalLight position={[-3, 5, -3]} intensity={1.0} color="#e8dcc8" />
+        <spotLight position={[0, 10, 5]} angle={0.2} penumbra={1} intensity={3} castShadow />
+        <pointLight position={[-5, -2, -5]} intensity={0.8} color="#b69d74" />
+        <pointLight position={[3, 0, 4]} intensity={0.6} color="#ffffff" />
 
         <MouseTracker onMouseMove={mouseCb} />
         <RobotModel botState={botState} audioAmplitude={audioAmplitude} mousePos={mousePos} />
 
+        <ContactShadows position={[0, -1.2, 0]} opacity={0.4} scale={5} blur={2.5} />
         <Environment preset="studio" />
+        <SceneEnvFallback />
       </Canvas>
     </div>
   )
