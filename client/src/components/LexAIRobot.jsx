@@ -27,28 +27,24 @@ const STATE_ANIMATION = {
   [BOT_STATE.DECISION]:  'Point_Forward',
 }
 
-const FACE_TEXTURES = {
-  happy:     '/robot_avatar/face_happy.png',
-  talking:   '/robot_avatar/face_talking.png',
-  thinking:  '/robot_avatar/face_thinking.png',
-  excited:   '/robot_avatar/face_excited.png',
-  surprised: '/robot_avatar/face_surprised.png',
-  serious:   '/robot_avatar/face_serious.png',
-}
-
 const STATE_FACE = {
-  [BOT_STATE.IDLE]:      'happy',
-  [BOT_STATE.LISTENING]: 'happy',
-  [BOT_STATE.THINKING]:  'thinking',
-  [BOT_STATE.SPEAKING]:  'talking',
-  [BOT_STATE.SUCCESS]:   'excited',
-  [BOT_STATE.ALERT]:     'surprised',
-  [BOT_STATE.ERROR]:     'surprised',
-  [BOT_STATE.GREETING]:  'happy',
-  [BOT_STATE.DECISION]:  'serious',
+  [BOT_STATE.IDLE]:      '/robot_avatar/face_happy.png',
+  [BOT_STATE.LISTENING]: '/robot_avatar/face_happy.png',
+  [BOT_STATE.THINKING]:  '/robot_avatar/face_thinking.png',
+  [BOT_STATE.SPEAKING]:  '/robot_avatar/face_talking.png',
+  [BOT_STATE.SUCCESS]:   '/robot_avatar/face_excited.png',
+  [BOT_STATE.ALERT]:     '/robot_avatar/face_surprised.png',
+  [BOT_STATE.ERROR]:     '/robot_avatar/face_surprised.png',
+  [BOT_STATE.GREETING]:  '/robot_avatar/face_happy.png',
+  [BOT_STATE.DECISION]:  '/robot_avatar/face_serious.png',
 }
 
-const SPEAKING_FACE_CYCLE = ['talking', 'happy', 'excited', 'talking']
+const SPEAKING_FACE_PATHS = [
+  '/robot_avatar/face_talking.png',
+  '/robot_avatar/face_happy.png',
+  '/robot_avatar/face_excited.png',
+  '/robot_avatar/face_talking.png',
+]
 
 const IDLE_BEHAVIORS = [
   { type: 'lookAround', duration: 2.5 },
@@ -61,94 +57,25 @@ const IDLE_BEHAVIORS = [
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
 const lerp = (a, b, t) => a + (b - a) * t
 
-function FaceDisplay({ currentFace, amplitude, botState }) {
-  const meshRef = useRef()
-  const matRef = useRef()
-  const texturesRef = useRef({})
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    const loader = new THREE.TextureLoader()
-    const entries = Object.entries(FACE_TEXTURES)
-    let loadCount = 0
-    entries.forEach(([key, path]) => {
-      loader.load(path, (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace
-        tex.flipY = false
-        tex.needsUpdate = true
-        texturesRef.current[key] = tex
-        loadCount++
-        if (loadCount === entries.length) {
-          setLoaded(true)
-        }
-      }, undefined, () => {
-        loadCount++
-        if (loadCount === entries.length) setLoaded(true)
-      })
-    })
-  }, [])
-
-  useFrame((state) => {
-    if (!matRef.current || !loaded) return
-    const t = state.clock.elapsedTime
-    const tex = texturesRef.current[currentFace]
-    if (tex && matRef.current.map !== tex) {
-      matRef.current.map = tex
-      matRef.current.emissiveMap = tex
-      matRef.current.needsUpdate = true
-    }
-
-    if (botState === BOT_STATE.SPEAKING) {
-      const baseGlow = 1.5 + amplitude * 3.0
-      const pulse = Math.sin(t * 15) * amplitude * 0.8
-      matRef.current.emissiveIntensity = clamp(baseGlow + pulse, 1.0, 5.0)
-      matRef.current.opacity = 0.92 + amplitude * 0.08
-    } else if (botState === BOT_STATE.LISTENING) {
-      matRef.current.emissiveIntensity = 1.2 + amplitude * 2.0 + Math.sin(t * 4) * 0.3
-      matRef.current.opacity = 0.9
-    } else if (botState === BOT_STATE.THINKING) {
-      matRef.current.emissiveIntensity = 0.8 + Math.sin(t * 1.5) * 0.4
-      matRef.current.opacity = 0.85
-    } else {
-      matRef.current.emissiveIntensity = 1.0 + Math.sin(t * 2) * 0.3
-      matRef.current.opacity = 0.9
-    }
-  })
-
-  return (
-    <mesh ref={meshRef} position={[0, 0, 0.01]} scale={[1, 1, 1]}>
-      <planeGeometry args={[0.28, 0.22]} />
-      <meshStandardMaterial
-        ref={matRef}
-        transparent
-        opacity={0.9}
-        side={THREE.FrontSide}
-        emissive={new THREE.Color(0xd4af37)}
-        emissiveIntensity={1.0}
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </mesh>
-  )
-}
-
 function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   const group = useRef()
   const { scene, animations } = useGLTF('/robot_avatar/LexAI_Robot_Final.glb')
   const { actions } = useAnimations(animations, group)
-  
+
   const currentActionRef = useRef(null)
+  const faceTextureRef = useRef(null)
+  const faceMeshRef = useRef(null)
   const speechBubbleRef = useRef(null)
   const gavelRef = useRef(null)
   const auraRef = useRef(null)
   const auraActionRef = useRef(null)
   const gavelActionRef = useRef(null)
   const prevStateRef = useRef(null)
-  
+
   const idleBehaviorRef = useRef({ active: false, type: null, startTime: 0, duration: 0 })
   const nextIdleTimeRef = useRef(3)
   const smoothMouseRef = useRef({ x: 0, y: 0 })
-  
+
   const smoothAmplitudeRef = useRef(0)
   const speakGestureRef = useRef({ nextTime: 0, active: false, type: 0, startTime: 0, duration: 0 })
   const faceSwapTimerRef = useRef(0)
@@ -158,15 +85,11 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   const spineBoneRef = useRef(null)
   const neckBoneRef = useRef(null)
   const breathPhaseRef = useRef(0)
-  
+
   const headBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
   const neckBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
   const spineBaseRotRef = useRef({ x: 0, y: 0, z: 0 })
   const bonesInitializedRef = useRef(false)
-  
-  const [currentFace, setCurrentFace] = useState('happy')
-  const [smoothAmp, setSmoothAmp] = useState(0)
-  const faceGroupRef = useRef()
 
   useEffect(() => {
     if (!scene) return
@@ -174,7 +97,11 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
       if (obj.name === 'SpeechBubble') speechBubbleRef.current = obj
       if (obj.name === 'Gavel') gavelRef.current = obj
       if (obj.name === 'ParticleAura') auraRef.current = obj
-      
+
+      if (obj.isMesh && (obj.name.toLowerCase().includes('face') || obj.name.toLowerCase().includes('screen'))) {
+        faceMeshRef.current = obj
+      }
+
       if (obj.isBone) {
         if (obj.name === 'Head') {
           headBoneRef.current = obj
@@ -199,41 +126,53 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
     playAnimation('Wave_Hello', false)
     setTimeout(() => {
       playAnimation('Hover_Float', true)
-      setCurrentFace('happy')
     }, 2200)
-    
+
     if (actions['ParticleAura_Spin']) auraActionRef.current = actions['ParticleAura_Spin']
     if (actions['Gavel_Swing']) gavelActionRef.current = actions['Gavel_Swing']
   }, [scene, actions])
 
-  useEffect(() => {
-    if (!headfrontBoneRef.current || !faceGroupRef.current) return
-    headfrontBoneRef.current.add(faceGroupRef.current)
-    return () => {
-      if (headfrontBoneRef.current && faceGroupRef.current) {
-        headfrontBoneRef.current.remove(faceGroupRef.current)
-      }
-    }
-  }, [scene])
-
   const playAnimation = useCallback((name, loop = true) => {
     const action = actions[name]
     if (!action) return
-    
+
     if (currentActionRef.current && currentActionRef.current !== action) {
       currentActionRef.current.fadeOut(0.35)
     }
-    
+
     action.reset()
     action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1)
     action.clampWhenFinished = !loop
     action.fadeIn(0.35).play()
     currentActionRef.current = action
-    
+
     if (!bonesInitializedRef.current) {
       bonesInitializedRef.current = true
     }
   }, [actions])
+
+  const updateFace = useCallback((texturePath) => {
+    if (!faceMeshRef.current) return
+    const loader = new THREE.TextureLoader()
+    loader.load(texturePath, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.flipY = false
+
+      if (faceMeshRef.current.material) {
+        if (!faceTextureRef.current) {
+          faceMeshRef.current.material = faceMeshRef.current.material.clone()
+        }
+
+        faceMeshRef.current.material.map = tex
+        faceMeshRef.current.material.emissiveMap = tex
+        faceMeshRef.current.material.emissive = new THREE.Color(0xd4af37)
+        faceMeshRef.current.material.emissiveIntensity = 3.5
+        faceMeshRef.current.material.transparent = true
+        faceMeshRef.current.material.needsUpdate = true
+        faceTextureRef.current = tex
+      }
+    })
+  }, [])
 
   useEffect(() => {
     if (!actions || botState === prevStateRef.current) return
@@ -243,8 +182,8 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
     const isLoop = [BOT_STATE.IDLE, BOT_STATE.SPEAKING, BOT_STATE.LISTENING].includes(botState)
     if (animName) playAnimation(animName, isLoop)
 
-    const face = STATE_FACE[botState]
-    if (face) setCurrentFace(face)
+    const faceTex = STATE_FACE[botState]
+    if (faceTex) updateFace(faceTex)
 
     if (botState !== BOT_STATE.IDLE) {
       idleBehaviorRef.current.active = false
@@ -279,7 +218,7 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
         auraActionRef.current.stop()
       }
     }
-  }, [botState, actions, playAnimation])
+  }, [botState, actions, playAnimation, updateFace])
 
   useFrame((state, delta) => {
     if (!group.current) return
@@ -287,10 +226,6 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
 
     smoothAmplitudeRef.current = lerp(smoothAmplitudeRef.current, audioAmplitude, 0.15)
     const amp = smoothAmplitudeRef.current
-
-    if (Math.abs(amp - smoothAmp) > 0.01) {
-      setSmoothAmp(amp)
-    }
 
     const mx = clamp(mousePos?.x ?? 0, -1, 1)
     const my = clamp(mousePos?.y ?? 0, -1, 1)
@@ -315,15 +250,14 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
       headExtraZ = Math.sin(t * 2.1) * amp * 0.03
       neckExtraY = Math.sin(t * 1.2) * amp * 0.025
       spineExtraZ = Math.sin(t * 1.5) * amp * 0.02
-
       posY = Math.sin(t * 2.5) * amp * 0.015
 
       faceSwapTimerRef.current += delta
       const swapInterval = amp > 0.3 ? 0.15 : amp > 0.1 ? 0.25 : 0.4
       if (faceSwapTimerRef.current > swapInterval && amp > 0.02) {
         faceSwapTimerRef.current = 0
-        currentFaceIdxRef.current = (currentFaceIdxRef.current + 1) % SPEAKING_FACE_CYCLE.length
-        setCurrentFace(SPEAKING_FACE_CYCLE[currentFaceIdxRef.current])
+        currentFaceIdxRef.current = (currentFaceIdxRef.current + 1) % SPEAKING_FACE_PATHS.length
+        updateFace(SPEAKING_FACE_PATHS[currentFaceIdxRef.current])
       }
 
       const gesture = speakGestureRef.current
@@ -357,6 +291,10 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
         }
       }
 
+      if (faceMeshRef.current?.material) {
+        faceMeshRef.current.material.emissiveIntensity = 2.0 + Math.sin(t * 20) * amp * 2.0
+      }
+
     } else if (botState === BOT_STATE.LISTENING) {
       posY = Math.sin(t * 2) * 0.01 + amp * 0.015
       headExtraX = Math.sin(t * 1.5) * 0.025
@@ -369,7 +307,7 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
 
     } else if (botState === BOT_STATE.IDLE) {
       const idle = idleBehaviorRef.current
-      
+
       if (!idle.active && t > nextIdleTimeRef.current) {
         const behavior = IDLE_BEHAVIORS[Math.floor(Math.random() * IDLE_BEHAVIORS.length)]
         idle.active = true
@@ -381,13 +319,13 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
       if (idle.active) {
         const elapsed = t - idle.startTime
         const progress = elapsed / idle.duration
-        
+
         if (progress >= 1) {
           idle.active = false
           nextIdleTimeRef.current = t + 2 + Math.random() * 4
         } else {
           const ease = Math.sin(progress * Math.PI)
-          
+
           switch (idle.type) {
             case 'lookAround':
               headExtraY = Math.sin(progress * Math.PI * 2) * 0.1 * ease
@@ -410,6 +348,10 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
       }
 
       posY += Math.sin(t * 0.8) * 0.003
+
+      if (faceMeshRef.current?.material) {
+        faceMeshRef.current.material.emissiveIntensity = 2.0 + Math.sin(t * 2) * 0.5
+      }
     }
 
     group.current.position.y = posY
@@ -445,16 +387,13 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
   return (
     <group ref={group}>
       <primitive object={scene} />
-      <group ref={faceGroupRef}>
-        <FaceDisplay currentFace={currentFace} amplitude={smoothAmp} botState={botState} />
-      </group>
     </group>
   )
 }
 
 function MouseTracker({ onMouseMove }) {
   const { gl } = useThree()
-  
+
   useEffect(() => {
     const handleMove = (e) => {
       const rect = gl.domElement.getBoundingClientRect()
@@ -462,14 +401,14 @@ function MouseTracker({ onMouseMove }) {
       const y = clamp(-((e.clientY - rect.top) / rect.height) * 2 + 1, -1, 1)
       onMouseMove({ x, y })
     }
-    
+
     window.addEventListener('mousemove', handleMove)
-    
+
     return () => {
       window.removeEventListener('mousemove', handleMove)
     }
   }, [gl, onMouseMove])
-  
+
   return null
 }
 
@@ -480,7 +419,7 @@ function hasWebGL() {
   } catch { return false }
 }
 
-export default function LexAIRobot({ 
+export default function LexAIRobot({
   botState = BOT_STATE.IDLE,
   audioAmplitude = 0,
   className = '',
@@ -501,9 +440,9 @@ export default function LexAIRobot({
   if (!webglOk) return null
 
   return (
-    <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '320px' }}>
+    <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '300px' }}>
       <Canvas
-        camera={{ position: [0, 0.8, 2.2], fov: 45 }}
+        camera={{ position: [0, 1.2, 3.2], fov: 40 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace
@@ -515,10 +454,10 @@ export default function LexAIRobot({
         <ambientLight intensity={0.8} color="#ffffff" />
         <spotLight position={[5, 10, 5]} angle={0.15} penumbra={1} intensity={2} castShadow />
         <pointLight position={[-5, -5, -5]} intensity={1} color="#b69d74" />
-        
+
         <MouseTracker onMouseMove={mouseCb} />
         <RobotModel botState={botState} audioAmplitude={audioAmplitude} mousePos={mousePos} />
-        
+
         <Environment preset="studio" />
       </Canvas>
     </div>
