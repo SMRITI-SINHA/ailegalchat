@@ -186,8 +186,8 @@ function RobotModel({ botState, audioAmplitude = 0, mousePos }) {
 
     const mx = mousePos?.x ?? state.mouse.x
     const my = mousePos?.y ?? state.mouse.y
-    smoothMouseRef.current.x = lerp(smoothMouseRef.current.x, mx * 0.15, 0.06)
-    smoothMouseRef.current.y = lerp(smoothMouseRef.current.y, my * 0.08, 0.06)
+    smoothMouseRef.current.x = lerp(smoothMouseRef.current.x, mx * 0.35, 0.08)
+    smoothMouseRef.current.y = lerp(smoothMouseRef.current.y, my * 0.2, 0.08)
 
     breathPhaseRef.current += delta * 1.2
     const breathScale = 1.0 + Math.sin(breathPhaseRef.current) * 0.003
@@ -333,7 +333,7 @@ export default function LexAIRobot({
   return (
     <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '300px' }}>
       <Canvas
-        camera={{ position: [0, 1.2, 3.2], fov: 40 }}
+        camera={{ position: [0, 0.9, 3.0], fov: 42 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace
