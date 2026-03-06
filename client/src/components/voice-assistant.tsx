@@ -515,10 +515,10 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
   }, []);
 
   const ensureMicStream = async (): Promise<MediaStream> => {
-    if (streamRef.current && streamRef.current.getTracks().some(t => t.readyState === "live")) {
+    if (streamRef.current && streamRef.current.getAudioTracks().some(t => t.readyState === "live" && t.enabled)) {
       return streamRef.current;
     }
-    if (prewarmedStreamRef.current && prewarmedStreamRef.current.getTracks().some(t => t.readyState === "live")) {
+    if (prewarmedStreamRef.current && prewarmedStreamRef.current.getAudioTracks().some(t => t.readyState === "live" && t.enabled)) {
       const s = prewarmedStreamRef.current;
       prewarmedStreamRef.current = null;
       streamRef.current = s;
@@ -527,6 +527,11 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
     const s = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
+    const tracks = s.getAudioTracks();
+    console.log("Mic stream acquired:", tracks.length, "audio tracks, state:", tracks.map(t => t.readyState + "/" + (t.enabled ? "enabled" : "disabled")).join(", "));
+    if (tracks.length === 0) {
+      throw new Error("No audio tracks available");
+    }
     streamRef.current = s;
     return s;
   };
@@ -547,12 +552,23 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
 
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
-        : "audio/webm";
-      const recorder = new MediaRecorder(stream, { mimeType });
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "";
+      console.log("MediaRecorder mimeType:", mimeType || "(default)");
+      const recorder = mimeType 
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
       audioChunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onerror = (e: any) => {
+        console.error("MediaRecorder error:", e?.error?.message || e);
+        setError("Recording error. Please try again.");
+        setState("idle");
       };
 
       mediaRecorderRef.current = recorder;
@@ -560,9 +576,17 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
       setState("listening");
       silenceCountRef.current = 0;
       startAmplitudeMonitor();
-    } catch (err) {
-      console.error("Mic access denied:", err);
-      setError("Microphone access is required. Please allow microphone access in your browser.");
+    } catch (err: any) {
+      console.error("Mic access error:", err?.name, err?.message);
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        setError("Microphone access denied. Please allow microphone access in your browser settings.");
+      } else if (err?.name === "NotFoundError") {
+        setError("No microphone found. Please connect a microphone and try again.");
+      } else if (err?.name === "NotReadableError") {
+        setError("Microphone is in use by another application. Please close other apps using the mic.");
+      } else {
+        setError("Microphone error: " + (err?.message || "Unknown error"));
+      }
     }
   };
 
@@ -581,7 +605,11 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
         audioContextRef.current = null;
         analyserRef.current = null;
 
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const chunks = audioChunksRef.current;
+        console.log("Recording stopped. Chunks:", chunks.length, "Total size:", chunks.reduce((a, c) => a + c.size, 0));
+        
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        console.log("Audio blob size:", blob.size, "bytes");
 
         if (blob.size < 500) {
           setError("No speech detected. Please speak clearly and try again.");
@@ -594,27 +622,38 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
         formData.append("audio", blob, "recording.webm");
 
         try {
+          console.log("Sending transcription request, blob size:", blob.size);
           const res = await fetch("/api/voice/transcribe", {
             method: "POST",
             body: formData,
           });
 
-          const data = await res.json();
+          let data: any;
+          const contentType = res.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            data = await res.json();
+          } else {
+            const rawText = await res.text();
+            console.error("Non-JSON transcription response:", res.status, rawText.substring(0, 200));
+            throw new Error("Server returned non-JSON response: " + res.status);
+          }
 
           if (!res.ok) {
             const detail = data?.detail || data?.error || "";
             console.error("Transcription API error:", res.status, detail);
-            if (typeof detail === "string" && (detail.includes("empty") || detail.includes("corrupted"))) {
+            const detailStr = typeof detail === "string" ? detail : JSON.stringify(detail);
+            if (detailStr.includes("empty") || detailStr.includes("corrupted")) {
               throw new Error("EMPTY_AUDIO");
             }
-            if (typeof detail === "string" && (detail.includes("X_REPLIT_TOKEN") || detail.includes("ElevenLabs not connected") || detail.includes("not configured"))) {
+            if (detailStr.includes("X_REPLIT_TOKEN") || detailStr.includes("ElevenLabs not connected") || detailStr.includes("not configured")) {
               throw new Error("NOT_CONFIGURED");
             }
-            throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+            throw new Error(detailStr);
           }
 
           const text = (data.text || "").trim();
           const rawLang = data.language_code || "eng";
+          console.log("Transcription result:", text.substring(0, 50), "lang:", rawLang);
 
           const SUPPORTED_LANGS = new Set([
             "eng", "en", "hin", "hi", "ben", "bn", "tam", "ta", "tel", "te",
@@ -637,14 +676,14 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
 
           await getAIResponse(text, langCode);
         } catch (err: any) {
-          console.error("Transcription error:", err);
+          console.error("Transcription error:", err?.message || err);
           const msg = err?.message || "";
           if (msg === "NOT_CONFIGURED") {
             setError("Voice service not configured. ElevenLabs API key is required.");
           } else if (msg === "EMPTY_AUDIO") {
             setError("No speech detected. Please speak louder and try again.");
           } else {
-            setError("Failed to transcribe audio. Please try again.");
+            setError("Failed to transcribe audio: " + (msg || "Unknown error. Check console."));
           }
           setState("idle");
         }
@@ -731,6 +770,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
+      console.log("Sending TTS request, text length:", speakText.length);
       const res = await fetch("/api/voice/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -738,9 +778,14 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
         signal: controller.signal,
       });
 
-      if (!res.ok) throw new Error("TTS failed");
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        console.error("TTS failed:", res.status, errBody.substring(0, 200));
+        throw new Error("TTS failed: " + res.status);
+      }
 
       const arrayBuffer = await res.arrayBuffer();
+      console.log("TTS audio received:", arrayBuffer.byteLength, "bytes");
       const audioCtx = new AudioContext();
       playbackContextRef.current = audioCtx;
 
@@ -775,7 +820,8 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
       speakAnimFrameRef.current = requestAnimationFrame(updateSpeakingAmplitude);
     } catch (err: any) {
       if (err.name === "AbortError") return;
-      console.error("TTS error:", err);
+      console.error("TTS error:", err?.message || err);
+      setError("Voice playback failed: " + (err?.message || "Unknown error"));
       setState("idle");
     }
   };

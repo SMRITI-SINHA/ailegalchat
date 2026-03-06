@@ -60,6 +60,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  const { warmupElevenLabs } = await import("./elevenlabs");
+  warmupElevenLabs();
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

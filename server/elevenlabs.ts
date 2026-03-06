@@ -1,15 +1,15 @@
 import { ElevenLabsClient } from 'elevenlabs';
 import WebSocket from 'ws';
 
-let cachedApiKey: string | null = null;
-let cachedClient: ElevenLabsClient | null = null;
+let envApiKey: string | null = null;
 
 async function getCredentials(): Promise<string> {
-  if (cachedApiKey) return cachedApiKey;
-
   if (process.env.ELEVENLABS_API_KEY) {
-    cachedApiKey = process.env.ELEVENLABS_API_KEY;
-    return cachedApiKey;
+    return process.env.ELEVENLABS_API_KEY;
+  }
+
+  if (envApiKey) {
+    return envApiKey;
   }
 
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -23,7 +23,8 @@ async function getCredentials(): Promise<string> {
     throw new Error('ElevenLabs not configured. Set ELEVENLABS_API_KEY in your .env file.');
   }
 
-  const connectionSettings = await fetch(
+  console.log('Fetching ElevenLabs credentials from Replit connector...');
+  const res = await fetch(
     'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=elevenlabs',
     {
       headers: {
@@ -31,25 +32,45 @@ async function getCredentials(): Promise<string> {
         'X_REPLIT_TOKEN': xReplitToken
       }
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
+  );
 
-  if (!connectionSettings || !connectionSettings.settings.api_key) {
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error('Replit connector error:', res.status, body.substring(0, 200));
+    throw new Error('Failed to get ElevenLabs credentials from Replit: ' + res.status);
+  }
+
+  const data = await res.json();
+  const connectionSettings = data.items?.[0];
+
+  if (!connectionSettings || !connectionSettings.settings?.api_key) {
+    console.error('ElevenLabs connector response:', JSON.stringify(data).substring(0, 300));
     throw new Error('ElevenLabs not connected. Set ELEVENLABS_API_KEY in your .env file.');
   }
 
-  cachedApiKey = connectionSettings.settings.api_key;
-  return cachedApiKey!;
+  envApiKey = connectionSettings.settings.api_key;
+  console.log('ElevenLabs credentials obtained successfully');
+  return envApiKey!;
 }
 
 export async function getUncachableElevenLabsClient() {
-  if (cachedClient) return cachedClient;
   const apiKey = await getCredentials();
-  cachedClient = new ElevenLabsClient({ apiKey });
-  return cachedClient;
+  return new ElevenLabsClient({ apiKey });
 }
 
 export async function getElevenLabsApiKey() {
   return await getCredentials();
+}
+
+export async function warmupElevenLabs(): Promise<boolean> {
+  try {
+    const key = await getCredentials();
+    console.log('ElevenLabs warmup: credentials available, key starts with:', key.substring(0, 8) + '...');
+    return true;
+  } catch (err: any) {
+    console.error('ElevenLabs warmup FAILED:', err?.message || err);
+    return false;
+  }
 }
 
 export async function transcribeAudio(audioBuffer: Buffer, filename: string): Promise<{ text: string; language_code: string }> {
