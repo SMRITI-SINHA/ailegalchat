@@ -503,7 +503,7 @@ export default function LexAIRobot({
   return (
     <div className={`lexai-robot-container ${className}`} style={{ width: '100%', height: '100%', minHeight: '320px' }}>
       <Canvas
-        camera={{ position: [0, 0.4, 3.5], fov: 40 }}
+        camera={{ position: [0, 0.8, 2.2], fov: 45 }}
         gl={{ antialias: true, alpha: true }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace
