@@ -33,7 +33,7 @@ The user interface is structured around a central "Chakshi AI Hub" with distinct
 - **AI Chat:** Chat with uploaded PDFs (summarization, timelines, issue tagging), Nyaya AI (general legal assistant), and CNR Chatbot (case status lookup).
 - **Research:** AI Research Assistant (Indian Kanoon API integration), Legal Memo Generator (IRAC structure), Compliance Checklist Generator (industry-specific with references), and Saved Notes management.
 - **Study Buddy (Beta):** Case Predict AI, Counter Argument Generator, and Legal Sandbox for learning and simulation.
-- **Security & Compliance:** SOC 2 compliant, zero data retention, and XSS protection.
+- **Security & Compliance:** SOC 2 compliant, zero data retention, XSS protection, production error overlay disabled, server-side error sanitization (no stack traces/code leak to users), React ErrorBoundary for graceful crash handling.
 
 ### External Dependencies
 - **OpenAI:** Used for various AI models (gpt-4o-mini, gpt-4.1, o3) via Replit AI Integrations for natural language processing, content generation, and intelligent reasoning. Also used for voice assistant: Whisper (speech-to-text transcription) and TTS API (text-to-speech with "nova" voice). Voice service module: `server/voice-service.ts`.

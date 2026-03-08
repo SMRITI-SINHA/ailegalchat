@@ -2,8 +2,28 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    let userMessage = res.statusText || "Something went wrong";
+    try {
+      const body = await res.text();
+      if (body) {
+        try {
+          const json = JSON.parse(body);
+          userMessage = json.error || json.message || userMessage;
+        } catch {
+          if (body.length < 200) userMessage = body;
+        }
+      }
+    } catch {}
+
+    if (res.status === 413) {
+      userMessage = "File is too large to upload. Please try a smaller file.";
+    } else if (res.status === 429) {
+      userMessage = "Too many requests. Please wait a moment and try again.";
+    } else if (res.status >= 500) {
+      userMessage = userMessage === res.statusText ? "Server error. Please try again later." : userMessage;
+    }
+
+    throw new Error(userMessage);
   }
 }
 
