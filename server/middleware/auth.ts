@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { logAudit } from "../audit";
 
 declare global {
   namespace Express {
@@ -33,6 +34,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   if (!token) {
+    logAudit(req, {
+      action: "jwt_verification_failure",
+      success: false,
+      errorCode: "MISSING_TOKEN",
+      userId: null,
+    });
     res.status(401).json({ error: "Unauthorized: missing token" });
     return;
   }
@@ -46,6 +53,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       (decoded.user_id as string | undefined);
 
     if (!userId) {
+      logAudit(req, {
+        action: "jwt_verification_failure",
+        success: false,
+        errorCode: "NO_USER_ID_IN_TOKEN",
+        userId: null,
+      });
       res.status(401).json({ error: "Unauthorized: token has no userId" });
       return;
     }
@@ -53,6 +66,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     req.user = { id: userId };
     next();
   } catch (err) {
+    logAudit(req, {
+      action: "jwt_verification_failure",
+      success: false,
+      errorCode: "INVALID_OR_EXPIRED_TOKEN",
+      userId: null,
+    });
     res.status(401).json({ error: "Unauthorized: invalid or expired token" });
   }
 }

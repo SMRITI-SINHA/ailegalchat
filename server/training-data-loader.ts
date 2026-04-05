@@ -136,7 +136,7 @@ class TrainingDataLoader {
 
     try {
       if (!fs.existsSync(this.trainingDataPath)) {
-        console.warn("Training data path does not exist:", this.trainingDataPath);
+        console.warn("[TRAINING] Training data path does not exist");
         return { totalDocuments: 0, categories: [], lastIndexed: new Date().toISOString() };
       }
 

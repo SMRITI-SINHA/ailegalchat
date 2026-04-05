@@ -30,8 +30,13 @@ import type {
   CalendarEvent,
   InsertCalendarEvent,
   AiUsage,
+  AuditLog,
+  InsertAuditLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { auditLogs as auditLogsTable } from "@shared/schema";
+import { desc, eq, gte, and } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -116,6 +121,8 @@ export interface IStorage {
 
   getAIUsage(userId: string, date: string): Promise<AiUsage | undefined>;
   incrementAIUsage(userId: string, date: string): Promise<AiUsage>;
+  createAuditLog(entry: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogs(filters?: { userId?: string; action?: string; since?: Date; limit?: number }): Promise<AuditLog[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -135,6 +142,7 @@ export class MemStorage implements IStorage {
   private googleCalendarCredentials: Map<string, GoogleCalendarCredentials>;
   private calendarEvents: Map<string, CalendarEvent>;
   private aiUsageMap: Map<string, AiUsage>;
+  private auditLogs: Map<string, AuditLog>;
 
   constructor() {
     this.users = new Map();
@@ -153,6 +161,7 @@ export class MemStorage implements IStorage {
     this.googleCalendarCredentials = new Map();
     this.calendarEvents = new Map();
     this.aiUsageMap = new Map();
+    this.auditLogs = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -722,6 +731,38 @@ export class MemStorage implements IStorage {
     };
     this.aiUsageMap.set(key, newUsage);
     return newUsage;
+  }
+
+  async createAuditLog(entry: InsertAuditLog): Promise<AuditLog> {
+    const [log] = await db.insert(auditLogsTable).values({
+      userId: entry.userId ?? null,
+      action: entry.action,
+      resourceType: entry.resourceType ?? null,
+      resourceId: entry.resourceId ?? null,
+      ipAddress: entry.ipAddress ?? null,
+      success: entry.success ?? true,
+      errorCode: entry.errorCode ?? null,
+      metadata: entry.metadata ?? null,
+    }).returning();
+    return log;
+  }
+
+  async getAuditLogs(filters?: { userId?: string; action?: string; since?: Date; limit?: number }): Promise<AuditLog[]> {
+    const conditions = [];
+    if (filters?.userId) conditions.push(eq(auditLogsTable.userId, filters.userId));
+    if (filters?.action) conditions.push(eq(auditLogsTable.action, filters.action));
+    if (filters?.since) conditions.push(gte(auditLogsTable.createdAt, filters.since));
+
+    const query = db
+      .select()
+      .from(auditLogsTable)
+      .orderBy(desc(auditLogsTable.createdAt))
+      .limit(filters?.limit ?? 100);
+
+    if (conditions.length > 0) {
+      return query.where(and(...conditions));
+    }
+    return query;
   }
 }
 

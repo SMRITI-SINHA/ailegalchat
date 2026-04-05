@@ -88,7 +88,7 @@ export async function transcribeAudio(audioBuffer: Buffer, filename: string): Pr
   formData.append('file', new Blob([audioBuffer], { type: mimeType }), filename);
   formData.append('model_id', 'scribe_v1');
 
-  console.log(`Transcription: sending ${audioBuffer.length} bytes, mime=${mimeType}, file=${filename}`);
+  console.log(`[VOICE] Transcription: sending ${audioBuffer.length} bytes, mime=${mimeType}`);
 
   const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
     method: 'POST',
@@ -103,7 +103,7 @@ export async function transcribeAudio(audioBuffer: Buffer, filename: string): Pr
   }
 
   const result = await response.json();
-  console.log(`Transcription result: "${(result.text || '').substring(0, 50)}..." lang=${result.language_code}`);
+  console.log(`[VOICE] Transcription complete: lang=${result.language_code}, chars=${(result.text || '').length}`);
   return { text: result.text || '', language_code: result.language_code || 'eng' };
 }
 

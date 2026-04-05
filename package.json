@@ -44,6 +44,7 @@
     "@react-three/fiber": "^8.15.11",
     "@tanstack/react-query": "^5.60.5",
     "@types/cors": "^2.8.19",
+    "@types/helmet": "^0.0.48",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
     "@types/pdf-parse": "^1.1.5",

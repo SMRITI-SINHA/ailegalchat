@@ -7,6 +7,7 @@ import mammoth from "mammoth";
 import sanitizeHtmlLib from "sanitize-html";
 import { z } from "zod";
 import { checkAIUsage, recordAIUsage, getTodayUsage, AI_DAILY_LIMIT, getISTDateString } from "./middleware/aiUsage";
+import { logAudit } from "./audit";
 // pdf-parse loaded dynamically to avoid bundling browser dependencies
 let PDFParseClass: any;
 async function getPDFParseClass() {
@@ -297,7 +298,7 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: s
       if (isOldDocFormat) {
         // Old .doc format is not supported by mammoth
         const errorMsg = `The file "${file.originalname}" is in the old .doc format (Word 97-2003). Please save it as .docx format in Microsoft Word and try again.`;
-        console.warn(errorMsg);
+        console.warn("[DOC PROCESSING] Old .doc format detected, rejecting");
         return { 
           text: errorMsg, 
           html: `<p style="color: #f59e0b;">${errorMsg}</p>` 
@@ -312,7 +313,7 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: s
         return { text: textResult.value || "", html };
       } catch (docError) {
         const errorMsg = `The file "${file.originalname}" could not be read. Please convert it to .docx format and try again.`;
-        console.warn(errorMsg, docError);
+        console.warn("[DOC PROCESSING] Failed to read .doc file as .docx");
         return { 
           text: errorMsg, 
           html: `<p style="color: #f59e0b;">${errorMsg}</p>` 
@@ -327,7 +328,7 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: s
     
     return { text: `[Unsupported file format: ${mimeType}]`, html: `<p>[Unsupported file format: ${mimeType}]</p>` };
   } catch (error) {
-    console.error(`Error extracting text from ${file.originalname}:`, error);
+    console.error("[DOC PROCESSING] Error extracting text from file");
     return { text: `[Error extracting text from document]`, html: `<p>[Error extracting text from document]</p>` };
   }
 }
@@ -394,6 +395,7 @@ export async function registerRoutes(
     "/voice/transcribe",
     "/voice/speak",
     "/calendar/google/callback",
+    "/admin/audit-log",
   ];
 
   app.use("/api", (req: Request, res: Response, next: NextFunction) => {
@@ -460,7 +462,7 @@ export async function registerRoutes(
           });
           await storage.addCostEntry({
             type: "document_processing",
-            description: `Processed ${file.originalname}`,
+            description: `Processed document (${pageCount} pages)`,
             amount: cost,
             modelUsed: "mini",
           });
@@ -475,12 +477,20 @@ export async function registerRoutes(
                 await storage.updateDocument(doc.id, {
                   extractedText: enhancedText,
                 });
-                console.log(`[DOC UPLOAD] InLegalBERT classified ${segments.length} segments in ${decodedName}`);
+                console.log(`[DOC UPLOAD] InLegalBERT classified ${segments.length} segments`);
               }
             } catch (e) {
-              console.log(`[DOC UPLOAD] InLegalBERT segmentation failed for ${decodedName}, keeping original text`);
+              console.log(`[DOC UPLOAD] InLegalBERT segmentation failed, keeping original text`);
             }
           }
+
+          logAudit(req, {
+            action: "document_upload",
+            resourceType: "document",
+            resourceId: doc.id,
+            success: true,
+            metadata: { fileType: file.mimetype, sizeBytes: file.size, pages: pageCount },
+          });
 
           return doc;
         })
@@ -488,7 +498,8 @@ export async function registerRoutes(
 
       res.status(201).json(documents);
     } catch (error) {
-      console.error("Error uploading documents:", error);
+      console.error("[AUDIT] Error uploading documents");
+      logAudit(req, { action: "document_upload", resourceType: "document", success: false, errorCode: "UPLOAD_FAILED" });
       res.status(500).json({ error: "Failed to upload documents" });
     }
   });
@@ -496,9 +507,16 @@ export async function registerRoutes(
   app.delete("/api/documents/:id", async (req: Request, res: Response) => {
     try {
       await storage.deleteDocument(req.params.id);
+      logAudit(req, {
+        action: "document_delete",
+        resourceType: "document",
+        resourceId: req.params.id,
+        success: true,
+      });
       res.status(204).send();
     } catch (error) {
-      console.error("Error deleting document:", error);
+      console.error("[AUDIT] Error deleting document");
+      logAudit(req, { action: "document_delete", resourceType: "document", resourceId: req.params.id, success: false, errorCode: "DELETE_FAILED" });
       res.status(500).json({ error: "Failed to delete document" });
     }
   });
@@ -874,7 +892,7 @@ ${documentContext}`;
         await recordAIUsage(req);
         res.end();
       } catch (aiError) {
-        console.error("AI Error:", aiError);
+        console.error("[AI] Chat query error occurred");
         res.write(
           `data: ${JSON.stringify({
             content: "I apologize, but I encountered an error processing your request. Please try again.",
@@ -1296,15 +1314,25 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
 
       await storage.addCostEntry({
         type: "draft_generation",
-        description: `Generated ${type}: ${title}`,
+        description: `Generated ${type} draft`,
         amount: cost,
         modelUsed: tier,
       });
 
       await recordAIUsage(req);
+      logAudit(req, {
+        action: "draft_generate",
+        resourceType: "draft",
+        resourceId: draft.id,
+        success: true,
+        metadata: { draftType: type, modelTier: tier, language: selectedLanguage },
+      });
+
+
       res.status(201).json(draft);
     } catch (error) {
-      console.error("Error generating draft:", error);
+      console.error("[AUDIT] Error generating draft");
+      logAudit(req, { action: "draft_generate", resourceType: "draft", success: false, errorCode: "GENERATION_FAILED" });
       res.status(500).json({ error: "Failed to generate draft" });
     }
   });
@@ -2411,9 +2439,16 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
         });
       }
 
+      logAudit(req, {
+        action: "calendar_connect",
+        resourceType: "google_calendar",
+        resourceId: userId,
+        success: true,
+      });
+
       res.redirect("/hub/calendar?connected=google");
     } catch (error) {
-      console.error("OAuth callback error:", error);
+      console.error("[AUDIT] OAuth callback error");
       res.redirect("/hub/calendar?error=oauth_failed");
     }
   });
@@ -2444,9 +2479,15 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
     try {
       const userId = req.user!.id;
       await storage.deleteGoogleCalendarCredentials(userId);
+      logAudit(req, {
+        action: "calendar_disconnect",
+        resourceType: "google_calendar",
+        resourceId: userId,
+        success: true,
+      });
       res.json({ success: true });
     } catch (error) {
-      console.error("Error disconnecting:", error);
+      console.error("[AUDIT] Error disconnecting calendar");
       res.status(500).json({ error: "Failed to disconnect" });
     }
   });
@@ -2657,7 +2698,7 @@ Do not include any other text outside the JSON object.`;
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
       }
-      console.log(`Transcription request: file size=${req.file.size} bytes, name=${req.file.originalname}`);
+      console.log(`[VOICE] Transcription request: file size=${req.file.size} bytes`);
       const result = await openaiTranscribe(req.file.buffer, req.file.originalname || "recording.webm");
       res.json({ text: result.text, language_code: result.language_code });
     } catch (error: any) {
@@ -2757,6 +2798,13 @@ Do not include any other text outside the JSON object.`;
       const currentCount = existing.length > 0 ? existing[0].usageCount : 0;
 
       if (currentCount >= EMBED_DAILY_LIMIT) {
+        logAudit(req, {
+          action: "rate_limit_exceeded",
+          resourceType: "embed_chat",
+          success: false,
+          errorCode: "DAILY_LIMIT_REACHED",
+          metadata: { used: currentCount, limit: EMBED_DAILY_LIMIT },
+        });
         return res.status(429).json({
           error: "Daily usage limit reached",
           message: `You have used all ${EMBED_DAILY_LIMIT} free queries for today. Please try again tomorrow.`,
@@ -2870,6 +2918,42 @@ ${kanoonContext}`;
         res.write(`data: ${JSON.stringify({ error: "An error occurred while processing your query." })}\n\n`);
         res.end();
       }
+    }
+  });
+
+  app.get("/api/admin/audit-log", async (req: Request, res: Response) => {
+    const adminSecret = req.headers["x-admin-secret"];
+    if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
+      logAudit(req, {
+        action: "admin_audit_access",
+        resourceType: "audit_log",
+        success: false,
+        errorCode: "UNAUTHORIZED",
+      });
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    logAudit(req, {
+      action: "admin_audit_access",
+      resourceType: "audit_log",
+      success: true,
+    });
+
+    try {
+      const { userId, action, since } = req.query;
+      const filters: { userId?: string; action?: string; since?: Date; limit?: number } = { limit: 100 };
+      if (userId) filters.userId = userId as string;
+      if (action) filters.action = action as string;
+      if (since) {
+        const sinceDate = new Date(since as string);
+        if (!isNaN(sinceDate.getTime())) filters.since = sinceDate;
+      }
+
+      const logs = await storage.getAuditLogs(filters);
+      res.json({ logs, count: logs.length });
+    } catch (error) {
+      console.error("[ADMIN] Error fetching audit logs");
+      res.status(500).json({ error: "Failed to fetch audit logs" });
     }
   });
 

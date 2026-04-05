@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, boolean, timestamp, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, real, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -453,6 +453,27 @@ export const aiUsage = pgTable("ai_usage", {
 ]);
 
 export type AiUsage = typeof aiUsage.$inferSelect;
+
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id"),
+  action: text("action").notNull(),
+  resourceType: text("resource_type"),
+  resourceId: text("resource_id"),
+  ipAddress: text("ip_address"),
+  success: boolean("success").notNull().default(true),
+  errorCode: text("error_code"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
 
 export const calendarEventTypes = ["academic", "exam", "career", "court", "professional"] as const;
 export type CalendarEventType = typeof calendarEventTypes[number];
