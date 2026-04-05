@@ -1,4 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -11,6 +14,68 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+const replitDomains = process.env.REPLIT_DOMAINS
+  ? process.env.REPLIT_DOMAINS.split(",").map((d) => `https://${d.trim()}`)
+  : [];
+
+const allowedOrigins = new Set<string>([
+  "https://chakshi.com",
+  "https://www.chakshi.com",
+  "https://chakshi.in",
+  "https://www.chakshi.in",
+  ...replitDomains,
+]);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.has(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS: origin not allowed"));
+      }
+    },
+    credentials: true,
+  })
+);
+
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+  skip: (req) => !req.path.startsWith("/api"),
+});
+
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "AI rate limit exceeded, please wait before sending more requests." },
+});
+
+app.use(globalLimiter);
+
+app.use("/api/chat/query", aiLimiter);
+app.use("/api/draft", aiLimiter);
+app.use("/api/drafts/generate", aiLimiter);
+app.use("/api/memos/generate", aiLimiter);
+app.use("/api/compliance/generate", aiLimiter);
+app.use("/api/research", aiLimiter);
 
 app.use(
   express.json({

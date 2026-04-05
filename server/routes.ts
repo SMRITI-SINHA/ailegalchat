@@ -1,5 +1,6 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { requireAuth } from "./middleware/auth";
 import multer from "multer";
 import OpenAI from "openai";
 import mammoth from "mammoth";
@@ -385,6 +386,23 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  const PUBLIC_PATH_PREFIXES = [
+    "/embed/",
+    "/voice/transcribe",
+    "/voice/speak",
+    "/calendar/google/callback",
+  ];
+
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    const isPublic = PUBLIC_PATH_PREFIXES.some(
+      (p) => req.path === p || req.path.startsWith(p)
+    );
+    if (isPublic) {
+      return next();
+    }
+    return requireAuth(req, res, next);
+  });
 
   app.get("/api/documents", async (req: Request, res: Response) => {
     try {
@@ -938,7 +956,7 @@ ${documentContext}`;
       // Get trained style documents if enabled (limited to 2 docs)
       // Uses extractedHtml for structure preservation when available, falls back to content
       let trainedStyleContext = "";
-      const userId = req.body.userId || "default-user";
+      const userId = req.user!.id;
       if (useFirmStyle) {
         const trainingDocs = await storage.getTrainingDocs(userId);
         if (trainingDocs.length > 0) {
@@ -1384,7 +1402,7 @@ Generate the requested content now:`;
   // Training Documents API endpoints
   app.get("/api/training-docs", async (req: Request, res: Response) => {
     try {
-      const userId = (req.query.userId as string) || "default-user";
+      const userId = req.user!.id;
       const docs = await storage.getTrainingDocs(userId);
       res.json(docs);
     } catch (error) {
@@ -1396,7 +1414,7 @@ Generate the requested content now:`;
   app.post("/api/training-docs/upload", upload.array("files", 20), async (req: Request, res: Response) => {
     try {
       const files = req.files as Express.Multer.File[];
-      const userId = (req.body.userId as string) || "default-user";
+      const userId = req.user!.id;
       
       if (!files || files.length === 0) {
         return res.status(400).json({ error: "No files uploaded" });
@@ -2227,7 +2245,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.get("/api/calendar/google/auth-url", (req: Request, res: Response) => {
     try {
-      const userId = (req.query.userId as string) || "default-user";
+      const userId = req.user!.id;
       const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       
       const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
@@ -2294,7 +2312,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.get("/api/calendar/google/status", async (req: Request, res: Response) => {
     try {
-      const userId = (req.query.userId as string) || "default-user";
+      const userId = req.user!.id;
       const creds = await storage.getGoogleCalendarCredentials(userId);
 
       if (!creds) {
@@ -2316,7 +2334,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.post("/api/calendar/google/disconnect", async (req: Request, res: Response) => {
     try {
-      const userId = req.body.userId || "default-user";
+      const userId = req.user!.id;
       await storage.deleteGoogleCalendarCredentials(userId);
       res.json({ success: true });
     } catch (error) {
@@ -2327,7 +2345,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.post("/api/calendar/google/sync", async (req: Request, res: Response) => {
     try {
-      const userId = req.body.userId || "default-user";
+      const userId = req.user!.id;
       const creds = await storage.getGoogleCalendarCredentials(userId);
 
       if (!creds) {
@@ -2350,7 +2368,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.get("/api/calendar/events", async (req: Request, res: Response) => {
     try {
-      const userId = (req.query.userId as string) || "default-user";
+      const userId = req.user!.id;
       const events = await storage.getCalendarEvents(userId);
       res.json(events);
     } catch (error) {
@@ -2366,11 +2384,13 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
         return res.status(400).json({ error: parsed.error.message });
       }
 
-      const event = await storage.createCalendarEvent(parsed.data);
+      const userId = req.user!.id;
+      const eventData = { ...parsed.data, userId };
+      const event = await storage.createCalendarEvent(eventData);
 
-      const creds = await storage.getGoogleCalendarCredentials(parsed.data.userId);
+      const creds = await storage.getGoogleCalendarCredentials(userId);
       if (creds) {
-        const service = new GoogleCalendarService(parsed.data.userId);
+        const service = new GoogleCalendarService(userId);
         await service.createGoogleEvent(event);
       }
 
@@ -2648,7 +2668,8 @@ Do not include any other text outside the JSON object.`;
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.setHeader("Vary", "Origin");
 
       let kanoonContext = "";
       try {
