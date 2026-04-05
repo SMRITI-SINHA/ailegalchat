@@ -29,6 +29,7 @@ import type {
   InsertGoogleCalendarCredentials,
   CalendarEvent,
   InsertCalendarEvent,
+  AiUsage,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -112,6 +113,9 @@ export interface IStorage {
   createCalendarEvent(event: InsertCalendarEvent): Promise<CalendarEvent>;
   updateCalendarEvent(id: string, updates: Partial<CalendarEvent>): Promise<CalendarEvent | undefined>;
   deleteCalendarEvent(id: string): Promise<void>;
+
+  getAIUsage(userId: string, date: string): Promise<AiUsage | undefined>;
+  incrementAIUsage(userId: string, date: string): Promise<AiUsage>;
 }
 
 export class MemStorage implements IStorage {
@@ -130,6 +134,7 @@ export class MemStorage implements IStorage {
   private savedCases: Map<string, SavedCase>;
   private googleCalendarCredentials: Map<string, GoogleCalendarCredentials>;
   private calendarEvents: Map<string, CalendarEvent>;
+  private aiUsageMap: Map<string, AiUsage>;
 
   constructor() {
     this.users = new Map();
@@ -147,6 +152,7 @@ export class MemStorage implements IStorage {
     this.savedCases = new Map();
     this.googleCalendarCredentials = new Map();
     this.calendarEvents = new Map();
+    this.aiUsageMap = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -693,6 +699,29 @@ export class MemStorage implements IStorage {
 
   async deleteCalendarEvent(id: string): Promise<void> {
     this.calendarEvents.delete(id);
+  }
+
+  async getAIUsage(userId: string, date: string): Promise<AiUsage | undefined> {
+    const key = `${userId}:${date}`;
+    return this.aiUsageMap.get(key);
+  }
+
+  async incrementAIUsage(userId: string, date: string): Promise<AiUsage> {
+    const key = `${userId}:${date}`;
+    const existing = this.aiUsageMap.get(key);
+    if (existing) {
+      const updated: AiUsage = { ...existing, callCount: existing.callCount + 1 };
+      this.aiUsageMap.set(key, updated);
+      return updated;
+    }
+    const newUsage: AiUsage = {
+      id: randomUUID(),
+      userId,
+      date,
+      callCount: 1,
+    };
+    this.aiUsageMap.set(key, newUsage);
+    return newUsage;
   }
 }
 

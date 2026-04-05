@@ -5,6 +5,8 @@ import multer from "multer";
 import OpenAI from "openai";
 import mammoth from "mammoth";
 import sanitizeHtmlLib from "sanitize-html";
+import { z } from "zod";
+import { checkAIUsage, recordAIUsage, getTodayUsage, AI_DAILY_LIMIT, getISTDateString } from "./middleware/aiUsage";
 // pdf-parse loaded dynamically to avoid bundling browser dependencies
 let PDFParseClass: any;
 async function getPDFParseClass() {
@@ -562,13 +564,24 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/chat/query", async (req: Request, res: Response) => {
+  app.post("/api/chat/query", checkAIUsage, async (req: Request, res: Response) => {
     try {
-      const { message, sessionId, documentIds, includeSources, voiceLanguage } = req.body;
-
-      if (!message) {
-        return res.status(400).json({ error: "Message is required" });
+      const chatQuerySchema = z.object({
+        message: z.string().min(1, "Message is required").max(5000, "Input too long — please shorten your text"),
+        sessionId: z.string().optional(),
+        documentIds: z.array(z.string()).optional(),
+        includeSources: z.boolean().optional(),
+        voiceLanguage: z.string().optional(),
+      });
+      const parsed = chatQuerySchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { message, sessionId, documentIds, includeSources, voiceLanguage } = parsed.data;
 
       const tier = determineModelTier(message);
       const model = MODEL_TIERS[tier];
@@ -858,6 +871,7 @@ ${documentContext}`;
           })}\n\n`
         );
 
+        await recordAIUsage(req);
         res.end();
       } catch (aiError) {
         console.error("AI Error:", aiError);
@@ -918,13 +932,32 @@ ${documentContext}`;
     }
   });
 
-  app.post("/api/drafts/generate", async (req: Request, res: Response) => {
+  app.post("/api/drafts/generate", checkAIUsage, async (req: Request, res: Response) => {
     try {
-      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle, documentTypeDetails, documentSubType } = req.body;
-
-      if (!type || !facts) {
-        return res.status(400).json({ error: "Type and facts are required" });
+      const draftGenerateSchema = z.object({
+        type: z.string().min(1, "Type is required"),
+        facts: z.string().min(1, "Facts are required").max(10000, "Input too long — please shorten your text"),
+        title: z.string().optional(),
+        parties: z.string().optional(),
+        jurisdiction: z.string().optional(),
+        additionalInfo: z.string().optional(),
+        language: z.string().optional(),
+        additionalPrompts: z.string().optional(),
+        formatReference: z.any().optional(),
+        formatHtml: z.string().optional(),
+        useFirmStyle: z.boolean().optional(),
+        documentTypeDetails: z.any().optional(),
+        documentSubType: z.string().optional(),
+      });
+      const parsed = draftGenerateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle, documentTypeDetails, documentSubType } = parsed.data;
 
       // Build detailed document type context from hierarchical selection
       let documentTypeContext = "";
@@ -1268,6 +1301,7 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
         modelUsed: tier,
       });
 
+      await recordAIUsage(req);
       res.status(201).json(draft);
     } catch (error) {
       console.error("Error generating draft:", error);
@@ -1299,13 +1333,21 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
     }
   });
 
-  app.post("/api/drafts/translate", async (req: Request, res: Response) => {
+  app.post("/api/drafts/translate", checkAIUsage, async (req: Request, res: Response) => {
     try {
-      const { content, targetLanguage } = req.body;
-
-      if (!content || !targetLanguage) {
-        return res.status(400).json({ error: "Content and targetLanguage are required" });
+      const translateSchema = z.object({
+        content: z.string().min(1, "Content is required").max(80000, "Input too long — please shorten your text"),
+        targetLanguage: z.string().min(1, "Target language is required"),
+      });
+      const parsed = translateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { content, targetLanguage } = parsed.data;
 
       const systemPrompt = `You are a professional legal translator fluent in all Indian languages. Translate the following legal document to ${targetLanguage}. 
 Maintain the exact structure, formatting, section numbers, and legal terminology.
@@ -1331,6 +1373,7 @@ Ensure the translation is accurate and uses appropriate legal terminology in ${t
         modelUsed: "standard",
       });
 
+      await recordAIUsage(req);
       res.json({ translatedContent, language: targetLanguage });
     } catch (error) {
       console.error("Error translating document:", error);
@@ -1339,13 +1382,21 @@ Ensure the translation is accurate and uses appropriate legal terminology in ${t
   });
 
   // AI Assistance endpoint for quick legal content generation
-  app.post("/api/drafts/assist", async (req: Request, res: Response) => {
+  app.post("/api/drafts/assist", checkAIUsage, async (req: Request, res: Response) => {
     try {
-      const { prompt, context } = req.body;
-
-      if (!prompt) {
-        return res.status(400).json({ error: "Prompt is required" });
+      const assistSchema = z.object({
+        prompt: z.string().min(1, "Prompt is required").max(10000, "Input too long — please shorten your text"),
+        context: z.string().max(80000, "Input too long — please shorten your text").optional(),
+      });
+      const parsed = assistSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { prompt, context } = parsed.data;
 
       const systemPrompt = `You are a SENIOR INDIAN LEGAL EXPERT with 30+ years of experience drafting legal documents. Generate the requested legal content following these strict rules:
 
@@ -1392,6 +1443,7 @@ Generate the requested content now:`;
         modelUsed: "standard",
       });
 
+      await recordAIUsage(req);
       res.json({ content: generatedContent });
     } catch (error) {
       console.error("Error in AI assistance:", error);
@@ -1518,12 +1570,31 @@ Generate the requested content now:`;
     }
   });
 
-  app.post("/api/research/search", async (req: Request, res: Response) => {
+  app.get("/api/usage/today", async (req: Request, res: Response) => {
     try {
-      const { query, page = 0 } = req.body;
-      if (!query) {
-        return res.status(400).json({ error: "Query is required" });
+      const result = await getTodayUsage(req);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching AI usage:", error);
+      res.status(500).json({ error: "Failed to fetch usage" });
+    }
+  });
+
+  app.post("/api/research/search", checkAIUsage, async (req: Request, res: Response) => {
+    try {
+      const researchSearchSchema = z.object({
+        query: z.string().min(1, "Query is required").max(10000, "Input too long — please shorten your text"),
+        page: z.number().optional().default(0),
+      });
+      const parsed = researchSearchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { query, page } = parsed.data;
       
       let results = await indianKanoon.search(query, page);
       
@@ -1549,6 +1620,7 @@ Generate the requested content now:`;
         }
       }
       
+      await recordAIUsage(req);
       res.json({ 
         results, 
         isConfigured: indianKanoon.isConfigured(),
@@ -1563,18 +1635,27 @@ Generate the requested content now:`;
     }
   });
 
-  app.post("/api/research/advanced", async (req: Request, res: Response) => {
+  app.post("/api/research/advanced", checkAIUsage, async (req: Request, res: Response) => {
     try {
-      const { query } = req.body;
-      if (!query) {
-        return res.status(400).json({ error: "Query is required" });
+      const advancedResearchSchema = z.object({
+        query: z.string().min(1, "Query is required").max(10000, "Input too long — please shorten your text"),
+      });
+      const parsed = advancedResearchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { query } = parsed.data;
 
       const [kanoonResults, advancedResults] = await Promise.all([
         indianKanoon.search(query, 0),
         legalWebSearch.advancedSearch(query),
       ]);
 
+      await recordAIUsage(req);
       res.json({
         query,
         disclaimer: `This research compiles judicial decisions, statutory provisions, and regulatory materials relevant to "${query}". No legal opinion or advice is provided.`,
@@ -1615,12 +1696,27 @@ Generate the requested content now:`;
     }
   });
 
-  app.post("/api/memos/generate", async (req: Request, res: Response) => {
+  app.post("/api/memos/generate", checkAIUsage, async (req: Request, res: Response) => {
     try {
-      const { facts, issues, documentIds, language, structure, jurisdiction, parties, title } = req.body;
-      if (!facts) {
-        return res.status(400).json({ error: "Facts are required" });
+      const memoGenerateSchema = z.object({
+        facts: z.string().min(1, "Facts are required").max(10000, "Input too long — please shorten your text"),
+        issues: z.string().max(10000, "Input too long — please shorten your text").optional(),
+        documentIds: z.array(z.string()).optional(),
+        language: z.string().optional(),
+        structure: z.string().optional(),
+        jurisdiction: z.string().optional(),
+        parties: z.string().optional(),
+        title: z.string().optional(),
+      });
+      const parsed = memoGenerateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { facts, issues, documentIds, language, structure, jurisdiction, parties, title } = parsed.data;
 
       const selectedLanguage = language || "English";
       const selectedStructure = structure || "IRAC";
@@ -1897,6 +1993,7 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
         modelUsed: "standard",
       });
 
+      await recordAIUsage(req);
       res.json({
         fullMemo,
         modelUsed: "standard",
@@ -1972,12 +2069,22 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
     }
   });
 
-  app.post("/api/compliance/generate", async (req: Request, res: Response) => {
+  app.post("/api/compliance/generate", checkAIUsage, async (req: Request, res: Response) => {
     try {
-      const { industry, jurisdiction, activity } = req.body;
-      if (!industry || !jurisdiction || !activity) {
-        return res.status(400).json({ error: "Industry, jurisdiction, and activity are required" });
+      const complianceGenerateSchema = z.object({
+        industry: z.string().min(1, "Industry is required"),
+        jurisdiction: z.string().min(1, "Jurisdiction is required"),
+        activity: z.string().min(1, "Activity is required").max(10000, "Input too long — please shorten your text"),
+      });
+      const parsed = complianceGenerateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { industry, jurisdiction, activity } = parsed.data;
 
       // Step 1: Search current compliance requirements using Perplexity with trusted legal domains
       let perplexityContext = "";
@@ -2083,6 +2190,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
         modelUsed: "standard",
       });
 
+      await recordAIUsage(req);
       res.json({
         content,
         items,
@@ -2448,13 +2556,22 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
     }
   });
 
-  app.post("/api/refine", async (req: Request, res: Response) => {
+  app.post("/api/refine", checkAIUsage, async (req: Request, res: Response) => {
     try {
-      const { text, action, customPrompt } = req.body;
-
-      if (!text) {
-        return res.status(400).json({ error: "Text is required" });
+      const refineSchema = z.object({
+        text: z.string().min(1, "Text is required").max(80000, "Input too long — please shorten your text"),
+        action: z.string().optional(),
+        customPrompt: z.string().optional(),
+      });
+      const parsed = refineSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.errors[0];
+        if (firstError.message.includes("too long")) {
+          return res.status(400).json({ error: "Input too long — please shorten your text" });
+        }
+        return res.status(400).json({ error: firstError.message });
       }
+      const { text, action, customPrompt } = parsed.data;
 
       let refinementInstruction = "";
       switch (action) {
@@ -2517,6 +2634,7 @@ Do not include any other text outside the JSON object.`;
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
+          await recordAIUsage(req);
           return res.json({
             refined: parsed.refined || raw,
             note: parsed.note || "",
@@ -2526,6 +2644,7 @@ Do not include any other text outside the JSON object.`;
         // If JSON parsing fails, return raw text
       }
 
+      await recordAIUsage(req);
       res.json({ refined: raw, note: "" });
     } catch (error) {
       console.error("Error refining text:", error);

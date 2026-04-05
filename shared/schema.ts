@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, boolean, timestamp, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, real, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -442,6 +442,17 @@ export const embedUsage = pgTable("embed_usage", {
 });
 
 export type EmbedUsage = typeof embedUsage.$inferSelect;
+
+export const aiUsage = pgTable("ai_usage", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
+  date: text("date").notNull(),
+  callCount: integer("call_count").notNull().default(0),
+}, (t) => [
+  uniqueIndex("ai_usage_user_date_idx").on(t.userId, t.date),
+]);
+
+export type AiUsage = typeof aiUsage.$inferSelect;
 
 export const calendarEventTypes = ["academic", "exam", "career", "court", "professional"] as const;
 export type CalendarEventType = typeof calendarEventTypes[number];
