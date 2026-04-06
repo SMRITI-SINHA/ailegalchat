@@ -34,17 +34,20 @@ app.use(
   })
 );
 
+const isDev = process.env.NODE_ENV !== "production";
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) {
+      if (!origin || isDev) {
         callback(null, true);
         return;
       }
       if (allowedOrigins.has(origin)) {
         callback(null, true);
       } else {
-        callback(new Error("CORS: origin not allowed"));
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        callback(null, false);
       }
     },
     credentials: true,
