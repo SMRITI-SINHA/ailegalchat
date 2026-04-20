@@ -523,6 +523,14 @@ export async function registerRoutes(
 
   app.delete("/api/documents/:id", async (req: Request, res: Response) => {
     try {
+      const doc = await storage.getDocument(req.params.id);
+      if (doc?.storagePath && supabaseStorage.isSupabaseConfigured()) {
+        try {
+          await supabaseStorage.deleteFile(doc.storagePath);
+        } catch (e: unknown) {
+          console.warn(`[DOC DELETE] Supabase file deletion failed, continuing: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
       await storage.deleteDocument(req.params.id);
       logAudit(req, {
         action: "document_delete",
@@ -1562,6 +1570,14 @@ Generate the requested content now:`;
 
   app.delete("/api/training-docs/:id", async (req: Request, res: Response) => {
     try {
+      const doc = await storage.getTrainingDoc(req.params.id);
+      if (doc?.storagePath && supabaseStorage.isSupabaseConfigured()) {
+        try {
+          await supabaseStorage.deleteFile(doc.storagePath);
+        } catch (e: unknown) {
+          console.warn(`[TRAINING DOC DELETE] Supabase file deletion failed, continuing: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
       await storage.deleteTrainingDoc(req.params.id);
       res.status(204).send();
     } catch (error) {
