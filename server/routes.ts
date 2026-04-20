@@ -1409,12 +1409,12 @@ For proper nouns, case citations, and official statute names, keep them in their
 Ensure the translation is accurate and uses appropriate legal terminology in ${targetLanguage}.`;
 
       const response = await callAI(openai, {
-        model: MODEL_TIERS.mini,
+        model: MODEL_TIERS.standard,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Translate this legal document to ${targetLanguage}:\n\n${content}` },
         ],
-        max_completion_tokens: 3000,
+        max_completion_tokens: 4000,
       }, "draft-translate");
 
       const translatedContent = response.choices[0]?.message?.content || content;
