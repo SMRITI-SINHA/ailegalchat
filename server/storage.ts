@@ -202,6 +202,8 @@ export class MemStorage implements IStorage {
       summary: insertDoc.summary ?? null,
       extractedText: insertDoc.extractedText ?? null,
       extractedHtml: insertDoc.extractedHtml ?? null,
+      storagePath: insertDoc.storagePath ?? null,
+      storageUrl: insertDoc.storageUrl ?? null,
       uploadedAt: new Date(),
     };
     this.documents.set(id, doc);
@@ -381,6 +383,8 @@ export class MemStorage implements IStorage {
       content: insertDoc.content ?? null,
       extractedHtml: insertDoc.extractedHtml ?? null,
       status: insertDoc.status ?? "pending",
+      storagePath: insertDoc.storagePath ?? null,
+      storageUrl: insertDoc.storageUrl ?? null,
       uploadedAt: new Date(),
     };
     this.trainingDocs.set(id, doc);

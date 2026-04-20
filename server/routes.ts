@@ -27,6 +27,7 @@ import { GoogleCalendarService } from "./google-calendar";
 import { trainingDataLoader } from "./training-data-loader";
 import { inLegalBERT } from "./huggingface";
 import { transcribeAudio as openaiTranscribe, generateSpeech as openaiTTS, DEFAULT_VOICE as OPENAI_DEFAULT_VOICE } from "./voice-service";
+import * as supabaseStorage from "./supabase-storage";
 
 function decodeFilename(rawName: string): string {
   try {
@@ -443,6 +444,20 @@ export async function registerRoutes(
           const extracted = await extractTextFromFile(file);
           const pageCount = Math.max(1, Math.ceil(extracted.text.length / 3000));
           const decodedName = decodeFilename(file.originalname);
+
+          const tempId = require("crypto").randomUUID();
+          let storagePath: string | null = null;
+          let storageUrl: string | null = null;
+
+          if (supabaseStorage.isSupabaseConfigured()) {
+            try {
+              const uploaded = await supabaseStorage.uploadDocument("default-user", tempId, file);
+              storagePath = uploaded.path;
+              storageUrl = uploaded.signedUrl;
+            } catch (e: any) {
+              console.warn(`[DOC UPLOAD] Supabase upload failed, continuing without cloud storage: ${e.message}`);
+            }
+          }
           
           const doc = await storage.createDocument({
             name: decodedName,
@@ -454,6 +469,8 @@ export async function registerRoutes(
             summary: null,
             extractedText: extracted.text,
             extractedHtml: extracted.html,
+            storagePath,
+            storageUrl,
           });
 
           const cost = 0.50 + (pageCount * 0.01);
@@ -1505,6 +1522,20 @@ Generate the requested content now:`;
           // Extract text and HTML structure using the same technique as document upload
           const extracted = await extractTextFromFile(file);
           const decodedName = decodeFilename(file.originalname);
+
+          const docId = require("crypto").randomUUID();
+          let storagePath: string | null = null;
+          let storageUrl: string | null = null;
+
+          if (supabaseStorage.isSupabaseConfigured()) {
+            try {
+              const uploaded = await supabaseStorage.uploadTrainingDoc(userId, docId, file);
+              storagePath = uploaded.path;
+              storageUrl = uploaded.signedUrl;
+            } catch (e: any) {
+              console.warn(`[TRAINING DOC UPLOAD] Supabase upload failed: ${e.message}`);
+            }
+          }
           
           const doc = await storage.createTrainingDoc({
             userId,
@@ -1514,6 +1545,8 @@ Generate the requested content now:`;
             content: extracted.text,
             extractedHtml: extracted.html,
             status: "completed",
+            storagePath,
+            storageUrl,
           });
 
           return doc;
@@ -2694,16 +2727,32 @@ Do not include any other text outside the JSON object.`;
   });
 
   app.post("/api/voice/transcribe", upload.single("audio"), async (req: Request, res: Response) => {
+    let audioStoragePath: string | null = null;
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No audio file provided" });
       }
       console.log(`[VOICE] Transcription request: file size=${req.file.size} bytes`);
+
+      if (supabaseStorage.isSupabaseConfigured()) {
+        try {
+          const uploaded = await supabaseStorage.uploadAudio(req.file);
+          audioStoragePath = uploaded.path;
+        } catch (e: any) {
+          console.warn(`[TRANSCRIBE] Supabase audio upload failed, transcribing from buffer: ${e.message}`);
+        }
+      }
+
+
       const result = await openaiTranscribe(req.file.buffer, req.file.originalname || "recording.webm");
       res.json({ text: result.text, language_code: result.language_code });
     } catch (error: any) {
       console.error("Error transcribing audio:", error?.message || error);
       res.status(500).json({ error: "Failed to transcribe audio", detail: error?.message || "Unknown error" });
+    } finally {
+      if (audioStoragePath) {
+        supabaseStorage.deleteFile(audioStoragePath).catch(() => {});
+      }
     }
   });
 

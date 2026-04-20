@@ -28,6 +28,8 @@ export const documents = pgTable("documents", {
   summary: text("summary"),
   extractedText: text("extracted_text"),
   extractedHtml: text("extracted_html"),
+  storagePath: text("storage_path"),
+  storageUrl: text("storage_url"),
   uploadedAt: timestamp("uploaded_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -116,6 +118,8 @@ export const trainingDocs = pgTable("training_docs", {
   content: text("content"),
   extractedHtml: text("extracted_html"),
   status: text("status").notNull().default("pending"),
+  storagePath: text("storage_path"),
+  storageUrl: text("storage_url"),
   uploadedAt: timestamp("uploaded_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
