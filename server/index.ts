@@ -9,6 +9,10 @@ import { createServer } from "http";
 const app = express();
 const httpServer = createServer(app);
 
+// Trust X-Forwarded-For from proxy/load balancer so rate limits
+// apply per real user IP, not Chakshi's server IP
+app.set("trust proxy", 1);
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -54,11 +58,32 @@ app.use(
   })
 );
 
+// Extract user ID from JWT for rate limit key — prevents all users
+// sharing one bucket when Chakshi's backend proxies requests.
+// We decode without verifying here (auth middleware does the real check).
+function resolveRateLimitKey(req: Request): string {
+  try {
+    let token: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) token = authHeader.slice(7);
+    if (!token && typeof req.query.token === "string") token = req.query.token as string;
+    if (token) {
+      const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+      const userId = payload.sub || payload.userId || payload.user_id;
+      if (userId) return String(userId);
+    }
+  } catch {
+    // fall through to IP
+  }
+  return req.ip || "unknown";
+}
+
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: resolveRateLimitKey,
   message: { error: "Too many requests, please try again later." },
   skip: (req) => !req.path.startsWith("/api"),
 });
@@ -68,6 +93,7 @@ const aiLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: resolveRateLimitKey,
   message: { error: "AI rate limit exceeded, please wait before sending more requests." },
 });
 
