@@ -28,6 +28,8 @@ import { trainingDataLoader } from "./training-data-loader";
 import { inLegalBERT } from "./huggingface";
 import { transcribeAudio as openaiTranscribe, generateSpeech as openaiTTS, DEFAULT_VOICE as OPENAI_DEFAULT_VOICE } from "./voice-service";
 import * as supabaseStorage from "./supabase-storage";
+import { callAI, callAIStream } from "./ai-queue";
+import { aiCache } from "./ai-cache";
 
 function decodeFilename(rawName: string): string {
   try {
@@ -851,7 +853,7 @@ ${documentContext}`;
       }
 
       try {
-        const stream = await openai.chat.completions.create({
+        const stream = await callAIStream(openai, {
           model,
           messages: [
             { role: "system", content: systemPrompt },
@@ -859,7 +861,7 @@ ${documentContext}`;
           ],
           stream: true,
           max_completion_tokens: 4096,
-        });
+        }, "nyaya-chat");
 
         let fullContent = "";
 
@@ -1313,7 +1315,7 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
         systemPrompt += formatSystemOverride;
       }
 
-      const response = await openai.chat.completions.create({
+      const response = await callAI(openai, {
         model,
         messages: [
           {
@@ -1323,7 +1325,7 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
           { role: "user", content: prompt + researchContext },
         ],
         max_completion_tokens: 4096,
-      });
+      }, "draft-generate");
 
       const content = response.choices[0]?.message?.content || "";
       const cost = tier === "standard" ? 1.50 : 0.80;
@@ -1408,14 +1410,14 @@ Only translate the content - do not add explanations or comments.
 For proper nouns, case citations, and official statute names, keep them in their original form.
 Ensure the translation is accurate and uses appropriate legal terminology in ${targetLanguage}.`;
 
-      const response = await openai.chat.completions.create({
+      const response = await callAI(openai, {
         model: MODEL_TIERS.standard,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Translate this legal document to ${targetLanguage}:\n\n${content}` },
         ],
         max_completion_tokens: 8192,
-      });
+      }, "draft-translate");
 
       const translatedContent = response.choices[0]?.message?.content || content;
 
@@ -1478,14 +1480,14 @@ Generate the requested content now:`;
         ? `Context: ${context}\n\nRequest: ${prompt}` 
         : prompt;
 
-      const response = await openai.chat.completions.create({
+      const response = await callAI(openai, {
         model: MODEL_TIERS.standard,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
         max_completion_tokens: 4096,
-      });
+      }, "draft-assist");
 
       const generatedContent = response.choices[0]?.message?.content || "";
 
@@ -1672,8 +1674,14 @@ Generate the requested content now:`;
         return res.status(400).json({ error: firstError.message });
       }
       const { query, page } = parsed.data;
-      
-      let results = await indianKanoon.search(query, page);
+
+      // Cache Indian Kanoon results for 24h — same query always returns same statutes/cases
+      const kanoonCacheKey = { query: query.toLowerCase().trim(), page };
+      let results = aiCache.get<typeof results>("kanoon-search", kanoonCacheKey) ?? null;
+      if (!results) {
+        results = await indianKanoon.search(query, page);
+        if (results?.length) aiCache.set("kanoon-search", kanoonCacheKey, results);
+      }
       
       let bertStatutes: { statute: string; confidence: number }[] = [];
       if (inLegalBERT.isConfigured() && page === 0) {
@@ -2048,7 +2056,7 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
         systemPrompt += memoTrainingContext;
       }
 
-      const response = await openai.chat.completions.create({
+      const response = await callAI(openai, {
         model: MODEL_TIERS.standard,
         messages: [
           {
@@ -2058,7 +2066,7 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
           { role: "user", content: prompt },
         ],
         max_completion_tokens: 4096,
-      });
+      }, "memo-generate");
 
       const fullMemo = response.choices[0]?.message?.content || "";
       const cost = MODEL_COSTS.standard;
@@ -2216,25 +2224,33 @@ OUTPUT FORMAT - Return a JSON object with an "items" key containing the array:
 
 IMPORTANT: The key MUST be "items" - do not use any other key name like "checklist" or "compliance".`;
 
-      const response = await openai.chat.completions.create({
-        model: MODEL_TIERS.standard,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { 
-            role: "user", 
-            content: `Generate a compliance checklist for:
+      const complianceCacheKey = { industry: industry.toLowerCase(), jurisdiction: jurisdiction.toLowerCase(), activity: activity.substring(0, 200).toLowerCase() };
+      const cachedCompliance = aiCache.get<string>("compliance", complianceCacheKey);
+
+      let content: string;
+      if (cachedCompliance) {
+        content = cachedCompliance;
+      } else {
+        const response = await callAI(openai, {
+          model: MODEL_TIERS.standard,
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: `Generate a compliance checklist for:
 Industry: ${industry}
 Jurisdiction: ${jurisdiction}
 Activity: ${activity}
 
 Generate 8-12 VERIFIED compliance items with exact legal references. Include any recent changes from the last 6 months.`
-          },
-        ],
-        max_completion_tokens: 3000,
-        response_format: { type: "json_object" },
-      });
-
-      const content = response.choices[0]?.message?.content || "";
+            },
+          ],
+          max_completion_tokens: 3000,
+          response_format: { type: "json_object" },
+        }, "compliance-generate");
+        content = response.choices[0]?.message?.content || "";
+        if (content) aiCache.set("compliance", complianceCacheKey, content);
+      }
       const cost = MODEL_COSTS.standard;
 
       // Parse the JSON response - AI may use various key names
@@ -2709,14 +2725,14 @@ Return ONLY a JSON object with exactly these two fields:
 
 Do not include any other text outside the JSON object.`;
 
-      const response = await openai.chat.completions.create({
+      const response = await callAI(openai, {
         model: MODEL_TIERS.mini,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: text },
         ],
         temperature: 0.3,
-      });
+      }, "refine");
 
       const raw = response.choices[0]?.message?.content || "";
 
@@ -2926,7 +2942,7 @@ IMPORTANT RULES:
 ${kanoonContext}`;
 
       const openai = new OpenAI();
-      const stream = await openai.chat.completions.create({
+      const stream = await callAIStream(openai, {
         model,
         messages: [
           { role: "system", content: systemPrompt },
@@ -2934,7 +2950,7 @@ ${kanoonContext}`;
         ],
         stream: true,
         max_tokens: 2000,
-      });
+      }, "research-chat");
 
       let fullResponse = "";
       for await (const chunk of stream) {
