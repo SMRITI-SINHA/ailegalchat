@@ -61,6 +61,7 @@ app.use(
 // Extract user ID from JWT for rate limit key — prevents all users
 // sharing one bucket when Chakshi's backend proxies requests.
 // We decode without verifying here (auth middleware does the real check).
+// IPv6-mapped IPv4 addresses are normalised to plain IPv4 as fallback.
 function resolveRateLimitKey(req: Request): string {
   try {
     let token: string | undefined;
@@ -75,7 +76,9 @@ function resolveRateLimitKey(req: Request): string {
   } catch {
     // fall through to IP
   }
-  return req.ip || "unknown";
+  // Normalise IPv6-mapped IPv4 (e.g. ::ffff:127.0.0.1 → 127.0.0.1)
+  const ip = (req.ip || "unknown").replace(/^::ffff:/, "");
+  return ip;
 }
 
 const globalLimiter = rateLimit({
@@ -84,6 +87,9 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: resolveRateLimitKey,
+  // Primary key is JWT user ID — IP is only a fallback for unauthenticated
+  // requests. Suppress the IPv6 static check which doesn't apply here.
+  validate: { keyGeneratorIpFallback: false },
   message: { error: "Too many requests, please try again later." },
   skip: (req) => !req.path.startsWith("/api"),
 });
@@ -94,6 +100,7 @@ const aiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: resolveRateLimitKey,
+  validate: { keyGeneratorIpFallback: false },
   message: { error: "AI rate limit exceeded, please wait before sending more requests." },
 });
 
