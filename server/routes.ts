@@ -726,7 +726,7 @@ ${endPart}`;
                 citationIndex++;
                 indianKanoonContext += `\n[${citationIndex}] ${result.title}\n`;
                 if (result.headline) {
-                  indianKanoonContext += `   Excerpt: ${result.headline.replace(/<[^>]*>/g, "").substring(0, 200)}...\n`;
+                  indianKanoonContext += `   Excerpt: ${result.headline.replace(/<[^>]*>/g, "").substring(0, 120)}...\n`;
                 }
                 
                 citations.push({
@@ -1259,13 +1259,11 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
 USE THESE CITATIONS ONLY. Do not invent or modify these references.
 
 `;
-            rankedResults.slice(0, 10).forEach((result: any, index: number) => {
-              const cleanSnippet = result.headline?.replace(/<[^>]*>/g, "").substring(0, 250) || "";
+            rankedResults.slice(0, 5).forEach((result: any, index: number) => {
+              const cleanSnippet = result.headline?.replace(/<[^>]*>/g, "").substring(0, 120) || "";
               const relevanceTag = result.relevanceScore ? ` [Relevance: ${(result.relevanceScore * 100).toFixed(0)}%]` : "";
               indianKanoonContext += `[${index + 1}] ${result.title}${relevanceTag}
-   Source: Indian Kanoon DocID ${result.docId}
-   Excerpt: ${cleanSnippet}...
-   URL: https://indiankanoon.org/doc/${result.docId}/
+   DocID: ${result.docId} | Excerpt: ${cleanSnippet}...
 
 `;
             });
@@ -1411,12 +1409,12 @@ For proper nouns, case citations, and official statute names, keep them in their
 Ensure the translation is accurate and uses appropriate legal terminology in ${targetLanguage}.`;
 
       const response = await callAI(openai, {
-        model: MODEL_TIERS.standard,
+        model: MODEL_TIERS.mini,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Translate this legal document to ${targetLanguage}:\n\n${content}` },
         ],
-        max_completion_tokens: 8192,
+        max_completion_tokens: 3000,
       }, "draft-translate");
 
       const translatedContent = response.choices[0]?.message?.content || content;
@@ -1481,12 +1479,12 @@ Generate the requested content now:`;
         : prompt;
 
       const response = await callAI(openai, {
-        model: MODEL_TIERS.standard,
+        model: MODEL_TIERS.mini,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
-        max_completion_tokens: 4096,
+        max_completion_tokens: 2000,
       }, "draft-assist");
 
       const generatedContent = response.choices[0]?.message?.content || "";
@@ -1865,12 +1863,10 @@ Generate the requested content now:`;
 USE THESE CITATIONS ONLY. Do not invent or modify these references.
 
 `;
-            allMemoResults.slice(0, 10).forEach((result: any, index: number) => {
-              const cleanSnippet = result.headline?.replace(/<[^>]*>/g, "").substring(0, 250) || "";
+            allMemoResults.slice(0, 5).forEach((result: any, index: number) => {
+              const cleanSnippet = result.headline?.replace(/<[^>]*>/g, "").substring(0, 120) || "";
               indianKanoonContext += `[${index + 1}] ${result.title}
-   Source: Indian Kanoon DocID ${result.docId}
-   Excerpt: ${cleanSnippet}...
-   URL: https://indiankanoon.org/doc/${result.docId}/
+   DocID: ${result.docId} | Excerpt: ${cleanSnippet}...
 
 `;
             });
@@ -2232,7 +2228,7 @@ IMPORTANT: The key MUST be "items" - do not use any other key name like "checkli
         content = cachedCompliance;
       } else {
         const response = await callAI(openai, {
-          model: MODEL_TIERS.standard,
+          model: MODEL_TIERS.mini,
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -2245,7 +2241,7 @@ Activity: ${activity}
 Generate 8-12 VERIFIED compliance items with exact legal references. Include any recent changes from the last 6 months.`
             },
           ],
-          max_completion_tokens: 3000,
+          max_completion_tokens: 2000,
           response_format: { type: "json_object" },
         }, "compliance-generate");
         content = response.choices[0]?.message?.content || "";
