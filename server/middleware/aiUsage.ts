@@ -6,17 +6,16 @@ import { eq, and, sql } from "drizzle-orm";
 const AI_DAILY_LIMIT = parseInt(process.env.AI_DAILY_LIMIT || "50", 10);
 const ROLE_LIMITS: Record<string, number> = {
   student: parseInt(process.env.AI_DAILY_LIMIT_STUDENT || "30", 10),
-  trial: parseInt(process.env.AI_DAILY_LIMIT_TRIAL || "25", 10),
+  clerk: parseInt(process.env.AI_DAILY_LIMIT_CLERK || "50", 10),
   advocate: parseInt(process.env.AI_DAILY_LIMIT_ADVOCATE || "100", 10),
-  lawyer: parseInt(process.env.AI_DAILY_LIMIT_ADVOCATE || "100", 10),
-  admin: parseInt(process.env.AI_DAILY_LIMIT_ADMIN || "500", 10),
-  enterprise: parseInt(process.env.AI_DAILY_LIMIT_ENTERPRISE || "250", 10),
 };
+const TRIAL_DAILY_LIMIT = parseInt(process.env.AI_DAILY_LIMIT_TRIAL || "25", 10);
 
 function getRoleLimit(req: Request): number {
   const role = req.user?.role?.toLowerCase();
   const plan = req.user?.plan?.toLowerCase();
-  return (role && ROLE_LIMITS[role]) || (plan && ROLE_LIMITS[plan]) || AI_DAILY_LIMIT;
+  if (plan === "trial") return TRIAL_DAILY_LIMIT;
+  return (role && ROLE_LIMITS[role]) || AI_DAILY_LIMIT;
 }
 
 function getISTDateString(): string {

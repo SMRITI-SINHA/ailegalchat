@@ -73,7 +73,7 @@ All layers fail safely - if any layer fails, the pipeline continues without that
 ### AI Scale Controls
 - GPT-4.1/o3 calls use a separate standard-model queue (`AI_STANDARD_MAX_CONCURRENT`, default 2) to prevent Tier 1 TPM bursts while allowing mini-model traffic to continue through the general queue.
 - Draft and memo generation support optional server-sent streaming (`stream: true`) while existing JSON endpoints remain backward compatible.
-- Daily AI quotas are role/plan-aware from Supabase JWT claims: trial/student/advocate/admin/enterprise limits can be configured with environment variables.
+- Daily AI quotas are role/plan-aware from Supabase JWT claims: supported Chakshi roles are student, clerk, and advocate. A 7-day trial plan can be passed as `plan: "trial"` and receives the trial daily AI quota before converting to the role quota after trial expiry is handled by the main Chakshi app/Supabase metadata.
 - Drafting/memo prompts and research contexts are compressed/truncated to reduce token usage while preserving legal safety rules.
 
 ### Pipeline Flow
