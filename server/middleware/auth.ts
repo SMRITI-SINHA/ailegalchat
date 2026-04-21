@@ -5,13 +5,25 @@ import { logAudit } from "../audit";
 declare global {
   namespace Express {
     interface Request {
-      user?: { id: string };
+      user?: { id: string; role?: string; plan?: string };
     }
   }
 }
 
 const JWT_ALGORITHM = (process.env.CHAKSHI_JWT_ALGORITHM || "HS256") as jwt.Algorithm;
 const JWT_USER_ID_CLAIM = process.env.CHAKSHI_JWT_USER_ID_CLAIM || "sub";
+
+function getClaimString(source: Record<string, unknown>, key: string): string | undefined {
+  const value = source[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function getMetadataString(source: Record<string, unknown>, metadataKey: string, field: string): string | undefined {
+  const metadata = source[metadataKey];
+  if (!metadata || typeof metadata !== "object") return undefined;
+  const value = (metadata as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : undefined;
+}
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const secret = process.env.CHAKSHI_JWT_SECRET;
@@ -63,7 +75,19 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       return;
     }
 
-    req.user = { id: userId };
+    const role =
+      getClaimString(decoded, "chakshi_role") ||
+      getClaimString(decoded, "user_role") ||
+      getMetadataString(decoded, "app_metadata", "role") ||
+      getMetadataString(decoded, "user_metadata", "role") ||
+      getClaimString(decoded, "role");
+    const plan =
+      getClaimString(decoded, "chakshi_plan") ||
+      getClaimString(decoded, "plan") ||
+      getMetadataString(decoded, "app_metadata", "plan") ||
+      getMetadataString(decoded, "user_metadata", "plan");
+
+    req.user = { id: userId, role, plan };
     next();
   } catch (err) {
     logAudit(req, {

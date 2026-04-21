@@ -4,6 +4,20 @@ import { aiUsage } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 const AI_DAILY_LIMIT = parseInt(process.env.AI_DAILY_LIMIT || "50", 10);
+const ROLE_LIMITS: Record<string, number> = {
+  student: parseInt(process.env.AI_DAILY_LIMIT_STUDENT || "30", 10),
+  trial: parseInt(process.env.AI_DAILY_LIMIT_TRIAL || "25", 10),
+  advocate: parseInt(process.env.AI_DAILY_LIMIT_ADVOCATE || "100", 10),
+  lawyer: parseInt(process.env.AI_DAILY_LIMIT_ADVOCATE || "100", 10),
+  admin: parseInt(process.env.AI_DAILY_LIMIT_ADMIN || "500", 10),
+  enterprise: parseInt(process.env.AI_DAILY_LIMIT_ENTERPRISE || "250", 10),
+};
+
+function getRoleLimit(req: Request): number {
+  const role = req.user?.role?.toLowerCase();
+  const plan = req.user?.plan?.toLowerCase();
+  return (role && ROLE_LIMITS[role]) || (plan && ROLE_LIMITS[plan]) || AI_DAILY_LIMIT;
+}
 
 function getISTDateString(): string {
   const now = new Date();
@@ -49,12 +63,13 @@ export async function checkAIUsage(req: Request, res: Response, next: NextFuncti
 
   try {
     const callCount = await getUsageCount(userId, date);
+    const dailyLimit = getRoleLimit(req);
 
-    if (callCount >= AI_DAILY_LIMIT) {
+    if (callCount >= dailyLimit) {
       return res.status(429).json({
         error: "Daily AI usage limit reached. Resets at midnight IST.",
         used: callCount,
-        limit: AI_DAILY_LIMIT,
+        limit: dailyLimit,
         remaining: 0,
         resetsAt: getMidnightISTResetISO(),
       });
@@ -82,13 +97,14 @@ export async function recordAIUsage(req: Request): Promise<void> {
 
 export async function getTodayUsage(req: Request): Promise<{ used: number; limit: number; remaining: number; resetsAt: string }> {
   const userId = req.user?.id;
+  const limit = getRoleLimit(req);
   if (!userId) {
-    return { used: 0, limit: AI_DAILY_LIMIT, remaining: AI_DAILY_LIMIT, resetsAt: getMidnightISTResetISO() };
+    return { used: 0, limit, remaining: limit, resetsAt: getMidnightISTResetISO() };
   }
   const date = getISTDateString();
   const used = await getUsageCount(userId, date);
-  const remaining = Math.max(0, AI_DAILY_LIMIT - used);
-  return { used, limit: AI_DAILY_LIMIT, remaining, resetsAt: getMidnightISTResetISO() };
+  const remaining = Math.max(0, limit - used);
+  return { used, limit, remaining, resetsAt: getMidnightISTResetISO() };
 }
 
 export { AI_DAILY_LIMIT, getISTDateString };

@@ -1,0 +1,104 @@
+3. AI Usage & Cost
+
+Rate limits (tokens per minute cap) are handled in three layers: (1) each user is capped at 50 AI calls per day and 20 per minute, so no single user can drain the shared bucket; (2) if OpenAI temporarily throttles us, the system automatically retries with a short wait instead of showing an error; (3) common repeated queries (like legal research on the same topic) are cached and served instantly without hitting the API again. For growth beyond a few hundred active users, we can upgrade the OpenAI plan tier which multiplies the limits automatically.
+
+Average Token Usage Per Use Case
+Token counts include : system prompt + context + user input + AI response ( all four combined)
+
+Use Case
+Model Used
+Input Tokens
+Output Tokens
+Total Per Request
+Nyaya AI Chat (simple query)
+gpt-4o-mini
+600–1,200
+500–1,500
+~1,100–2,700
+Nyaya AI Chat (legal query + Kanoon context)
+gpt-4.1
+2,500–5,000
+1,000–3,000
+~3,500–8,000
+Chat with PDF (per message)
+gpt-4o-mini
+3,000–10,000
+500–1,500
+~3,500–11,500
+Draft Generation
+gpt-4.1
+6,000–12,000
+2,000–4,096
+~8,000–16,000
+Document Translation
+gpt-4.1
+3,000–10,000
+2,000–8,000
+~5,000–18,000
+Draft Assist
+gpt-4.1
+1,500–4,000
+500–2,000
+~2,000–6,000
+Research Memo (IRAC)
+gpt-4.1
+8,000–14,000
+2,000–4,096
+~10,000–18,000
+Compliance Checklist
+gpt-4.1
+3,000–6,000
+2,000–3,000
+~5,000–9,000
+Refine/Polish Text
+gpt-4o-mini
+500–1,500
+300–1,000
+~800–2,500
+Research Chat
+gpt-4o-mini/4.1
+2,000–6,000
+500–2,000
+~2,500–8,000
+Voice Transcription (Whisper)
+whisper-1
+Per minute of audio
+—
+~30–90 sec avg
+Voice TTS (nova)
+tts-1
+Per character
+—
+~500–1,500 chars avg
+
+
+
+OpenAI Vendor Rate Limits by Tier
+Tier
+Reached When
+gpt-4o-mini RPM
+gpt-4o-mini TPM
+gpt-4.1 RPM
+gpt-4.1 TPM
+Tier 1
+After first $5 spend
+500
+200,000
+500
+30,000
+Tier 2
+After $50 spend
+5,000
+2,000,000
+5,000
+300,000
+Tier 3
+After $100 spend
+15,000
+4,000,000
+15,000
+1,000,000
+
+
+For hugging face we will self host it, currently its fetching from api.
+

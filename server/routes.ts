@@ -357,6 +357,15 @@ const MODEL_COSTS = {
   pro: 2.00,
 } as const;
 
+function sendSse(res: Response, event: string, data: unknown): void {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function trimPromptText(value: string, maxChars: number): string {
+  return value.length > maxChars ? `${value.slice(0, maxChars)}\n[TRUNCATED FOR TOKEN EFFICIENCY]` : value;
+}
+
 function determineModelTier(query: string): "mini" | "standard" | "pro" {
   const complexKeywords = [
     "constitutional",
@@ -993,6 +1002,7 @@ ${documentContext}`;
         useFirmStyle: z.boolean().optional(),
         documentTypeDetails: z.any().optional(),
         documentSubType: z.string().optional(),
+        stream: z.boolean().optional(),
       });
       const parsed = draftGenerateSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1002,7 +1012,7 @@ ${documentContext}`;
         }
         return res.status(400).json({ error: firstError.message });
       }
-      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle, documentTypeDetails, documentSubType } = parsed.data;
+      const { type, title, facts, parties, jurisdiction, additionalInfo, language, additionalPrompts, formatReference, formatHtml, useFirmStyle, documentTypeDetails, documentSubType, stream } = parsed.data;
 
       // Build detailed document type context from hierarchical selection
       let documentTypeContext = "";
@@ -1043,7 +1053,7 @@ ${documentContext}`;
             // Prefer extractedHtml for structure, fall back to content
             const structuredContent = doc.extractedHtml || doc.content;
             if (structuredContent) {
-              trainedStyleContext += `=== ${doc.name} (Structure Reference) ===\n${structuredContent.substring(0, 2000)}\n\n`;
+              trainedStyleContext += `=== ${doc.name} (Structure Reference) ===\n${trimPromptText(structuredContent, 1000)}\n\n`;
             }
           }
           trainedStyleContext += "\nAdapt the exact format, structure, and tone from these samples to maintain firm consistency.";
@@ -1079,7 +1089,7 @@ ${structurePatterns}
 
 FULL TEMPLATE STRUCTURE FOR REFERENCE:
 === FORMAT TEMPLATE HTML ===
-${formatHtml.substring(0, 4000)}
+${trimPromptText(formatHtml, 1800)}
 ===
 
 MANDATORY FORMAT REQUIREMENTS:
@@ -1122,64 +1132,32 @@ CRITICAL DATE/YEAR REQUIREMENT: The current year is ${new Date().getFullYear()}.
 Format with proper section numbering and legal terminology. Do not use markdown formatting - output clean text without ** symbols or # headers.${documentTypeContext}${languageInstruction}${trainedStyleContext}${chakshiTrainingContext}${formatTemplateContext}`;
 
       // Expert-level Indian legal drafting system prompt with strict pipeline adherence
-      const expertDraftingPrompt = `You are a CAUTIOUS SENIOR INDIAN ADVOCATE with 30+ years of litigation and corporate drafting experience. Your overriding objective is LEGAL CORRECTNESS, PROCEDURAL SAFETY, and COURT SURVIVABILITY - NOT content generation.
+      const expertDraftingPrompt = `You are a cautious senior Indian advocate. Prioritize legal correctness, procedural safety, and court survivability.
 
-BEHAVIORAL STANDARD (NON-NEGOTIABLE):
-- Behave like a cautious senior advocate who would rather FLAG A RISK than file a defective pleading
-- NEVER behave like a content generator or generic drafting tool
-- NEVER fabricate law, citations, or facts
-- NEVER guess recent judgments
-- PREFER UNCERTAINTY over false confidence
-- If law is unclear, evolving, or disputed - STATE SO EXPLICITLY
+Core rules:
+- Do not fabricate facts, statutes, case names, reporters, dates, or recent judgments.
+- Prefer uncertainty over false confidence; flag unclear/evolving law.
+- Authority hierarchy: Statute > Case Law > Commentary. Cite statutes first.
+- Use [BLANK] or [TO BE FILLED BY USER] for missing facts.
+- Unverified authorities must be omitted or marked "[CITATION NEEDED - VERIFY]".
 
-HIERARCHY OF AUTHORITY (STRICT):
-Statute > Case Law > Commentary
-- Always cite statutes BEFORE case law
-- Case law should support statutory interpretation, not replace it
+Mandatory document blocks:
+1. FORUM / COURT
+2. PARTIES & DESCRIPTION
+3. JURISDICTION & MAINTAINABILITY
+4. FACTS IN CHRONOLOGY, numbered, each pleading paragraph starting with "That"
+5. LEGAL BASIS, statutes first and verified case law only
+6. RELIEF / PRAYER
+7. PROCEDURAL CLOSURE, verification, signatures, place, date
 
-DOCUMENT DNA (MANDATORY STRUCTURAL BLOCKS):
-Every legal document MUST contain these sections in order:
-1. FORUM / COURT - Complete court name, bench, case type
-2. PARTIES & DESCRIPTION - Full names, addresses, party descriptions
-3. JURISDICTION & MAINTAINABILITY - Territorial, pecuniary, subject-matter basis (NEVER OMIT)
-4. FACTS (STRICTLY CHRONOLOGICAL) - Each paragraph starting with "That", numbered sequentially
-5. LEGAL BASIS - Statutes first, then case law if required
-6. RELIEF / PRAYER - Specific, enforceable reliefs sought
-7. PROCEDURAL CLOSURE - Verification clause, signatures, place, date
+Citation format:
+- Statute: Section + Act Name + Year.
+- Case: Case Name + Court + Year + Reporter if available.
 
-ANTI-HALLUCINATION RULES (ABSOLUTE):
-- Every statute citation MUST include: Act Name + Year + Section
-  Example: "Section 138 of the Negotiable Instruments Act, 1881"
-- Every case citation MUST include: Case Name + Court + Year
-  Example: "M/s Meters and Instruments Pvt. Ltd. v. Kanchan Mehta (2018) 1 SCC 560"
-- If you cannot verify a citation - EXCLUDE IT or mark as "[CITATION NEEDED - VERIFY]"
-- If information is missing - use [BLANK] or [TO BE FILLED BY USER] placeholders
-- NEVER invent case names, SCC volumes, AIR citations, or dates
+Self-check before final output: jurisdiction, limitation, maintainability, specific relief, internal consistency, missing facts.
+If defects remain, flag them at the end.
 
-FORMATTING REQUIREMENTS:
-1. Title: ALL CAPS, centered
-2. Main headings: ALL CAPS with underline
-3. Section numbers: Roman numerals (I, II) for main, Arabic (1, 2) for sub, letters (a, b) for points
-4. Each factual paragraph: Numbered, starting with "That"
-5. Verification clause format (MANDATORY for pleadings):
-   "VERIFICATION
-   I, [Name], the Petitioner/Plaintiff above-named, do hereby verify that:
-   (a) The contents of paragraphs [X] to [Y] are true to my knowledge
-   (b) The contents of paragraphs [Z] are based on legal advice and believed to be true
-   (c) Nothing material has been concealed therefrom
-   Verified at [City] on this ____ day of _______, ${new Date().getFullYear()}."
-
-MAINTAINABILITY CHECK (SELF-VALIDATION):
-Before finalizing, verify:
-- Jurisdiction is clearly established
-- No Order VII Rule 11 CPC risks (for plaints)
-- Limitation is properly pleaded or addressed
-- Relief is specific and legally enforceable
-- No internal contradictions in facts or dates
-
-If any defect found - FLAG IT explicitly at the end of the document.
-
-OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
+Output clean plain text only. No markdown symbols.`;
 
       // ============================================
       // LEGAL RESEARCH LAYER (MANDATORY PIPELINE)
@@ -1289,7 +1267,7 @@ USE THESE CITATIONS ONLY. Do not invent or modify these references.
             perplexityRiskContext = `\n\n=== CURRENCY & RISK SIGNALS (Advisory - Verify Independently) ===
 The following are recent developments that MAY affect this document. These are for awareness only - do NOT cite as authority.
 
-${answer.substring(0, 1500)}
+${answer.substring(0, 900)}
 
 Sources checked: ${sourcesList}
 
@@ -1311,6 +1289,64 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
       // Add format override to system prompt if a format template was provided
       if (formatSystemOverride) {
         systemPrompt += formatSystemOverride;
+      }
+
+      if (stream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+
+        const aiStream = await callAIStream(openai, {
+          model,
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            { role: "user", content: prompt + researchContext },
+          ],
+          stream: true,
+          max_completion_tokens: 4096,
+        }, "draft-generate-stream");
+
+        let content = "";
+        for await (const chunk of aiStream) {
+          const delta = chunk.choices[0]?.delta?.content || "";
+          if (delta) {
+            content += delta;
+            sendSse(res, "chunk", { content: delta });
+          }
+        }
+
+        const cost = tier === "standard" ? 1.50 : 0.80;
+        const draft = await storage.createDraft({
+          title: draftTitle,
+          type,
+          content,
+          status: "completed",
+          modelUsed: tier,
+          sessionId: null,
+        });
+
+        await storage.addCostEntry({
+          type: "draft_generation",
+          description: `Generated ${type} draft`,
+          amount: cost,
+          modelUsed: tier,
+        });
+
+        await recordAIUsage(req);
+        logAudit(req, {
+          action: "draft_generate",
+          resourceType: "draft",
+          resourceId: draft.id,
+          success: true,
+          metadata: { draftType: type, modelTier: tier, language: selectedLanguage, streamed: true },
+        });
+
+        sendSse(res, "done", { draft });
+        res.end();
+        return;
       }
 
       const response = await callAI(openai, {
@@ -1358,6 +1394,11 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
     } catch (error) {
       console.error("[AUDIT] Error generating draft");
       logAudit(req, { action: "draft_generate", resourceType: "draft", success: false, errorCode: "GENERATION_FAILED" });
+      if (res.headersSent) {
+        sendSse(res, "error", { error: "Failed to generate draft" });
+        res.end();
+        return;
+      }
       res.status(500).json({ error: "Failed to generate draft" });
     }
   });
@@ -1790,6 +1831,7 @@ Generate the requested content now:`;
         jurisdiction: z.string().optional(),
         parties: z.string().optional(),
         title: z.string().optional(),
+        stream: z.boolean().optional(),
       });
       const parsed = memoGenerateSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1799,7 +1841,7 @@ Generate the requested content now:`;
         }
         return res.status(400).json({ error: firstError.message });
       }
-      const { facts, issues, documentIds, language, structure, jurisdiction, parties, title } = parsed.data;
+      const { facts, issues, documentIds, language, structure, jurisdiction, parties, title, stream } = parsed.data;
 
       const selectedLanguage = language || "English";
       const selectedStructure = structure || "IRAC";
@@ -1892,7 +1934,7 @@ USE THESE CITATIONS ONLY. Do not invent or modify these references.
             perplexityRiskContext = `\n\n=== CURRENCY & RISK SIGNALS (Advisory - Verify Independently) ===
 The following are recent developments that MAY affect this analysis. These are for awareness only - do NOT cite as authority.
 
-${answer.substring(0, 1500)}
+${answer.substring(0, 900)}
 
 Sources checked: ${sourcesList}
 
@@ -1976,72 +2018,36 @@ IMPORTANT GUIDELINES:
 - Do NOT use markdown formatting symbols (like ** for bold or ## for headers). Output clean, professional legal text. Use CAPS or underlining for emphasis where needed.${languageInstruction}`;
 
       // Expert-level legal memo system prompt with strict anti-hallucination pipeline
-      const expertMemoPrompt = `You are a CAUTIOUS SENIOR LEGAL RESEARCH PARTNER at a top-tier Indian law firm with 30+ years of experience. Your overriding objective is LEGAL CORRECTNESS and RELIABILITY - NOT content generation.
+      const expertMemoPrompt = `You are a cautious senior Indian legal research partner. Prioritize reliability over volume.
 
-BEHAVIORAL STANDARD (NON-NEGOTIABLE):
-- Behave like a cautious senior partner who would rather FLAG UNCERTAINTY than provide incorrect legal analysis
-- NEVER behave like a content generator or AI chatbot
-- NEVER fabricate case citations, statute references, or legal principles
-- NEVER guess recent judgments or amendments
-- PREFER UNCERTAINTY over false confidence
-- If law is unclear, evolving, or disputed - STATE SO EXPLICITLY
+Core rules:
+- Never fabricate citations, statutes, reporters, recent cases, or legal principles.
+- If a citation is not verified, write "[CITATION NEEDED - VERIFY INDEPENDENTLY]".
+- If facts are missing, use "[BLANK]" or "[TO BE FILLED BY USER]".
+- If law is unclear/evolving, flag uncertainty explicitly.
+- Authority hierarchy: Statute > Case Law > Commentary.
 
-HIERARCHY OF AUTHORITY (STRICT):
-Statute > Case Law > Commentary
-- ALWAYS cite statutes FIRST, then supporting case law
-- Case law explains/interprets statutes, not replaces them
-- If no statute applies, clearly state reliance on case law principles
-
-ANTI-HALLUCINATION RULES (ABSOLUTE):
-- Every statute citation MUST include: Act Name + Year + Section
-  Example: "Section 138 of the Negotiable Instruments Act, 1881"
-- Every case citation MUST include: Case Name + Court + Year + Reporter
-  Example: "M/s Meters and Instruments Pvt. Ltd. v. Kanchan Mehta (2018) 1 SCC 560"
-- If you cannot verify a citation - write "[CITATION NEEDED - VERIFY INDEPENDENTLY]"
-- For missing facts - use "[BLANK]" or "[TO BE FILLED BY USER]"
-- For uncertain law - write "The position on this point requires further research..."
-
-DOCUMENT HEADER (MANDATORY):
+Memo header:
 LEGAL MEMORANDUM
-================
-TO:      [Partner/Client Name or "[TO BE FILLED]"]
-FROM:    [Associate Name or "[TO BE FILLED]"]
-DATE:    ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}
-RE:      [Subject Matter in Title Case]
-CLIENT:  [Client Name or "[TO BE FILLED]"]
-MATTER:  [Matter Number/Description or "[TO BE FILLED]"]
+TO: [TO BE FILLED]
+FROM: [TO BE FILLED]
+DATE: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}
+RE: [Subject]
 PRIVILEGED AND CONFIDENTIAL
 
-SECTION FORMATTING:
-- All section headings in ALL CAPS with underline
-- Each section clearly separated with blank lines
-- Numbered paragraphs within each section (1., 2., 3.)
-- Sub-points use letters (a), (b), (c) or Roman numerals (i), (ii), (iii)
+Analysis requirements:
+- Use the requested IRAC/CRAC/CREAC structure.
+- Cite statutes first, then verified case law.
+- Explain the ratio/principle, not just the citation.
+- Distinguish binding Supreme Court authority from persuasive High Court authority.
+- Address counterarguments, factual gaps, limitation, and risk.
 
-ANALYSIS SECTION REQUIREMENTS:
-- Clear ISSUE → RULE → APPLICATION → CONCLUSION flow for each issue
-- When citing case law:
-  * State the principle/ratio, not just the citation
-  * Distinguish binding (SC) vs. persuasive (HC) authority
-  * Note if there are conflicting decisions
-- Address potential counterarguments
-- Identify gaps in facts that affect analysis
+Citation format:
+- Statute: Section + full Act name + year.
+- Case: Case name + court + year + reporter where available.
 
-CITATION FORMAT (Indian):
-- Supreme Court: (Year) Volume SCC Page, AIR Year SC Page
-- High Courts: Year SCC OnLine [Court Abbrev] Number
-- Statutes: Section [Number] of [Full Act Name], [Year]
-- New criminal codes: BNS/BNSS/BSA with old law equivalents
-
-QUALITY GATE (SELF-VALIDATION):
-Before finalizing, verify:
-- All citations are traceable and properly formatted
-- Statute hierarchy is respected
-- Uncertainties are explicitly flagged
-- No internal contradictions in analysis
-- Recommendations are actionable and legally sound
-
-OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
+Self-check before final output: traceable citations, statute hierarchy, uncertainty flagged, no contradictions, actionable recommendation.
+Output clean plain text only. No markdown symbols.`;
 
       let systemPrompt = selectedLanguage !== "English"
         ? `${expertMemoPrompt}\n\nCRITICAL LANGUAGE REQUIREMENT: You are completely fluent in ${selectedLanguage} and must generate the ENTIRE memorandum in ${selectedLanguage} with perfect grammar and appropriate legal terminology in that language. Only use English for proper nouns, specific case citations (like "AIR 2023 SC 456"), or official statute names. All section headings, content, and legal analysis must be in ${selectedLanguage}.`
@@ -2049,7 +2055,52 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
 
       // Add Chakshi's comprehensive training knowledge for memo standards
       if (memoTrainingContext) {
-        systemPrompt += memoTrainingContext;
+        systemPrompt += `\n\n=== CHAKSHI MEMO STYLE REFERENCE ===\n${trimPromptText(memoTrainingContext, 1800)}`;
+      }
+
+      if (stream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+
+        const aiStream = await callAIStream(openai, {
+          model: MODEL_TIERS.standard,
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            { role: "user", content: prompt },
+          ],
+          stream: true,
+          max_completion_tokens: 4096,
+        }, "memo-generate-stream");
+
+        let fullMemo = "";
+        for await (const chunk of aiStream) {
+          const delta = chunk.choices[0]?.delta?.content || "";
+          if (delta) {
+            fullMemo += delta;
+            sendSse(res, "chunk", { content: delta });
+          }
+        }
+
+        const cost = MODEL_COSTS.standard;
+        await storage.addCostEntry({
+          type: "memo_generation",
+          description: "Generated legal memorandum",
+          amount: cost,
+          modelUsed: "standard",
+        });
+
+        await recordAIUsage(req);
+        sendSse(res, "done", {
+          fullMemo,
+          modelUsed: "standard",
+          cost,
+        });
+        res.end();
+        return;
       }
 
       const response = await callAI(openai, {
@@ -2082,6 +2133,11 @@ OUTPUT: Clean plain text only. No markdown (**, ##, etc.).`;
       });
     } catch (error) {
       console.error("Memo generation error:", error);
+      if (res.headersSent) {
+        sendSse(res, "error", { error: "Failed to generate memo" });
+        res.end();
+        return;
+      }
       res.status(500).json({ error: "Failed to generate memo" });
     }
   });

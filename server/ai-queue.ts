@@ -9,6 +9,14 @@ import { withRetry } from "./ai-retry";
 
 const MAX_CONCURRENT = parseInt(process.env.AI_MAX_CONCURRENT ?? "10", 10);
 const QUEUE_TIMEOUT_MS = parseInt(process.env.AI_QUEUE_TIMEOUT_MS ?? "30000", 10);
+const STANDARD_MAX_CONCURRENT = parseInt(process.env.AI_STANDARD_MAX_CONCURRENT ?? "2", 10);
+const STANDARD_QUEUE_TIMEOUT_MS = parseInt(process.env.AI_STANDARD_QUEUE_TIMEOUT_MS ?? "45000", 10);
+const STANDARD_MODELS = new Set(
+  (process.env.AI_STANDARD_MODELS ?? "gpt-4.1,o3")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean)
+);
 
 class ConcurrencyQueue {
   private active = 0;
@@ -27,6 +35,29 @@ class ConcurrencyQueue {
       return await fn();
     } finally {
       this.release();
+    }
+  }
+
+  async runStream<T>(
+    fn: () => Promise<AsyncIterable<T>>,
+    label = "AI stream"
+  ): Promise<AsyncIterable<T>> {
+    await this.acquire(label);
+    try {
+      const stream = await fn();
+      const release = () => this.release();
+      return (async function* () {
+        try {
+          for await (const chunk of stream) {
+            yield chunk;
+          }
+        } finally {
+          release();
+        }
+      })();
+    } catch (error) {
+      this.release();
+      throw error;
     }
   }
 
@@ -69,6 +100,11 @@ class ConcurrencyQueue {
 }
 
 export const aiQueue = new ConcurrencyQueue(MAX_CONCURRENT, QUEUE_TIMEOUT_MS);
+export const standardAIQueue = new ConcurrencyQueue(STANDARD_MAX_CONCURRENT, STANDARD_QUEUE_TIMEOUT_MS);
+
+function getQueueForModel(model: string | undefined): ConcurrencyQueue {
+  return model && STANDARD_MODELS.has(model) ? standardAIQueue : aiQueue;
+}
 
 /**
  * Drop-in replacement for openai.chat.completions.create() that goes through
@@ -79,7 +115,7 @@ export async function callAI(
   params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
   label = "chat.completions"
 ): Promise<OpenAI.Chat.ChatCompletion> {
-  return aiQueue.run(
+  return getQueueForModel(params.model).run(
     () => withRetry(() => openai.chat.completions.create(params) as Promise<OpenAI.Chat.ChatCompletion>, 3, label),
     label
   );
@@ -94,7 +130,7 @@ export async function callAIStream(
   params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
   label = "chat.completions.stream"
 ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>> {
-  return aiQueue.run(
+  return getQueueForModel(params.model).runStream(
     () =>
       withRetry(
         () => openai.chat.completions.create(params) as Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>,

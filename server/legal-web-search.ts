@@ -664,14 +664,9 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
     if (cached) return cached;
 
     try {
-      // Split all domains into chunks of 20 (Perplexity API limit)
-      const allDomains = LEGAL_DOMAINS;
-      const domainChunks: string[][] = [];
-      for (let i = 0; i < allDomains.length; i += 20) {
-        domainChunks.push(allDomains.slice(i, i + 20));
-      }
+      const domainChunks: string[][] = [PRIORITY_DOMAINS.slice(0, 20)];
 
-      console.log(`Advanced search using ${allDomains.length} domains in ${domainChunks.length} parallel batches`);
+      console.log(`Advanced search using one prioritized Perplexity call across ${domainChunks[0].length} high-authority domains`);
 
       const systemPrompt = `You are an advanced legal research assistant specializing in Indian law. Search across authoritative Indian legal sources.
 

@@ -41,7 +41,7 @@ The user interface is structured around a central "Chakshi AI Hub" with distinct
 - **Google Calendar API:** Utilized for bidirectional synchronization of legal events, enabling users to manage their academic and professional schedules within the platform and externally.
 - **`mammoth.js`:** Library used for converting `.docx` files to HTML, preserving document structure during upload and processing.
 - **`sanitize-html`:** Library used for HTML sanitization to prevent XSS vulnerabilities, particularly with uploaded document content.
-- **Perplexity API:** Used for currency and risk signals - recent amendments, notifications, and judicial developments (advisory layer, not primary authority). Perplexity calls are rate-paced to avoid vendor RPM bursts, retried with exponential backoff on 429/5xx failures, and cached for repeated legal, compliance, regulatory, and advanced research queries to reduce vendor quota usage.
+- **Perplexity API:** Used for currency and risk signals - recent amendments, notifications, and judicial developments (advisory layer, not primary authority). Perplexity calls are burst-safe, cached, retried with exponential backoff, and capped with timeouts. Advanced research now uses one prioritized high-authority Perplexity call instead of multi-batch domain fan-out to reduce latency and vendor RPM pressure.
 
 ### Legal Research Layer (Mandatory Pipeline)
 The drafting and memo generation endpoints implement a three-layer research pipeline:
@@ -69,6 +69,12 @@ The drafting and memo generation endpoints implement a three-layer research pipe
 - Warns user to verify from official gazettes
 
 All layers fail safely - if any layer fails, the pipeline continues without that context.
+
+### AI Scale Controls
+- GPT-4.1/o3 calls use a separate standard-model queue (`AI_STANDARD_MAX_CONCURRENT`, default 2) to prevent Tier 1 TPM bursts while allowing mini-model traffic to continue through the general queue.
+- Draft and memo generation support optional server-sent streaming (`stream: true`) while existing JSON endpoints remain backward compatible.
+- Daily AI quotas are role/plan-aware from Supabase JWT claims: trial/student/advocate/admin/enterprise limits can be configured with environment variables.
+- Drafting/memo prompts and research contexts are compressed/truncated to reduce token usage while preserving legal safety rules.
 
 ### Pipeline Flow
 ```
