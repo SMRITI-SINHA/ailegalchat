@@ -214,14 +214,23 @@ export const LEGAL_DOMAINS = Array.from(new Set([...PRIORITY_DOMAINS, ...SECONDA
 
 export class LegalWebSearchService {
   private static requestQueue: Promise<void> = Promise.resolve();
-  private static nextAvailableAt = 0;
+  private static availableTokens = 5;
+  private static lastRefillAt = Date.now();
 
   private perplexityKey: string | null;
   private readonly perplexityMinIntervalMs: number;
+  private readonly perplexityBurstSize: number;
+  private readonly perplexityTimeoutMs: number;
 
   constructor() {
     this.perplexityKey = process.env.PERPLEXITY_API_KEY || null;
-    this.perplexityMinIntervalMs = Number(process.env.PERPLEXITY_MIN_INTERVAL_MS || 1250);
+    this.perplexityMinIntervalMs = Number(process.env.PERPLEXITY_MIN_INTERVAL_MS || 1200);
+    this.perplexityBurstSize = Number(process.env.PERPLEXITY_BURST_SIZE || 5);
+    this.perplexityTimeoutMs = Number(process.env.PERPLEXITY_TIMEOUT_MS || 6000);
+    LegalWebSearchService.availableTokens = Math.min(
+      LegalWebSearchService.availableTokens,
+      this.perplexityBurstSize
+    );
   }
 
   isConfigured(): boolean {
@@ -230,24 +239,38 @@ export class LegalWebSearchService {
 
   private async fetchPerplexity(body: Record<string, unknown>, label: string): Promise<PerplexityResponse> {
     await this.waitForPerplexitySlot(label);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.perplexityTimeoutMs);
 
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${this.perplexityKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    try {
+      const response = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.perplexityKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      const error: Error & { status?: number } = new Error(`${label} failed: ${errorText}`);
-      error.status = response.status;
+      if (!response.ok) {
+        const errorText = await response.text();
+        const error: Error & { status?: number } = new Error(`${label} failed: ${errorText}`);
+        error.status = response.status;
+        throw error;
+      }
+
+      return response.json();
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        const timeoutError: Error & { status?: number } = new Error(`${label} timed out after ${this.perplexityTimeoutMs}ms`);
+        timeoutError.status = 504;
+        throw timeoutError;
+      }
       throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return response.json();
   }
 
   private async waitForPerplexitySlot(label: string): Promise<void> {
@@ -255,15 +278,31 @@ export class LegalWebSearchService {
     LegalWebSearchService.requestQueue = previous
       .catch(() => undefined)
       .then(async () => {
-        const now = Date.now();
-        const delayMs = Math.max(0, LegalWebSearchService.nextAvailableAt - now);
+        while (true) {
+          const now = Date.now();
+          const elapsed = now - LegalWebSearchService.lastRefillAt;
+          const tokensToAdd = Math.floor(elapsed / this.perplexityMinIntervalMs);
 
-        if (delayMs > 0) {
-          console.log(`[perplexity-rate-limit] pacing ${label} for ${delayMs}ms`);
+          if (tokensToAdd > 0) {
+            LegalWebSearchService.availableTokens = Math.min(
+              this.perplexityBurstSize,
+              LegalWebSearchService.availableTokens + tokensToAdd
+            );
+            LegalWebSearchService.lastRefillAt += tokensToAdd * this.perplexityMinIntervalMs;
+          }
+
+          if (LegalWebSearchService.availableTokens > 0) {
+            LegalWebSearchService.availableTokens--;
+            return;
+          }
+
+          const delayMs = Math.max(
+            0,
+            this.perplexityMinIntervalMs - (now - LegalWebSearchService.lastRefillAt)
+          );
+          console.log(`[perplexity-rate-limit] burst exhausted; pacing ${label} for ${delayMs}ms`);
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
-
-        LegalWebSearchService.nextAvailableAt = Date.now() + this.perplexityMinIntervalMs;
       });
 
     await LegalWebSearchService.requestQueue;
