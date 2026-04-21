@@ -213,10 +213,15 @@ export const SECONDARY_DOMAINS = [
 export const LEGAL_DOMAINS = Array.from(new Set([...PRIORITY_DOMAINS, ...SECONDARY_DOMAINS]));
 
 export class LegalWebSearchService {
+  private static requestQueue: Promise<void> = Promise.resolve();
+  private static nextAvailableAt = 0;
+
   private perplexityKey: string | null;
+  private readonly perplexityMinIntervalMs: number;
 
   constructor() {
     this.perplexityKey = process.env.PERPLEXITY_API_KEY || null;
+    this.perplexityMinIntervalMs = Number(process.env.PERPLEXITY_MIN_INTERVAL_MS || 1250);
   }
 
   isConfigured(): boolean {
@@ -224,6 +229,8 @@ export class LegalWebSearchService {
   }
 
   private async fetchPerplexity(body: Record<string, unknown>, label: string): Promise<PerplexityResponse> {
+    await this.waitForPerplexitySlot(label);
+
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
@@ -241,6 +248,25 @@ export class LegalWebSearchService {
     }
 
     return response.json();
+  }
+
+  private async waitForPerplexitySlot(label: string): Promise<void> {
+    const previous = LegalWebSearchService.requestQueue;
+    LegalWebSearchService.requestQueue = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const now = Date.now();
+        const delayMs = Math.max(0, LegalWebSearchService.nextAvailableAt - now);
+
+        if (delayMs > 0) {
+          console.log(`[perplexity-rate-limit] pacing ${label} for ${delayMs}ms`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+
+        LegalWebSearchService.nextAvailableAt = Date.now() + this.perplexityMinIntervalMs;
+      });
+
+    await LegalWebSearchService.requestQueue;
   }
 
   getDomainList(): string[] {

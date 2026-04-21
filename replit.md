@@ -41,7 +41,7 @@ The user interface is structured around a central "Chakshi AI Hub" with distinct
 - **Google Calendar API:** Utilized for bidirectional synchronization of legal events, enabling users to manage their academic and professional schedules within the platform and externally.
 - **`mammoth.js`:** Library used for converting `.docx` files to HTML, preserving document structure during upload and processing.
 - **`sanitize-html`:** Library used for HTML sanitization to prevent XSS vulnerabilities, particularly with uploaded document content.
-- **Perplexity API:** Used for currency and risk signals - recent amendments, notifications, and judicial developments (advisory layer, not primary authority). Perplexity calls are retried with exponential backoff on 429/5xx failures and cached for repeated legal, compliance, regulatory, and advanced research queries to reduce vendor quota usage.
+- **Perplexity API:** Used for currency and risk signals - recent amendments, notifications, and judicial developments (advisory layer, not primary authority). Perplexity calls are rate-paced to avoid vendor RPM bursts, retried with exponential backoff on 429/5xx failures, and cached for repeated legal, compliance, regulatory, and advanced research queries to reduce vendor quota usage.
 
 ### Legal Research Layer (Mandatory Pipeline)
 The drafting and memo generation endpoints implement a three-layer research pipeline:
