@@ -1,3 +1,6 @@
+import { aiCache } from "./ai-cache";
+import { withRetry } from "./ai-retry";
+
 interface WebSearchResult {
   title: string;
   url: string;
@@ -220,6 +223,26 @@ export class LegalWebSearchService {
     return !!this.perplexityKey;
   }
 
+  private async fetchPerplexity(body: Record<string, unknown>, label: string): Promise<PerplexityResponse> {
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.perplexityKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const error: Error & { status?: number } = new Error(`${label} failed: ${errorText}`);
+      error.status = response.status;
+      throw error;
+    }
+
+    return response.json();
+  }
+
   getDomainList(): string[] {
     return LEGAL_DOMAINS;
   }
@@ -242,16 +265,14 @@ export class LegalWebSearchService {
       return { answer: "", sources: [] };
     }
 
+    const cacheKey = { query: query.trim().toLowerCase(), recency: "month", model: "sonar" };
+    const cached = aiCache.get<{ answer: string; sources: WebSearchResult[] }>("perplexity:legal", cacheKey);
+    if (cached) return cached;
+
     try {
       const legalDomains = LEGAL_DOMAINS;
 
-      const response = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${this.perplexityKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const data = await withRetry(() => this.fetchPerplexity({
           model: "sonar",
           messages: [
             {
@@ -278,16 +299,7 @@ Be precise and always cite your sources with proper legal citations.`
           return_related_questions: false,
           search_recency_filter: "month",
           stream: false,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Perplexity API error:", response.status, errorText);
-        return { answer: "", sources: [] };
-      }
-
-      const data: PerplexityResponse = await response.json();
+        }, "perplexity legal search"), 3, "perplexity legal search");
       
       const answer = data.choices?.[0]?.message?.content || "";
       const sources: WebSearchResult[] = (data.citations || []).map((url, index) => ({
@@ -297,7 +309,9 @@ Be precise and always cite your sources with proper legal citations.`
         source: this.extractSourceName(url),
       }));
 
-      return { answer, sources };
+      const result = { answer, sources };
+      if (answer) aiCache.set("perplexity:legal", cacheKey, result);
+      return result;
     } catch (error) {
       console.error("Legal web search error:", error);
       return { answer: "", sources: [] };
@@ -331,15 +345,22 @@ Be precise and always cite your sources with proper legal citations.`
     // Get relevant domains for this industry (with fallbacks)
     const primaryDomains = industryDomains[industry] || PRIORITY_DOMAINS.slice(0, 10);
     const searchDomains = [...primaryDomains, ...PRIORITY_DOMAINS.slice(0, 5)].slice(0, 10);
+    const cacheKey = {
+      industry: industry.trim().toLowerCase(),
+      activity: activity.trim().toLowerCase(),
+      jurisdiction: jurisdiction.trim().toLowerCase(),
+      domains: searchDomains.join(","),
+      model: "sonar",
+    };
+    const cached = aiCache.get<{
+      answer: string;
+      sources: WebSearchResult[];
+      recentChanges: string[];
+    }>("perplexity:compliance", cacheKey);
+    if (cached) return cached;
 
     try {
-      const response = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${this.perplexityKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const data = await withRetry(() => this.fetchPerplexity({
           model: "sonar",
           messages: [
             {
@@ -389,16 +410,7 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
           return_related_questions: false,
           search_recency_filter: "month",
           stream: false,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Perplexity compliance search error:", response.status, errorText);
-        return { answer: "", sources: [], recentChanges: [] };
-      }
-
-      const data: PerplexityResponse = await response.json();
+        }, "perplexity compliance search"), 3, "perplexity compliance search");
       
       const answer = data.choices?.[0]?.message?.content || "";
       const sources: WebSearchResult[] = (data.citations || []).map((url) => ({
@@ -422,7 +434,9 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
         }
       }
 
-      return { answer, sources, recentChanges: Array.from(new Set(recentChanges)) };
+      const result = { answer, sources, recentChanges: Array.from(new Set(recentChanges)) };
+      if (answer) aiCache.set("perplexity:compliance", cacheKey, result);
+      return result;
     } catch (error) {
       console.error("Compliance search error:", error);
       return { answer: "", sources: [], recentChanges: [] };
@@ -441,15 +455,19 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
       cbic: ["cbic.gov.in", "gst.gov.in", "services.gst.gov.in", "icegate.gov.in", "dgft.gov.in"],
       general: ["livelaw.in", "barandbench.com", "scconline.com", "indialegallive.com", "latestlaws.com"],
     };
+    const searchDomains = regulatorDomains[regulator] || regulatorDomains.general;
+    const cacheKey = {
+      query: query.trim().toLowerCase(),
+      regulator,
+      domains: searchDomains.join(","),
+      recency: "week",
+      model: "sonar",
+    };
+    const cached = aiCache.get<{ answer: string; sources: WebSearchResult[] }>("perplexity:regulatory", cacheKey);
+    if (cached) return cached;
 
     try {
-      const response = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${this.perplexityKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const data = await withRetry(() => this.fetchPerplexity({
           model: "sonar",
           messages: [
             {
@@ -463,19 +481,12 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
           ],
           max_tokens: 1024,
           temperature: 0.1,
-          search_domain_filter: regulatorDomains[regulator] || regulatorDomains.general,
+          search_domain_filter: searchDomains,
           search_recency_filter: "week",
           stream: false,
-        }),
-      });
-
-      if (!response.ok) {
-        return { answer: "", sources: [] };
-      }
-
-      const data: PerplexityResponse = await response.json();
+        }, "perplexity regulatory search"), 3, "perplexity regulatory search");
       
-      return {
+      const result = {
         answer: data.choices?.[0]?.message?.content || "",
         sources: (data.citations || []).map(url => ({
           title: this.extractDomainName(url),
@@ -484,6 +495,8 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
           source: this.extractSourceName(url),
         })),
       };
+      if (result.answer) aiCache.set("perplexity:regulatory", cacheKey, result);
+      return result;
     } catch (error) {
       console.error("Regulatory search error:", error);
       return { answer: "", sources: [] };
@@ -576,6 +589,15 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
       };
     }
 
+    const cacheKey = {
+      query: query.trim().toLowerCase(),
+      recency: "month",
+      model: "sonar-pro",
+      domains: LEGAL_DOMAINS.length,
+    };
+    const cached = aiCache.get<any>("perplexity:advanced", cacheKey);
+    if (cached) return cached;
+
     try {
       // Split all domains into chunks of 20 (Perplexity API limit)
       const allDomains = LEGAL_DOMAINS;
@@ -602,13 +624,7 @@ Your response must be a JSON object with this exact structure:
       // Make parallel API calls for each domain chunk
       const searchPromises = domainChunks.map(async (domains, index) => {
         try {
-          const response = await fetch("https://api.perplexity.ai/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${this.perplexityKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
+          const data = await withRetry(() => this.fetchPerplexity({
               model: "sonar-pro",
               messages: [
                 { role: "system", content: systemPrompt },
@@ -620,15 +636,7 @@ Your response must be a JSON object with this exact structure:
               return_images: false,
               search_recency_filter: "month",
               stream: false,
-            }),
-          });
-
-          if (!response.ok) {
-            console.error(`Batch ${index + 1}/${domainChunks.length} failed:`, response.status);
-            return null;
-          }
-
-          const data: PerplexityResponse = await response.json();
+            }, `perplexity advanced search batch ${index + 1}`), 3, `perplexity advanced search batch ${index + 1}`);
           return {
             content: data.choices?.[0]?.message?.content || "{}",
             citations: data.citations || [],
@@ -721,7 +729,7 @@ Your response must be a JSON object with this exact structure:
 
       console.log(`Merged: ${allSources.length} sources, ${allParagraphs.length} paragraphs from ${validResults.length}/${domainChunks.length} batches`);
 
-      return {
+      const result = {
         answer: mergedAnalysis,
         sources: allSources,
         extractedParagraphs: allParagraphs,
@@ -733,6 +741,8 @@ Your response must be a JSON object with this exact structure:
           courts: Array.from(allCourts),
         },
       };
+      if (mergedAnalysis) aiCache.set("perplexity:advanced", cacheKey, result);
+      return result;
     } catch (error) {
       console.error("Advanced search error:", error);
       return {
