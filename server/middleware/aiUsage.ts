@@ -9,12 +9,16 @@ const ROLE_LIMITS: Record<string, number> = {
   clerk: parseInt(process.env.AI_DAILY_LIMIT_CLERK || "50", 10),
   advocate: parseInt(process.env.AI_DAILY_LIMIT_ADVOCATE || "100", 10),
 };
-const TRIAL_DAILY_LIMIT = parseInt(process.env.AI_DAILY_LIMIT_TRIAL || "25", 10);
+const TRIAL_ROLE_LIMITS: Record<string, number> = {
+  student: parseInt(process.env.AI_DAILY_LIMIT_STUDENT_TRIAL || "25", 10),
+  clerk: parseInt(process.env.AI_DAILY_LIMIT_CLERK_TRIAL || "35", 10),
+  advocate: parseInt(process.env.AI_DAILY_LIMIT_ADVOCATE_TRIAL || "50", 10),
+};
 
 function getRoleLimit(req: Request): number {
   const role = req.user?.role?.toLowerCase();
   const plan = req.user?.plan?.toLowerCase();
-  if (plan === "trial") return TRIAL_DAILY_LIMIT;
+  if (plan === "trial" && role && TRIAL_ROLE_LIMITS[role]) return TRIAL_ROLE_LIMITS[role];
   return (role && ROLE_LIMITS[role]) || AI_DAILY_LIMIT;
 }
 
