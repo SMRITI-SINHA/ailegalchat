@@ -1,0 +1,95 @@
+1. OpenAI Rate Limits — Not Fixed Like This
+
+The biggest issue in your table is this:
+
+OpenAI does NOT publish fixed “Tier 1 / Tier 2 / Tier 3” limits like this publicly anymore
+
+Rate limits:
+
+vary per account
+depend on usage history, billing, trust level
+change dynamically
+
+So lines like:
+
+“After $5 spend → Tier 1”
+“After $50 → Tier 2”
+👉 These are approx heuristics, not official rules.
+🟡 2. Model-wise Reality Check
+✅ gpt-4o-mini
+Yes, it has high throughput limits
+Your numbers (500 RPM / 200K TPM etc.) are reasonable ballpark estimates
+Tier scaling (5K RPM etc.) → possible, but not guaranteed
+
+👉 Verdict: Roughly correct, but not guaranteed
+
+⚠️ gpt-4.1
+This is where your table is shaky
+TPM limits (30K → 300K → 1M) can vary widely
+For heavy drafting:
+TPM matters more than RPM
+And OpenAI often throttles based on token spikes
+
+👉 Verdict: Directionally correct, but risky to depend on
+
+🟡 3. Sonar (Perplexity)
+"~50 RPM" → not officially documented
+Limits depend on:
+plan (Pro / Enterprise)
+backend routing
+Used as advisory → good architecture decision
+
+👉 Verdict: Acceptable assumption, not exact
+
+🟢 4. Indian Kanoon API
+Correct:
+No TPM concept
+Request-based usage
+1–3 calls per action → very realistic design assumption
+
+👉 Verdict: Solid
+
+🟢 5. InLegalBERT
+Correct:
+No RPM/TPM unless hosted API
+Depends on infra (HF Inference / self-hosted)
+Fallback to keyword matching → good system design
+
+👉 Verdict: Correct
+
+🧠 Final Reality (Important for Your System Design)
+
+If you’re building something like Chakshi / legal AI system, don’t rely on static limits.
+
+Instead:
+
+✅ Design for:
+dynamic rate limiting
+queue system (Redis / n8n / worker queues)
+retry + backoff
+token budgeting per user
+⚡ What I’d Fix in Your Table
+
+If you want it investor/client ready:
+
+❌ Remove:
+
+“After $5 / $50 / $100 spend”
+Exact RPM/TPM claims
+
+✅ Replace with:
+
+“Typical range based on usage tier”
+“Subject to OpenAI dynamic scaling”
+💬 Straight answer:
+
+👉 Your data is ~60–70% correct conceptually
+👉 But NOT reliable enough for production planning or documentation
+
+If you want, I can:
+
+turn this into a clean, investor-ready infra slide
+OR 
+map exact scaling limits for 1K / 10K / 100K users
+
+That’s where things get interesting for your system 🚀
