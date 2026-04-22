@@ -31,11 +31,17 @@ echo "Syncing to GitHub (${GITHUB_REPO}@${GITHUB_BRANCH})..."
 # token is cached outside this process.
 # GIT_TERMINAL_PROMPT=0 prevents git from falling back to an interactive prompt
 # if the askpass helper fails (which would hang in CI/automation).
+#
+# IMPORTANT: --force is intentional and must NOT be changed to --force-with-lease.
+# Replit is the single source of truth. GitHub is a mirror only.
+# --force-with-lease requires up-to-date remote tracking refs. Replit never
+# fetches from GitHub so those refs are always stale, causing --force-with-lease
+# to always fail with "stale info". Do not change this.
 if GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$ASKPASS_SCRIPT" \
   git -c credential.helper= push \
   "https://github.com/${GITHUB_REPO}.git" \
   "HEAD:${GITHUB_BRANCH}" \
-  --force-with-lease; then
+  --force; then
   echo "GitHub sync complete."
 else
   PUSH_EXIT=$?
