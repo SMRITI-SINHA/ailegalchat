@@ -83,3 +83,12 @@ User Input → Pre-Draft Validation (types) → InLegalBERT Statute Analysis (La
            → Document DNA Engine (prompts) → Drafting Engine (LLM) → Self-Validation Quality Gate
            → Final Output
 ```
+
+### GitHub Sync Automation
+After every Replit task merge, the post-merge script (`scripts/post-merge.sh`) automatically
+pushes code to GitHub via `scripts/sync-github.sh`. The sync uses the `GITHUB_PAT` secret (with
+`--force-with-lease` for safety) and skips gracefully when the secret is absent. The target repo
+and branch are controlled by the `GITHUB_REPO` and `GITHUB_BRANCH` environment variables, both
+with sensible defaults. A separate GitHub Actions workflow (`.github/workflows/ci.yml`) runs
+type-checking and a build **on the GitHub side** once code has been pushed there, acting as a CI
+quality gate.
