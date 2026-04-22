@@ -31,9 +31,16 @@ echo "Syncing to GitHub (${GITHUB_REPO}@${GITHUB_BRANCH})..."
 # token is cached outside this process.
 # GIT_TERMINAL_PROMPT=0 prevents git from falling back to an interactive prompt
 # if the askpass helper fails (which would hang in CI/automation).
-GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$ASKPASS_SCRIPT" \
+if GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$ASKPASS_SCRIPT" \
   git -c credential.helper= push \
   "https://github.com/${GITHUB_REPO}.git" \
   "HEAD:${GITHUB_BRANCH}" \
-  --force
-echo "GitHub sync complete."
+  --force-with-lease; then
+  echo "GitHub sync complete."
+else
+  PUSH_EXIT=$?
+  echo "ERROR: git push to GitHub failed (exit code $PUSH_EXIT)." \
+       "Possible causes: expired token, network issue, or rejected push." \
+       "The remote mirror is now behind." >&2
+  exit $PUSH_EXIT
+fi
