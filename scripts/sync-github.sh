@@ -13,5 +13,5 @@ echo "Syncing to GitHub (${GITHUB_REPO}@${GITHUB_BRANCH})..."
 git push \
   "https://x-token-auth:${GITHUB_PAT}@github.com/${GITHUB_REPO}.git" \
   "HEAD:${GITHUB_BRANCH}" \
-  --force-with-lease
+  --force
 echo "GitHub sync complete."
