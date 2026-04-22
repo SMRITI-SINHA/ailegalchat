@@ -35,5 +35,5 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="$ASKPASS_SCRIPT" \
   git -c credential.helper= push \
   "https://github.com/${GITHUB_REPO}.git" \
   "HEAD:${GITHUB_BRANCH}" \
-  --force-with-lease
+  --force
 echo "GitHub sync complete."

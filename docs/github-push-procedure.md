@@ -30,6 +30,15 @@ This means the token never appears in:
 - shell history (no inline URL with credentials)
 - process listings (`ps aux`)
 
+## Important: Always use --force, never --force-with-lease
+
+Replit is the single source of truth. GitHub is a mirror only.
+
+`--force-with-lease` requires up-to-date remote tracking refs. Since Replit
+never fetches from GitHub, those refs are always stale and `--force-with-lease`
+will always reject the push with "stale info". Always use `--force` in this
+script. Do not change this.
+
 ## Manual push (if needed)
 
 If you ever need to push manually, run:
