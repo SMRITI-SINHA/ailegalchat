@@ -35,8 +35,16 @@ app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    frameguard: false,
   })
 );
+
+// Allow Chakshi AI Hub to be embedded as an iframe inside chakshi.in and chakshi.com
+app.use((_req, res, next) => {
+  res.removeHeader("X-Frame-Options");
+  res.setHeader("Content-Security-Policy", "frame-ancestors *");
+  next();
+});
 
 const isDev = process.env.NODE_ENV !== "production";
 
