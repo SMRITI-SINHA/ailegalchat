@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { authFetch } from "@/lib/queryClient";
 import { Scale, Send, Sparkles, Lightbulb, AlertCircle } from "lucide-react";
 
 interface Citation {
@@ -142,10 +143,9 @@ export default function EmbedNyayaPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/embed/chat", {
+      const response = await authFetch("/api/embed/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ message: query }),
       });
 

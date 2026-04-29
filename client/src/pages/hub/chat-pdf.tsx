@@ -37,7 +37,7 @@ import {
   Save,
   Loader2,
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
 import type { ChatSession, ModelTier, Citation } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -297,7 +297,7 @@ export default function ChatWithPDFPage() {
     setPendingSelectedText("");
     
     if (sessionId) {
-      fetch("/api/chat/messages", {
+      authFetch("/api/chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, role: "user", content: fullMessage }),
@@ -305,7 +305,7 @@ export default function ChatWithPDFPage() {
     }
 
     try {
-      const response = await fetch("/api/chat/query", {
+      const response = await authFetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMsg.content, sessionId }),
@@ -358,7 +358,7 @@ export default function ChatWithPDFPage() {
       );
       
       if (sessionId && fullContent) {
-        fetch("/api/chat/messages", {
+        authFetch("/api/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, role: "assistant", content: fullContent }),
@@ -401,7 +401,7 @@ export default function ChatWithPDFPage() {
     setNyayaLoading(true);
     
     if (sessionId) {
-      fetch("/api/chat/messages", {
+      authFetch("/api/chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, role: "user", content: messageContent }),
@@ -409,7 +409,7 @@ export default function ChatWithPDFPage() {
     }
 
     try {
-      const response = await fetch("/api/chat/query", {
+      const response = await authFetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: nyayaInput, sessionId }),
@@ -462,7 +462,7 @@ export default function ChatWithPDFPage() {
       );
       
       if (sessionId && fullContent) {
-        fetch("/api/chat/messages", {
+        authFetch("/api/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, role: "assistant", content: fullContent }),
@@ -496,7 +496,7 @@ export default function ChatWithPDFPage() {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
 
-      const response = await fetch("/api/documents/upload", {
+      const response = await authFetch("/api/documents/upload", {
         method: "POST",
         body: formData,
       });
@@ -667,7 +667,7 @@ export default function ChatWithPDFPage() {
         console.warn("No documents available for query - response may not be grounded in documents");
       }
 
-      const response = await fetch("/api/chat/query", {
+      const response = await authFetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 

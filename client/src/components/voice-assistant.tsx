@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Scale, X, Mic, MicOff, Square } from "lucide-react";
 import { markdownToHtml } from "@/lib/utils";
+import { authFetch } from "@/lib/queryClient";
 
 import LexAIRobot, { BOT_STATE } from "./LexAIRobot";
 
@@ -582,7 +583,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
 
         try {
           console.log("Sending transcription request, blob size:", blob.size);
-          const res = await fetch("/api/voice/transcribe", {
+          const res = await authFetch("/api/voice/transcribe", {
             method: "POST",
             body: formData,
           });
@@ -659,7 +660,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch("/api/chat/query", {
+      const response = await authFetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: query, voiceLanguage: langCode || detectedLanguage }),
@@ -730,7 +731,7 @@ export function VoiceAssistant({ onClose }: VoiceAssistantProps) {
       abortControllerRef.current = controller;
 
       console.log("Sending TTS request, text length:", speakText.length);
-      const res = await fetch("/api/voice/speak", {
+      const res = await authFetch("/api/voice/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: speakText }),

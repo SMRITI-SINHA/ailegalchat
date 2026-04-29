@@ -43,7 +43,7 @@ import {
   Trash2,
   CheckCircle2,
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
 import type { IndianLanguage, Draft } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
@@ -130,7 +130,7 @@ export default function CustomDraftPage() {
         const formData = new FormData();
         formData.append("file", file);
         
-        const response = await fetch("/api/format/extract", {
+        const response = await authFetch("/api/format/extract", {
           method: "POST",
           body: formData,
         });

@@ -35,7 +35,7 @@ import {
   Clock,
   FileType,
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import type { Document, DocumentStatus } from "@shared/schema";
 import { Link } from "wouter";
 
@@ -52,7 +52,7 @@ export default function DocumentsPage() {
     mutationFn: async (files: File[]) => {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
-      const res = await fetch("/api/documents/upload", {
+      const res = await authFetch("/api/documents/upload", {
         method: "POST",
         body: formData,
       });

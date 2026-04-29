@@ -15,7 +15,7 @@ import {
   Sparkles,
   Loader2,
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import type { TrainingDoc } from "@shared/schema";
 
 export default function TrainDraftsPage() {
@@ -31,7 +31,7 @@ export default function TrainDraftsPage() {
       files.forEach((file) => formData.append("files", file));
       formData.append("userId", "default-user");
       
-      const response = await fetch("/api/training-docs/upload", {
+      const response = await authFetch("/api/training-docs/upload", {
         method: "POST",
         body: formData,
       });

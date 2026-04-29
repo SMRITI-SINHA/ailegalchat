@@ -32,7 +32,7 @@ import {
   MessageSquare,
   Clock,
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import type { ChatSession, ChatMessage, ModelTier } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
@@ -95,7 +95,7 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, streamingMessage]);
 
     try {
-      const response = await fetch("/api/chat/query", {
+      const response = await authFetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage.content }),

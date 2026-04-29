@@ -30,7 +30,7 @@ import {
   ArrowLeft,
   Mic,
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
 import type { ModelTier, Citation, ChatSession } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -115,7 +115,7 @@ export default function NyayaAIPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/chat/query", {
+      const response = await authFetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: query, sessionId }),
@@ -187,7 +187,7 @@ export default function NyayaAIPage() {
     
     // Load messages from the session
     try {
-      const response = await fetch(`/api/chat/sessions/${session.id}/messages`);
+      const response = await authFetch(`/api/chat/sessions/${session.id}/messages`);
       if (response.ok) {
         const sessionMessages = await response.json();
         setMessages(sessionMessages.map((m: { 

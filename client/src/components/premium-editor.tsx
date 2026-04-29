@@ -72,6 +72,7 @@ import {
 import { indianLanguages, type IndianLanguage } from "@shared/schema";
 import type { Draft } from "@shared/schema";
 import { markdownToHtml } from "@/lib/utils";
+import { authFetch } from "@/lib/queryClient";
 
 interface PremiumEditorProps {
   title: string;
@@ -335,7 +336,7 @@ export function PremiumEditor({
     setShowRefineButton(false);
 
     try {
-      const response = await fetch("/api/refine", {
+      const response = await authFetch("/api/refine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

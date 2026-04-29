@@ -53,7 +53,7 @@ import {
   Gauge,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { markdownToHtml, stripHtmlTags } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { Draft, IndianLanguage, DocumentTypeSelection } from "@shared/schema";
@@ -352,7 +352,7 @@ export default function AIDraftingPage() {
       const formData = new FormData();
       files.forEach(file => formData.append("files", file));
       
-      const response = await fetch("/api/documents/upload", {
+      const response = await authFetch("/api/documents/upload", {
         method: "POST",
         body: formData,
       });
@@ -410,7 +410,7 @@ export default function AIDraftingPage() {
       const formData = new FormData();
       formData.append("files", file);
       
-      const response = await fetch("/api/documents/upload", {
+      const response = await authFetch("/api/documents/upload", {
         method: "POST",
         body: formData,
       });

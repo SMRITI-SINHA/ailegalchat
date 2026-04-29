@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { stripHtmlTags, isNewLaw } from "@/lib/utils";
 import type { ResearchNote } from "@shared/schema";
 import { jsPDF } from "jspdf";
@@ -71,7 +71,7 @@ export function ResearchSidebar({ isOpen, onAddToDocument, draftId }: ResearchSi
     queryKey: ["/api/research/notes", draftId],
     queryFn: async () => {
       const url = draftId ? `/api/research/notes?draftId=${draftId}` : "/api/research/notes";
-      const response = await fetch(url);
+      const response = await authFetch(url);
       if (!response.ok) throw new Error("Failed to fetch notes");
       return response.json();
     },
