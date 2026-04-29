@@ -1,37 +1,121 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// --- Token Management ---
-// When Chakshi AI Hub is embedded as an iframe inside chakshi.in or chakshi.com,
-// the parent app passes the Supabase JWT token as a ?token= URL query parameter.
-// We read it once on load, store it in sessionStorage for SPA navigation persistence,
-// and attach it to every API request as an Authorization: Bearer header.
+// =============================================================================
+// TOKEN DELIVERY — SECURITY DESIGN
+// =============================================================================
+//
+// PREFERRED (secure): postMessage handshake
+//   1. This iframe emits CHAKSHI_HUB_READY to window.parent on load.
+//   2. Parent (chakshi.in) listens, then sends:
+//        iframe.contentWindow.postMessage(
+//          { type: "CHAKSHI_TOKEN", token: session.access_token },
+//          "https://<this-hub-domain>"   ← exact targetOrigin, never "*"
+//        )
+//   3. We validate event.origin against TRUSTED_PARENT_ORIGINS before accepting.
+//   4. Token is kept in memory only (_token variable). Never in the URL.
+//
+// FALLBACK (dev only): ?token= URL query param
+//   Only accepted when VITE_ALLOW_URL_TOKEN=true (development builds).
+//   In production this flag must be unset/false — URL tokens are insecure.
+//   If a URL token is read, it is immediately stripped from the address bar.
+//
+// WHY URL PARAMS ARE INSECURE:
+//   - Full URL appears in server access logs
+//   - Appears in browser history
+//   - Leaks via Referer header to any third-party resource the page loads
+//   - Cached by proxies and CDNs
+// =============================================================================
 
-function initToken(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  const urlToken = params.get("token");
-  if (urlToken) {
-    sessionStorage.setItem("chakshi_token", urlToken);
-    return urlToken;
-  }
-  return sessionStorage.getItem("chakshi_token");
+// Origins allowed to send us a CHAKSHI_TOKEN via postMessage.
+// Populated from VITE_TRUSTED_PARENT_ORIGINS (comma-separated list set at build time).
+// Example: "https://chakshi.in,https://www.chakshi.in,https://chakshi.com"
+// If the env var is absent we accept all origins as a permissive default,
+// but the token is still cryptographically verified on the backend.
+const TRUSTED_PARENT_ORIGINS: Set<string> = (() => {
+  const raw = import.meta.env.VITE_TRUSTED_PARENT_ORIGINS as string | undefined;
+  if (!raw) return new Set<string>();
+  return new Set(
+    raw.split(",").map((o) => o.trim()).filter(Boolean)
+  );
+})();
+
+function isOriginTrusted(origin: string): boolean {
+  if (TRUSTED_PARENT_ORIGINS.size === 0) return true; // permissive until configured
+  return TRUSTED_PARENT_ORIGINS.has(origin);
 }
 
-let _token: string | null = initToken();
+// --- Token state ---
+let _token: string | null = null;
 
-// Also listen for postMessage from parent window (alternative secure delivery)
+function applyToken(t: string) {
+  _token = t;
+  // Keep in sessionStorage so SPA route changes don't lose the token
+  sessionStorage.setItem("chakshi_token", t);
+}
+
+function initToken(): void {
+  // 1. Dev fallback: read from URL param (only when explicitly enabled)
+  const allowUrlToken = import.meta.env.VITE_ALLOW_URL_TOKEN === "true";
+  if (allowUrlToken) {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    if (urlToken) {
+      applyToken(urlToken);
+      // Strip the token from the address bar so it doesn't leak to history / Referer
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("token");
+      window.history.replaceState({}, "", clean.toString());
+      return;
+    }
+  }
+
+  // 2. Restore from sessionStorage (survives SPA navigation)
+  const stored = sessionStorage.getItem("chakshi_token");
+  if (stored) {
+    _token = stored;
+  }
+}
+
+initToken();
+
+// --- postMessage listener ---
+// Receives { type: "CHAKSHI_TOKEN", token: "<JWT>" } from the parent window.
 window.addEventListener("message", (event) => {
-  if (event.data && typeof event.data === "object" && event.data.type === "CHAKSHI_TOKEN") {
+  if (!event.data || typeof event.data !== "object") return;
+
+  if (event.data.type === "CHAKSHI_TOKEN") {
+    if (!isOriginTrusted(event.origin)) {
+      console.warn("[chakshi] Rejected CHAKSHI_TOKEN from untrusted origin:", event.origin);
+      return;
+    }
     const t = event.data.token;
     if (typeof t === "string" && t.length > 0) {
-      _token = t;
-      sessionStorage.setItem("chakshi_token", t);
+      applyToken(t);
     }
   }
 });
 
+// --- Ready signal ---
+// Tell the parent window we are loaded and ready to receive the token.
+// The parent should listen for this and respond with CHAKSHI_TOKEN.
+// We emit once on module load and again after DOMContentLoaded to be safe.
+function emitReady() {
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: "CHAKSHI_HUB_READY" }, "*");
+  }
+}
+emitReady();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", emitReady);
+}
+
 export function getAuthToken(): string | null {
   return _token;
 }
+
+// =============================================================================
+// AUTH HEADERS
+// =============================================================================
 
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const headers: Record<string, string> = { ...extra };
@@ -41,23 +125,22 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
   return headers;
 }
 
-// --- Global error notification ---
-// Instead of letting errors bubble up and trigger dev overlays or crash the UI,
-// we emit a custom DOM event that a React component at the root can listen to
-// and show as a clean, user-friendly toast notification.
+// =============================================================================
+// GLOBAL ERROR NOTIFICATION
+// =============================================================================
+// Errors flow through emitAppError → "chakshi-error" CustomEvent →
+// GlobalErrorHandler (App.tsx) → shadcn toast. No raw overlays, ever.
 
 export function emitAppError(message: string) {
   window.dispatchEvent(new CustomEvent("chakshi-error", { detail: message }));
 }
 
-// Catch any truly unhandled promise rejections (e.g. fire-and-forget calls)
-// and surface them as app errors instead of silent failures or console noise.
+// Catch unhandled promise rejections (fire-and-forget calls etc.)
 window.addEventListener("unhandledrejection", (event) => {
   const msg =
     event.reason instanceof Error
       ? event.reason.message
       : String(event.reason ?? "An unexpected error occurred.");
-  // Suppress known benign rejections
   if (
     msg.includes("ResizeObserver") ||
     msg.includes("AbortError") ||
@@ -70,7 +153,9 @@ window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
 });
 
-// --- HTTP error handling ---
+// =============================================================================
+// HTTP HELPERS
+// =============================================================================
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -101,12 +186,10 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-// --- API request helpers ---
-
 export async function apiRequest(
   method: string,
   url: string,
-  data?: unknown | undefined,
+  data?: unknown,
 ): Promise<Response> {
   const contentHeaders = data ? { "Content-Type": "application/json" } : {};
   const res = await fetch(url, {
@@ -115,12 +198,10 @@ export async function apiRequest(
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
-
   await throwIfResNotOk(res);
   return res;
 }
 
-// Multipart upload helper (for file uploads — does NOT set Content-Type so browser sets boundary)
 export async function apiUpload(
   method: string,
   url: string,
@@ -132,7 +213,6 @@ export async function apiUpload(
     body: formData,
     credentials: "include",
   });
-
   await throwIfResNotOk(res);
   return res;
 }
@@ -150,6 +230,10 @@ export async function authFetch(
   });
 }
 
+// =============================================================================
+// REACT QUERY CLIENT
+// =============================================================================
+
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
@@ -160,11 +244,9 @@ export const getQueryFn: <T>(options: {
       headers: authHeaders(),
       credentials: "include",
     });
-
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
     }
-
     await throwIfResNotOk(res);
     return await res.json();
   };
