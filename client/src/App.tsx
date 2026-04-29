@@ -1,10 +1,12 @@
 import { Switch, Route } from "wouter";
+import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import HubPage from "@/pages/hub";
 import AIDraftingPage from "@/pages/hub/drafting-ai";
@@ -23,6 +25,27 @@ import CounterArgsPage from "@/pages/hub/study-counter-args";
 import LegalSandboxPage from "@/pages/hub/study-sandbox";
 import EmbedNyayaPage from "@/pages/embed-nyaya";
 import EmbedCNRCasesPage from "@/pages/embed-cnr-cases";
+
+// Listens for app-wide error events emitted by queryClient/authFetch
+// and renders them as clean toast notifications — never raw stack traces.
+function GlobalErrorHandler() {
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const handle = (e: Event) => {
+      const message = (e as CustomEvent<string>).detail ?? "Something went wrong. Please try again.";
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    };
+    window.addEventListener("chakshi-error", handle);
+    return () => window.removeEventListener("chakshi-error", handle);
+  }, [toast]);
+
+  return null;
+}
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -73,6 +96,7 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
             <Toaster />
+            <GlobalErrorHandler />
             <Router />
           </TooltipProvider>
         </QueryClientProvider>
