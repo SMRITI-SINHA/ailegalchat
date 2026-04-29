@@ -45,7 +45,7 @@ import {
   startOfWeek,
   endOfWeek,
 } from "date-fns";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, authFetch } from "@/lib/queryClient";
 import type { CalendarEvent } from "@shared/schema";
 
 const USER_ID = "default-user";
@@ -104,7 +104,7 @@ export default function LegalCalendarPage() {
   const { data: googleStatus, isLoading: statusLoading } = useQuery<GoogleCalendarStatus>({
     queryKey: ["/api/calendar/google/status", USER_ID],
     queryFn: async () => {
-      const res = await fetch(`/api/calendar/google/status?userId=${USER_ID}`);
+      const res = await authFetch(`/api/calendar/google/status?userId=${USER_ID}`);
       return res.json();
     },
   });
@@ -112,14 +112,14 @@ export default function LegalCalendarPage() {
   const { data: events = [], isLoading: eventsLoading } = useQuery<CalendarEvent[]>({
     queryKey: ["/api/calendar/events", USER_ID],
     queryFn: async () => {
-      const res = await fetch(`/api/calendar/events?userId=${USER_ID}`);
+      const res = await authFetch(`/api/calendar/events?userId=${USER_ID}`);
       return res.json();
     },
   });
 
   const connectGoogleMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/calendar/google/auth-url?userId=${USER_ID}`);
+      const res = await authFetch(`/api/calendar/google/auth-url?userId=${USER_ID}`);
       const data = await res.json();
       return data.authUrl;
     },

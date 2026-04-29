@@ -580,7 +580,7 @@ export default function ChatWithPDFPage() {
     setSessionDocumentIds(docIds);
     
     try {
-      const messagesResponse = await fetch(`/api/chat/sessions/${session.id}/messages`);
+      const messagesResponse = await authFetch(`/api/chat/sessions/${session.id}/messages`);
       if (messagesResponse.ok) {
         const loadedMessages = await messagesResponse.json();
         setMessages(loadedMessages.map((m: { id: string; role: string; content: string }) => ({
@@ -599,7 +599,7 @@ export default function ChatWithPDFPage() {
     if (nyayaSession) {
       setNyayaSessionId(nyayaSession.id);
       try {
-        const nyayaMessagesResponse = await fetch(`/api/chat/sessions/${nyayaSession.id}/messages`);
+        const nyayaMessagesResponse = await authFetch(`/api/chat/sessions/${nyayaSession.id}/messages`);
         if (nyayaMessagesResponse.ok) {
           const loadedNyayaMessages = await nyayaMessagesResponse.json();
           setNyayaMessages(loadedNyayaMessages.map((m: { id: string; role: string; content: string }) => ({
@@ -617,7 +617,7 @@ export default function ChatWithPDFPage() {
       try {
         const docs = await Promise.all(
           docIds.map(async (docId) => {
-            const response = await fetch(`/api/documents/${docId}`);
+            const response = await authFetch(`/api/documents/${docId}`);
             if (response.ok) {
               return response.json();
             }
