@@ -26,6 +26,7 @@ function getMetadataString(source: Record<string, unknown>, metadataKey: string,
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const isDev = process.env.NODE_ENV !== "production";
   const secret = process.env.CHAKSHI_JWT_SECRET;
 
   if (!secret) {
@@ -43,6 +44,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 
   if (!token && typeof req.query.token === "string") {
     token = req.query.token;
+  }
+
+  // In development mode, allow requests without a token using a mock user
+  if (!token && isDev) {
+    req.user = { id: "dev-user-001", role: "advocate", plan: "trial" };
+    next();
+    return;
   }
 
   if (!token) {
