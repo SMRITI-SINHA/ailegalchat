@@ -1,0 +1,83 @@
+import React, { useState, useEffect } from 'react';
+import { FiRefreshCw, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { supabase } from '../lib/supabaseClient';
+// The Replit deployment URL of the Chakshi AI Hub.
+// Do NOT change this to chakshi.in — that is your own site, not the hub.
+const HUB_ORIGIN = "https://legal-ai-chat--smritiseema1022.replit.app";
+const AIHub = () => {
+  const [iframeKey, setIframeKey] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  // ── Token delivery ──────────────────────────────────────────────────────────
+  // Listens globally for CHAKSHI_HUB_READY from any AI Hub iframe on the page
+  // (main hub AND cnr-cases embed). Responds directly to whichever iframe sent it.
+  useEffect(() => {
+    async function sendToken(targetWindow) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        targetWindow.postMessage(
+          { type: "CHAKSHI_TOKEN", token: session.access_token },
+          HUB_ORIGIN
+        );
+      }
+    }
+    function handleMessage(event) {
+      if (event.origin !== HUB_ORIGIN) return;
+      if (event.data?.type === "CHAKSHI_HUB_READY") {
+        sendToken(event.source);
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+  // ── Token refresh (Supabase JWTs expire every hour) ─────────────────────────
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session?.access_token) {
+          document.querySelectorAll('iframe[data-chakshi-hub]').forEach(iframe => {
+            iframe.contentWindow?.postMessage(
+              { type: "CHAKSHI_TOKEN", token: session.access_token },
+              HUB_ORIGIN
+            );
+          });
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
+  }, []);
+  const handleRefresh = () => setIframeKey(prev => prev + 1);
+  const toggleFullscreen = () => setIsFullscreen(!isFullscreen);
+  return (
+    <div
+      className={`flex flex-col bg-gradient-to-br from-[#f5f5ef] to-[#f8f7f2] ${isFullscreen ? 'fixed inset-0 z-50' : 'fixed top-0 right-0 bottom-0'
+        }`}
+      style={isFullscreen ? {} : { left: '240px' }}
+    >
+      {/* Controls */}
+      <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b border-gray-200 bg-white/60 backdrop-blur-sm flex-shrink-0">
+        <button onClick={handleRefresh} className="p-1.5 rounded hover:bg-gray-100" title="Refresh">
+          <FiRefreshCw size={14} />
+        </button>
+        <button onClick={toggleFullscreen} className="p-1.5 rounded hover:bg-gray-100" title="Toggle fullscreen">
+          {isFullscreen ? <FiMinimize2 size={14} /> : <FiMaximize2 size={14} />}
+        </button>
+      </div>
+      {/* Main AI Hub iframe */}
+      <div className="flex-1 overflow-hidden p-1">
+        <div className="h-full w-full rounded overflow-hidden shadow-xl">
+          <iframe
+            key={iframeKey}
+            src="https://legal-ai-chat--smritiseema1022.replit.app"
+            data-chakshi-hub="main"
+            title="Chakshi AI Hub"
+            className="w-full h-full border-0"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+            loading="lazy"
+            allow="microphone"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+export default AIHub;

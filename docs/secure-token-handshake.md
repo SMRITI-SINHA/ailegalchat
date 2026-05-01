@@ -6,9 +6,6 @@
 https://legal-ai-chat--smritiseema1022.replit.app
 ```
 
-This is the URL your dev must use everywhere below.  
-It is **NOT** `https://chakshi.in` — that is your own site, not the AI Hub.
-
 ---
 
 ## Embed URLs
@@ -20,49 +17,33 @@ It is **NOT** `https://chakshi.in` — that is your own site, not the AI Hub.
 
 ---
 
-## How the Handshake Works
+## Why They Cannot Be on the Same Page
 
-```
-chakshi.in (parent page)                   AI Hub iframe
-        |                                         |
-        |  <iframe src="https://legal-ai-chat--smritiseema1022.replit.app">
-        |─────────────────────────────────────────>|
-        |                                          |  loads, then emits:
-        |       { type: "CHAKSHI_HUB_READY" }      |
-        |<─────────────────────────────────────────|
-        |                                          |
-        |  { type: "CHAKSHI_TOKEN", token: jwt }   |
-        |─────────────────────────────────────────>|  (in memory, never in URL)
-        |                                          |
-        |                              stores token in memory
-        |                              attaches as Authorization: Bearer on every API call
-```
+The **AI Hub** and **CNR Saved Cases** are on **different pages** in chakshi.in:
+- AI Hub → shown on the `/ai-hub` route
+- CNR Saved Cases → shown on the `/cases` route (or similar)
+
+The token listener must be **always active** regardless of which page the user is on.  
+**The fix: put the listener in the root layout (`layout.tsx`), not inside `AIHub.jsx`.**
 
 ---
 
-## AIHub.jsx — Complete Corrected File
+## Step 1 — Root Layout Listener (REQUIRED)
 
-Copy this exactly. The `HUB_ORIGIN` is pre-filled with the correct URL.
+Add this once in your root `layout.tsx` (or `_app.tsx`).  
+This runs on every page so every iframe always gets a token automatically.
 
-```jsx
+```tsx
+// app/layout.tsx  (or pages/_app.tsx)
 'use client';
-import React, { useState, useEffect } from 'react';
-import { FiRefreshCw, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-// The Replit deployment URL of the Chakshi AI Hub.
-// Do NOT change this to chakshi.in — that is your own site, not the hub.
 const HUB_ORIGIN = "https://legal-ai-chat--smritiseema1022.replit.app";
 
-const AIHub = () => {
-  const [iframeKey, setIframeKey] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  // ── Token delivery ──────────────────────────────────────────────────────────
-  // Listens globally for CHAKSHI_HUB_READY from any AI Hub iframe on the page
-  // (main hub AND cnr-cases embed). Responds directly to whichever iframe sent it.
+export function ChakshiTokenProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    async function sendToken(targetWindow) {
+    async function sendToken(targetWindow: Window) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
         targetWindow.postMessage(
@@ -72,10 +53,11 @@ const AIHub = () => {
       }
     }
 
-    function handleMessage(event) {
+    // Listen for any Chakshi iframe on any page saying it's ready
+    function handleMessage(event: MessageEvent) {
       if (event.origin !== HUB_ORIGIN) return;
       if (event.data?.type === "CHAKSHI_HUB_READY") {
-        sendToken(event.source);
+        sendToken(event.source as Window);
       }
     }
 
@@ -83,12 +65,12 @@ const AIHub = () => {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // ── Token refresh (Supabase JWTs expire every hour) ─────────────────────────
+  // Refresh token whenever Supabase session renews
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session?.access_token) {
-          document.querySelectorAll('iframe[data-chakshi-hub]').forEach(iframe => {
+          document.querySelectorAll<HTMLIFrameElement>('iframe[data-chakshi-hub]').forEach(iframe => {
             iframe.contentWindow?.postMessage(
               { type: "CHAKSHI_TOKEN", token: session.access_token },
               HUB_ORIGIN
@@ -100,8 +82,54 @@ const AIHub = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleRefresh = () => setIframeKey(prev => prev + 1);
-  const toggleFullscreen = () => setIsFullscreen(!isFullscreen);
+  return <>{children}</>;
+}
+```
+
+Then wrap your layout:
+```tsx
+// app/layout.tsx
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <ChakshiTokenProvider>
+          {children}
+        </ChakshiTokenProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+---
+
+## Step 2 — AIHub.jsx (simplified — listener is now in layout)
+
+```jsx
+'use client';
+import React, { useState, useRef } from 'react';
+import { FiRefreshCw, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { supabase } from '../lib/supabaseClient';
+
+const HUB_ORIGIN = "https://legal-ai-chat--smritiseema1022.replit.app";
+
+const AIHub = () => {
+  const [iframeKey, setIframeKey] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const iframeRef = useRef(null);
+
+  // Belt-and-suspenders: also send token on iframe load
+  // (covers the case where the ready signal was already fired before layout listener ran)
+  async function handleLoad() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token && iframeRef.current) {
+      iframeRef.current.contentWindow?.postMessage(
+        { type: "CHAKSHI_TOKEN", token: session.access_token },
+        HUB_ORIGIN
+      );
+    }
+  }
 
   return (
     <div
@@ -110,23 +138,23 @@ const AIHub = () => {
       }`}
       style={isFullscreen ? {} : { left: '240px' }}
     >
-      {/* Controls */}
       <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b border-gray-200 bg-white/60 backdrop-blur-sm flex-shrink-0">
-        <button onClick={handleRefresh} className="p-1.5 rounded hover:bg-gray-100" title="Refresh">
+        <button onClick={() => setIframeKey(p => p + 1)} className="p-1.5 rounded hover:bg-gray-100" title="Refresh">
           <FiRefreshCw size={14} />
         </button>
-        <button onClick={toggleFullscreen} className="p-1.5 rounded hover:bg-gray-100" title="Toggle fullscreen">
+        <button onClick={() => setIsFullscreen(f => !f)} className="p-1.5 rounded hover:bg-gray-100" title="Toggle fullscreen">
           {isFullscreen ? <FiMinimize2 size={14} /> : <FiMaximize2 size={14} />}
         </button>
       </div>
 
-      {/* Main AI Hub iframe */}
       <div className="flex-1 overflow-hidden p-1">
         <div className="h-full w-full rounded overflow-hidden shadow-xl">
           <iframe
+            ref={iframeRef}
             key={iframeKey}
             src="https://legal-ai-chat--smritiseema1022.replit.app"
             data-chakshi-hub="main"
+            onLoad={handleLoad}
             title="Chakshi AI Hub"
             className="w-full h-full border-0"
             sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
@@ -144,24 +172,40 @@ export default AIHub;
 
 ---
 
-## CNRCasesEmbed.jsx — Separate Component
+## Step 3 — CNRCasesEmbed.jsx (separate page, token from layout)
 
-Use this wherever you show saved CNR cases on chakshi.in.  
-Token delivery is handled automatically by the global listener in `AIHub.jsx` above — no extra code needed.
+Put this on your Cases page. The root layout listener handles token delivery automatically.
 
 ```jsx
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { supabase } from '../lib/supabaseClient';
+
+const HUB_ORIGIN = "https://legal-ai-chat--smritiseema1022.replit.app";
 
 const CNRCasesEmbed = () => {
   const [key, setKey] = useState(0);
+  const iframeRef = useRef(null);
+
+  // Belt-and-suspenders: also send token on iframe load
+  async function handleLoad() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token && iframeRef.current) {
+      iframeRef.current.contentWindow?.postMessage(
+        { type: "CHAKSHI_TOKEN", token: session.access_token },
+        HUB_ORIGIN
+      );
+    }
+  }
 
   return (
     <div style={{ width: '100%', height: '100%', minHeight: '500px' }}>
       <iframe
+        ref={iframeRef}
         key={key}
         src="https://legal-ai-chat--smritiseema1022.replit.app/embed-cnr-cases"
         data-chakshi-hub="cnr-cases"
+        onLoad={handleLoad}
         title="Saved CNR Cases"
         style={{ width: '100%', height: '100%', minHeight: '500px', border: 'none' }}
         sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
@@ -173,29 +217,35 @@ const CNRCasesEmbed = () => {
 export default CNRCasesEmbed;
 ```
 
-**Important:** Both `AIHub.jsx` and `CNRCasesEmbed.jsx` must be on the same page at the same time for token refresh to work — OR include the global listener in your root layout so it runs on every page.
-
 ---
 
-## Summary of Bugs That Were Fixed
+## How Token Delivery Now Works (Three Layers)
 
-| Bug | Old (broken) | Correct |
+The AI Hub now retries sending `CHAKSHI_HUB_READY` every 500ms until it gets a token — so even if Layer 1 is slow, Layers 2 and 3 catch it.
+
+| Layer | Mechanism | Handles |
 |---|---|---|
-| `HUB_ORIGIN` pointed to wrong domain | `"https://chakshi.in"` | `"https://legal-ai-chat--smritiseema1022.replit.app"` |
-| iframe `src` loaded wrong page | `src="https://chakshi.in"` (own site) | `src="https://legal-ai-chat--smritiseema1022.replit.app"` |
-| Origin check always failed | Expected chakshi.in, got Replit | Now correctly expects Replit URL |
-| Token never sent | Origin check blocked it | Now sends on `CHAKSHI_HUB_READY` |
-| Wrong token source | `localStorage.getItem('token')` | `supabase.auth.getSession()` |
-| CNR embed wrong URL | `chakshi.in/embed-cnr-cases` (404) | `legal-ai-chat--smritiseema1022.replit.app/embed-cnr-cases` |
+| 1 | Root layout listener responds to `CHAKSHI_HUB_READY` | Normal case |
+| 2 | `onLoad` on each iframe directly sends token | Iframe loaded before listener ran |
+| 3 | AI Hub retries `CHAKSHI_HUB_READY` every 500ms for 60s | Any timing race |
 
 ---
 
-## Environment Variables (already set on this Replit — no changes needed)
+## Summary of All Changes
+
+| What | Location |
+|---|---|
+| Global token listener | Root `layout.tsx` — always active on all pages |
+| `AIHub.jsx` | Simplified — uses `onLoad` as backup |
+| `CNRCasesEmbed.jsx` | New component for Cases page — uses `onLoad` as backup |
+| AI Hub retry | `queryClient.ts` — retries every 500ms until token received |
+
+---
+
+## Environment Variables (already set — no changes needed)
 
 ```env
 VITE_TRUSTED_PARENT_ORIGINS=https://chakshi.in,https://www.chakshi.in
 VITE_ALLOW_URL_TOKEN=false
 CHAKSHI_JWT_SECRET=<already set>
 ```
-
-The Replit side needs no changes. Only `AIHub.jsx` (and the new `CNRCasesEmbed.jsx`) on chakshi.in need to be updated.

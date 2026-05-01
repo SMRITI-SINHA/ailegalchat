@@ -95,19 +95,33 @@ window.addEventListener("message", (event) => {
   }
 });
 
-// --- Ready signal ---
+// --- Ready signal with retry ---
 // Tell the parent window we are loaded and ready to receive the token.
-// The parent should listen for this and respond with CHAKSHI_TOKEN.
-// We emit once on module load and again after DOMContentLoaded to be safe.
+// We poll every 500 ms until we receive a token, to survive the timing race
+// where the parent's listener is not yet attached when the first signal fires.
+// Stops automatically once _token is populated, or after 60 seconds.
 function emitReady() {
   if (window.parent !== window) {
     window.parent.postMessage({ type: "CHAKSHI_HUB_READY" }, "*");
   }
 }
-emitReady();
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", emitReady);
-}
+
+(function startReadyPolling() {
+  if (window.parent === window) return; // not inside an iframe, nothing to do
+
+  emitReady(); // fire immediately
+
+  const intervalMs = 500;
+  const maxWaitMs = 60_000;
+  let elapsed = 0;
+
+  const id = setInterval(() => {
+    if (_token) { clearInterval(id); return; } // token received — stop polling
+    elapsed += intervalMs;
+    if (elapsed >= maxWaitMs) { clearInterval(id); return; } // give up after 60 s
+    emitReady();
+  }, intervalMs);
+})();
 
 export function getAuthToken(): string | null {
   return _token;
