@@ -324,6 +324,6 @@ export const queryClient = new QueryClient({
   },
 });
 
-// Wire up the lazy reference so applyToken can invalidate queries
+// Wire up the lazy reference so applyToken() can invalidate queries
 // the moment the first auth token arrives via postMessage.
 _qcRef = queryClient;
