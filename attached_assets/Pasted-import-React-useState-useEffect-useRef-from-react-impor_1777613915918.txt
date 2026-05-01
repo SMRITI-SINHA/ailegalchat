@@ -1,0 +1,81 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { FiRefreshCw, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
+import { supabase } from '../lib/supabaseClient';
+
+const HUB_ORIGIN = "https://chakshi.in"; // exact domain, no trailing slash
+
+const AIHub = () => {
+  const [iframeKey, setIframeKey] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const iframeRef = useRef(null);
+
+  useEffect(() => {
+    function handleMessage(event) {
+      if (event.origin !== HUB_ORIGIN) return; // ignore other origins
+      if (event.data?.type === "CHAKSHI_HUB_READY") {
+        // Hub is ready — send token securely in memory, never in URL
+        const token = localStorage.getItem('token');
+        console.log("Token:", token);
+        if (token) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "CHAKSHI_TOKEN", token: token },
+            HUB_ORIGIN  // ← critical: targetOrigin, not "*"
+          );
+          console.log("Token sent to AI Hub successfully (Initial)");
+        }
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  // Watch for token refresh
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session?.access_token) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "CHAKSHI_TOKEN", token: session.access_token },
+            HUB_ORIGIN
+          );
+          console.log("Token sent to AI Hub successfully (Refresh)");
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleRefresh = () => {
+    setIframeKey(prev => prev + 1);
+  };
+
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
+  return (
+    <div
+      className={`flex flex-col bg-gradient-to-br from-[#f5f5ef] to-[#f8f7f2] ${isFullscreen ? 'fixed inset-0 z-50' : 'fixed top-0 right-0 bottom-0'
+        }`}
+      style={isFullscreen ? {} : { left: '240px' }}
+    >
+      {/* iframe Container */}
+      <div className="flex-1 overflow-hidden p-1">
+        <div className="h-full w-full rounded overflow-hidden shadow-xl">
+          <iframe
+            ref={iframeRef}
+            key={iframeKey}
+            src={`${HUB_ORIGIN}`}
+            title="AI Hub"
+            className="w-full h-full border-0"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+            loading="lazy"
+            allow="microphone"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AIHub;
