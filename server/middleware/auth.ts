@@ -27,7 +27,7 @@ function getMetadataString(source: Record<string, unknown>, metadataKey: string,
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const isDev = process.env.NODE_ENV !== "production";
-  const secret = process.env.CHAKSHI_JWT_SECRET;
+  const secret = process.env.CHAKSHI_JWT_SECRET?.trim();
 
   if (!secret) {
     console.error("[auth] CHAKSHI_JWT_SECRET is not set");
@@ -65,6 +65,19 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   try {
+    // Log token shape for debugging (never log the full token)
+    const parts = token.split(".");
+    if (parts.length === 3) {
+      try {
+        const header = JSON.parse(Buffer.from(parts[0], "base64url").toString());
+        const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+        console.log("[auth] JWT header:", JSON.stringify(header));
+        console.log("[auth] JWT exp:", payload.exp ? new Date(payload.exp * 1000).toISOString() : "no exp");
+        console.log("[auth] JWT iss:", payload.iss || "no iss");
+        console.log("[auth] JWT sub:", payload.sub ? payload.sub.slice(0, 8) + "..." : "no sub");
+        console.log("[auth] secret length:", secret.length);
+      } catch { /* ignore decode errors */ }
+    }
     const decoded = jwt.verify(token, secret, { algorithms: [JWT_ALGORITHM] }) as Record<string, unknown>;
     const userId =
       (decoded[JWT_USER_ID_CLAIM] as string | undefined) ||
@@ -98,6 +111,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     req.user = { id: userId, role, plan };
     next();
   } catch (err) {
+    const errName = err instanceof Error ? err.name : "UnknownError";
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[auth] JWT verify failed — name:", errName, "| message:", errMsg);
     logAudit(req, {
       action: "jwt_verification_failure",
       success: false,
