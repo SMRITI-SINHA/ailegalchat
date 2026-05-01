@@ -146,6 +146,7 @@ function emitReady() {
       clearInterval(id);
       return;
     }
+    console.log("[chakshi:token] Retrying CHAKSHI_HUB_READY (elapsed:", elapsed, "ms)");
     emitReady();
   }, intervalMs);
 })();
