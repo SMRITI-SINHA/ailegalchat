@@ -33,14 +33,17 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 // but the token is still cryptographically verified on the backend.
 const TRUSTED_PARENT_ORIGINS: Set<string> = (() => {
   const raw = import.meta.env.VITE_TRUSTED_PARENT_ORIGINS as string | undefined;
-  if (!raw) return new Set<string>();
-  return new Set(
-    raw.split(",").map((o) => o.trim()).filter(Boolean)
-  );
+  if (!raw) {
+    console.log("[chakshi:token] VITE_TRUSTED_PARENT_ORIGINS not set — accepting any origin (permissive mode)");
+    return new Set<string>();
+  }
+  const origins = new Set(raw.split(",").map((o) => o.trim()).filter(Boolean));
+  console.log("[chakshi:token] Trusted parent origins:", [...origins]);
+  return origins;
 })();
 
 function isOriginTrusted(origin: string): boolean {
-  if (TRUSTED_PARENT_ORIGINS.size === 0) return true; // permissive until configured
+  if (TRUSTED_PARENT_ORIGINS.size === 0) return true;
   return TRUSTED_PARENT_ORIGINS.has(origin);
 }
 
@@ -49,8 +52,9 @@ let _token: string | null = null;
 
 function applyToken(t: string) {
   _token = t;
-  // Keep in sessionStorage so SPA route changes don't lose the token
   sessionStorage.setItem("chakshi_token", t);
+  // Log token receipt — show only first 20 chars so we never log the full JWT
+  console.log("[chakshi:token] ✅ Token stored. Preview:", t.slice(0, 20) + "...", "| Length:", t.length);
 }
 
 function initToken(): void {
@@ -60,8 +64,8 @@ function initToken(): void {
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get("token");
     if (urlToken) {
+      console.log("[chakshi:token] Token loaded from URL param (dev mode)");
       applyToken(urlToken);
-      // Strip the token from the address bar so it doesn't leak to history / Referer
       const clean = new URL(window.location.href);
       clean.searchParams.delete("token");
       window.history.replaceState({}, "", clean.toString());
@@ -73,33 +77,44 @@ function initToken(): void {
   const stored = sessionStorage.getItem("chakshi_token");
   if (stored) {
     _token = stored;
+    console.log("[chakshi:token] Token restored from sessionStorage. Preview:", stored.slice(0, 20) + "...");
+  } else {
+    console.log("[chakshi:token] No token in sessionStorage — waiting for postMessage from parent");
   }
 }
 
 initToken();
 
 // --- postMessage listener ---
-// Receives { type: "CHAKSHI_TOKEN", token: "<JWT>" } from the parent window.
 window.addEventListener("message", (event) => {
   if (!event.data || typeof event.data !== "object") return;
 
+  // Log every message we receive so we can see if token is arriving
   if (event.data.type === "CHAKSHI_TOKEN") {
+    console.log("[chakshi:token] 📨 CHAKSHI_TOKEN message received from origin:", event.origin);
+
     if (!isOriginTrusted(event.origin)) {
-      console.warn("[chakshi] Rejected CHAKSHI_TOKEN from untrusted origin:", event.origin);
+      console.warn("[chakshi:token] ❌ REJECTED — origin not in trusted list:", event.origin);
+      console.warn("[chakshi:token]    Trusted origins are:", [...TRUSTED_PARENT_ORIGINS]);
       return;
     }
+
     const t = event.data.token;
     if (typeof t === "string" && t.length > 0) {
+      console.log("[chakshi:token] ✅ Origin trusted — applying token");
       applyToken(t);
+    } else {
+      console.warn("[chakshi:token] ⚠️ Token message received but token was empty or invalid. Value type:", typeof t);
     }
+  }
+
+  if (event.data.type === "CHAKSHI_HUB_READY") {
+    // We shouldn't normally receive this — it's what WE send out
+    console.log("[chakshi:token] (info) Received CHAKSHI_HUB_READY — this is unusual, we send this, not receive it");
   }
 });
 
 // --- Ready signal with retry ---
-// Tell the parent window we are loaded and ready to receive the token.
-// We poll every 500 ms until we receive a token, to survive the timing race
-// where the parent's listener is not yet attached when the first signal fires.
-// Stops automatically once _token is populated, or after 60 seconds.
 function emitReady() {
   if (window.parent !== window) {
     window.parent.postMessage({ type: "CHAKSHI_HUB_READY" }, "*");
@@ -107,18 +122,30 @@ function emitReady() {
 }
 
 (function startReadyPolling() {
-  if (window.parent === window) return; // not inside an iframe, nothing to do
+  if (window.parent === window) {
+    console.log("[chakshi:token] Not inside an iframe — postMessage handshake skipped");
+    return;
+  }
 
-  emitReady(); // fire immediately
+  console.log("[chakshi:token] Running inside iframe — sending CHAKSHI_HUB_READY to parent");
+  emitReady();
 
   const intervalMs = 500;
   const maxWaitMs = 60_000;
   let elapsed = 0;
 
   const id = setInterval(() => {
-    if (_token) { clearInterval(id); return; } // token received — stop polling
+    if (_token) {
+      console.log("[chakshi:token] Token received — stopping CHAKSHI_HUB_READY polling");
+      clearInterval(id);
+      return;
+    }
     elapsed += intervalMs;
-    if (elapsed >= maxWaitMs) { clearInterval(id); return; } // give up after 60 s
+    if (elapsed >= maxWaitMs) {
+      console.warn("[chakshi:token] ⚠️ No token received after 60 seconds — giving up. Check parent postMessage setup.");
+      clearInterval(id);
+      return;
+    }
     emitReady();
   }, intervalMs);
 })();
