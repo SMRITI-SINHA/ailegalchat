@@ -1,51 +1,48 @@
 # Secure Token Handshake — chakshi.in ↔ AI Hub
 
-## Critical: What HUB_ORIGIN Must Be
-
-`HUB_ORIGIN` = **the Replit app URL** (where this AI Hub is deployed).  
-It is **NOT** `https://chakshi.in` — that is your own domain, not the hub.
+## The AI Hub URL (Replit Production)
 
 ```
-WRONG:  const HUB_ORIGIN = "https://chakshi.in";       ← your own site, causes infinite loop
-CORRECT: const HUB_ORIGIN = "https://your-hub.replit.app"; ← the Replit deployment URL
+https://legal-ai-chat--smritiseema1022.replit.app
 ```
 
-**Your current Replit development URL:**
-```
-https://08db6339-46a6-4e1f-bd99-7431b7132adf-00-1g8n8ex0817mp.spock.replit.dev
-```
+This is the URL your dev must use everywhere below.  
+It is **NOT** `https://chakshi.in` — that is your own site, not the AI Hub.
 
-When you publish/deploy this Replit app, you'll get a stable production URL like:
-```
-https://chakshi-hub.replit.app   (example — use your actual deployed URL)
-```
-Use that deployed URL as `HUB_ORIGIN` in your production `AIHub.jsx`.
+---
+
+## Embed URLs
+
+| What to embed | Full iframe src URL |
+|---|---|
+| Main AI Hub | `https://legal-ai-chat--smritiseema1022.replit.app` |
+| CNR Saved Cases | `https://legal-ai-chat--smritiseema1022.replit.app/embed-cnr-cases` |
 
 ---
 
 ## How the Handshake Works
 
 ```
-chakshi.in (parent page)           AI Hub iframe (Replit URL)
-        |                                  |
-        |  <iframe src="HUB_ORIGIN/hub">   |
-        |─────────────────────────────────>|
-        |                                  |  loads, then emits:
-        |    { type: "CHAKSHI_HUB_READY" } |
-        |<─────────────────────────────────|
-        |                                  |
-        |  { type: "CHAKSHI_TOKEN", token }|
-        |─────────────────────────────────>|  (via postMessage, never in URL)
-        |                                  |
-        |                       stores in memory
-        |                       attaches as Authorization: Bearer on all API calls
+chakshi.in (parent page)                   AI Hub iframe
+        |                                         |
+        |  <iframe src="https://legal-ai-chat--smritiseema1022.replit.app">
+        |─────────────────────────────────────────>|
+        |                                          |  loads, then emits:
+        |       { type: "CHAKSHI_HUB_READY" }      |
+        |<─────────────────────────────────────────|
+        |                                          |
+        |  { type: "CHAKSHI_TOKEN", token: jwt }   |
+        |─────────────────────────────────────────>|  (in memory, never in URL)
+        |                                          |
+        |                              stores token in memory
+        |                              attaches as Authorization: Bearer on every API call
 ```
 
 ---
 
-## Corrected AIHub.jsx (replace what you have now)
+## AIHub.jsx — Complete Corrected File
 
-This handles **both** the main AI Hub and the CNR embed iframe automatically.
+Copy this exactly. The `HUB_ORIGIN` is pre-filled with the correct URL.
 
 ```jsx
 'use client';
@@ -53,40 +50,31 @@ import React, { useState, useEffect } from 'react';
 import { FiRefreshCw, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import { supabase } from '../lib/supabaseClient';
 
-// ─── IMPORTANT ───────────────────────────────────────────────────────────────
-// HUB_ORIGIN = the Replit deployment URL of the Chakshi AI Hub.
-// This is NOT your chakshi.in domain — it is the external Replit app.
-// Development:  https://08db6339-46a6-4e1f-bd99-7431b7132adf-00-1g8n8ex0817mp.spock.replit.dev
-// Production:   use your deployed Replit URL (e.g. https://chakshi-hub.replit.app)
-// ─────────────────────────────────────────────────────────────────────────────
-const HUB_ORIGIN = "https://YOUR-REPLIT-APP.replit.app"; // ← PUT YOUR REPLIT URL HERE
+// The Replit deployment URL of the Chakshi AI Hub.
+// Do NOT change this to chakshi.in — that is your own site, not the hub.
+const HUB_ORIGIN = "https://legal-ai-chat--smritiseema1022.replit.app";
 
 const AIHub = () => {
   const [iframeKey, setIframeKey] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // ── Token delivery ──────────────────────────────────────────────────────────
-  // We listen globally for CHAKSHI_HUB_READY from ANY iframe (main hub or embed
-  // pages). When we hear it, we reply directly to that iframe via event.source.
-  // This means both AIHub and EmbedCNRCases iframes get tokens automatically.
+  // Listens globally for CHAKSHI_HUB_READY from any AI Hub iframe on the page
+  // (main hub AND cnr-cases embed). Responds directly to whichever iframe sent it.
   useEffect(() => {
     async function sendToken(targetWindow) {
-      // Use Supabase session — do NOT use localStorage.getItem('token'),
-      // Supabase does not store the token under that key.
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
         targetWindow.postMessage(
           { type: "CHAKSHI_TOKEN", token: session.access_token },
-          HUB_ORIGIN  // ← critical: targetOrigin must be the Replit URL, never "*"
+          HUB_ORIGIN
         );
       }
     }
 
     function handleMessage(event) {
-      // Only accept signals from our Replit hub — ignore all other origins
       if (event.origin !== HUB_ORIGIN) return;
       if (event.data?.type === "CHAKSHI_HUB_READY") {
-        // Respond directly to whichever iframe sent the ready signal
         sendToken(event.source);
       }
     }
@@ -95,12 +83,11 @@ const AIHub = () => {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // ── Token refresh (Supabase session renews every hour) ──────────────────────
+  // ── Token refresh (Supabase JWTs expire every hour) ─────────────────────────
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session?.access_token) {
-          // Broadcast refreshed token to all hub iframes on the page
           document.querySelectorAll('iframe[data-chakshi-hub]').forEach(iframe => {
             iframe.contentWindow?.postMessage(
               { type: "CHAKSHI_TOKEN", token: session.access_token },
@@ -138,8 +125,8 @@ const AIHub = () => {
         <div className="h-full w-full rounded overflow-hidden shadow-xl">
           <iframe
             key={iframeKey}
-            src={`${HUB_ORIGIN}`}          {/* ← loads the Replit app, NOT chakshi.in */}
-            data-chakshi-hub="main"         {/* ← used by token refresh above */}
+            src="https://legal-ai-chat--smritiseema1022.replit.app"
+            data-chakshi-hub="main"
             title="Chakshi AI Hub"
             className="w-full h-full border-0"
             sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
@@ -157,73 +144,58 @@ export default AIHub;
 
 ---
 
-## Embedding the CNR Saved Cases Page
+## CNRCasesEmbed.jsx — Separate Component
 
-The CNR cases embed is a **separate page** on the Replit app at `/embed-cnr-cases`.  
-Embed it wherever you show saved cases — token delivery is automatic (see above).
+Use this wherever you show saved CNR cases on chakshi.in.  
+Token delivery is handled automatically by the global listener in `AIHub.jsx` above — no extra code needed.
 
 ```jsx
 'use client';
 import React, { useState } from 'react';
 
-// Same HUB_ORIGIN as above — same Replit app
-const HUB_ORIGIN = "https://YOUR-REPLIT-APP.replit.app"; // ← same URL as AIHub.jsx
-
 const CNRCasesEmbed = () => {
   const [key, setKey] = useState(0);
 
   return (
-    <iframe
-      key={key}
-      src={`${HUB_ORIGIN}/embed-cnr-cases`}   {/* ← /embed-cnr-cases route */}
-      data-chakshi-hub="cnr-cases"              {/* ← picked up by token refresh */}
-      title="Saved CNR Cases"
-      className="w-full h-full border-0"
-      sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-      style={{ minHeight: '500px' }}
-    />
+    <div style={{ width: '100%', height: '100%', minHeight: '500px' }}>
+      <iframe
+        key={key}
+        src="https://legal-ai-chat--smritiseema1022.replit.app/embed-cnr-cases"
+        data-chakshi-hub="cnr-cases"
+        title="Saved CNR Cases"
+        style={{ width: '100%', height: '100%', minHeight: '500px', border: 'none' }}
+        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+      />
+    </div>
   );
 };
 
 export default CNRCasesEmbed;
 ```
 
-The `AIHub.jsx` global listener handles token delivery for this iframe too — no extra code needed.
+**Important:** Both `AIHub.jsx` and `CNRCasesEmbed.jsx` must be on the same page at the same time for token refresh to work — OR include the global listener in your root layout so it runs on every page.
 
 ---
 
-## Why "Refused to Connect" Happened
+## Summary of Bugs That Were Fixed
 
-If you were embedding `https://chakshi.in/embed-cnr-cases` — that route doesn't exist on  
-your Next.js app. The embed page only exists on the Replit app:
-
-```
-WRONG:   src="https://chakshi.in/embed-cnr-cases"       ← 404, refused to connect
-CORRECT: src="https://YOUR-REPLIT-APP.replit.app/embed-cnr-cases"  ← works
-```
-
----
-
-## Summary of Bugs Fixed in This Doc
-
-| Bug | Old Code | Correct Code |
+| Bug | Old (broken) | Correct |
 |---|---|---|
-| HUB_ORIGIN was wrong domain | `"https://chakshi.in"` | `"https://your-hub.replit.app"` |
-| iframe src loaded wrong page | `src={HUB_ORIGIN}` → chakshi.in in itself | `src={HUB_ORIGIN}` → Replit URL |
-| Origin check always failed | Checked for chakshi.in, got Replit origin | Now correctly checks Replit origin |
-| Token never delivered | Check failed → postMessage never ran | Now sends on CHAKSHI_HUB_READY |
+| `HUB_ORIGIN` pointed to wrong domain | `"https://chakshi.in"` | `"https://legal-ai-chat--smritiseema1022.replit.app"` |
+| iframe `src` loaded wrong page | `src="https://chakshi.in"` (own site) | `src="https://legal-ai-chat--smritiseema1022.replit.app"` |
+| Origin check always failed | Expected chakshi.in, got Replit | Now correctly expects Replit URL |
+| Token never sent | Origin check blocked it | Now sends on `CHAKSHI_HUB_READY` |
 | Wrong token source | `localStorage.getItem('token')` | `supabase.auth.getSession()` |
-| CNR embed wrong URL | `chakshi.in/embed-cnr-cases` (404) | `replit-url/embed-cnr-cases` |
-| Token refresh missed embeds | Only sent to one ref | Broadcasts to all `data-chakshi-hub` iframes |
+| CNR embed wrong URL | `chakshi.in/embed-cnr-cases` (404) | `legal-ai-chat--smritiseema1022.replit.app/embed-cnr-cases` |
 
 ---
 
-## Environment Variables (already set on this Replit)
+## Environment Variables (already set on this Replit — no changes needed)
 
 ```env
 VITE_TRUSTED_PARENT_ORIGINS=https://chakshi.in,https://www.chakshi.in
 VITE_ALLOW_URL_TOKEN=false
-CHAKSHI_JWT_SECRET=<your Supabase JWT secret — already set>
+CHAKSHI_JWT_SECRET=<already set>
 ```
 
-No changes needed on the Replit side — only the chakshi.in `AIHub.jsx` needs updating.
+The Replit side needs no changes. Only `AIHub.jsx` (and the new `CNRCasesEmbed.jsx`) on chakshi.in need to be updated.
