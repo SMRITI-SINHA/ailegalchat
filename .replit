@@ -49,5 +49,5 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-VITE_TRUSTED_PARENT_ORIGINS = "https://chakshi.in,https://www.chakshi.in,https://chakshi.com,https://www.chakshi.com"
+VITE_TRUSTED_PARENT_ORIGINS = "https://chakshi.in,https://www.chakshi.in,https://chakshi.com,https://www.chakshi.com,http://localhost:3000"
 VITE_ALLOW_URL_TOKEN = "false"
