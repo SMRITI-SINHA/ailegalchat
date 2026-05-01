@@ -19,6 +19,7 @@ export type User = typeof users.$inferSelect;
 
 export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   name: text("name").notNull(),
   type: text("type").notNull(),
   size: integer("size").notNull(),
@@ -43,6 +44,7 @@ export type Document = typeof documents.$inferSelect;
 
 export const chatSessions = pgTable("chat_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   title: text("title").notNull(),
   sessionType: text("session_type").default("general"),
   documentIds: text("document_ids").array(),
@@ -65,6 +67,7 @@ export type ChatSession = typeof chatSessions.$inferSelect;
 
 export const chatMessages = pgTable("chat_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   sessionId: varchar("session_id").notNull(),
   role: text("role").notNull(),
   content: text("content").notNull(),
@@ -85,6 +88,7 @@ export type ChatMessage = typeof chatMessages.$inferSelect;
 
 export const drafts = pgTable("drafts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   title: text("title").notNull(),
   type: text("type").notNull(),
   content: text("content"),
@@ -133,6 +137,7 @@ export type TrainingDoc = typeof trainingDocs.$inferSelect;
 
 export const legalMemos = pgTable("legal_memos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   title: text("title").notNull(),
   facts: text("facts").notNull(),
   issues: text("issues"),
@@ -180,6 +185,7 @@ export type ComplianceChecklist = typeof complianceChecklists.$inferSelect;
 
 export const researchQueries = pgTable("research_queries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   query: text("query").notNull(),
   results: text("results"),
   legalDomain: text("legal_domain"),
@@ -328,6 +334,7 @@ export interface ChecklistItem {
 
 export const researchNotes = pgTable("research_notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   name: text("name").notNull(),
   content: text("content").notNull(),
   draftId: varchar("draft_id"),
@@ -344,6 +351,7 @@ export type ResearchNote = typeof researchNotes.$inferSelect;
 
 export const cnrNotes = pgTable("cnr_notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
   cnrNumber: text("cnr_number"),

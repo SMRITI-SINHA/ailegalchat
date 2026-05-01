@@ -422,7 +422,7 @@ export async function registerRoutes(
 
   app.get("/api/documents", async (req: Request, res: Response) => {
     try {
-      const documents = await storage.getDocuments();
+      const documents = await storage.getDocuments(req.user!.id);
       res.json(documents);
     } catch (error) {
       console.error("Error fetching documents:", error);
@@ -432,7 +432,7 @@ export async function registerRoutes(
 
   app.get("/api/documents/:id", async (req: Request, res: Response) => {
     try {
-      const document = await storage.getDocument(req.params.id);
+      const document = await storage.getDocument(req.params.id, req.user!.id);
       if (!document) {
         return res.status(404).json({ error: "Document not found" });
       }
@@ -462,7 +462,7 @@ export async function registerRoutes(
 
           if (supabaseStorage.isSupabaseConfigured()) {
             try {
-              const uploaded = await supabaseStorage.uploadDocument("default-user", tempId, file);
+              const uploaded = await supabaseStorage.uploadDocument(req.user!.id, tempId, file);
               storagePath = uploaded.path;
               storageUrl = uploaded.signedUrl;
             } catch (e: any) {
@@ -471,6 +471,7 @@ export async function registerRoutes(
           }
           
           const doc = await storage.createDocument({
+            userId: req.user!.id,
             name: decodedName,
             type: file.mimetype,
             size: file.size,
@@ -534,7 +535,7 @@ export async function registerRoutes(
 
   app.delete("/api/documents/:id", async (req: Request, res: Response) => {
     try {
-      const doc = await storage.getDocument(req.params.id);
+      const doc = await storage.getDocument(req.params.id, req.user!.id);
       if (doc?.storagePath && supabaseStorage.isSupabaseConfigured()) {
         try {
           await supabaseStorage.deleteFile(doc.storagePath);
@@ -542,7 +543,7 @@ export async function registerRoutes(
           console.warn(`[DOC DELETE] Supabase file deletion failed, continuing: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
-      await storage.deleteDocument(req.params.id);
+      await storage.deleteDocument(req.params.id, req.user!.id);
       logAudit(req, {
         action: "document_delete",
         resourceType: "document",
@@ -559,7 +560,7 @@ export async function registerRoutes(
 
   app.get("/api/chat/sessions", async (req: Request, res: Response) => {
     try {
-      const sessions = await storage.getChatSessions();
+      const sessions = await storage.getChatSessions(req.user!.id);
       res.json(sessions);
     } catch (error) {
       console.error("Error fetching sessions:", error);
@@ -570,6 +571,7 @@ export async function registerRoutes(
   app.post("/api/chat/sessions", async (req: Request, res: Response) => {
     try {
       const session = await storage.createChatSession({
+        userId: req.user!.id,
         title: req.body.title || "New Chat",
         sessionType: req.body.sessionType || "general",
         documentIds: req.body.documentIds || [],
@@ -586,7 +588,7 @@ export async function registerRoutes(
 
   app.delete("/api/chat/sessions/:id", async (req: Request, res: Response) => {
     try {
-      await storage.deleteChatSession(req.params.id);
+      await storage.deleteChatSession(req.params.id, req.user!.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting session:", error);
@@ -596,7 +598,7 @@ export async function registerRoutes(
 
   app.get("/api/chat/sessions/:id/messages", async (req: Request, res: Response) => {
     try {
-      const messages = await storage.getChatMessages(req.params.id);
+      const messages = await storage.getChatMessages(req.params.id, req.user!.id);
       res.json(messages);
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -610,7 +612,11 @@ export async function registerRoutes(
       if (!sessionId || !role || !content) {
         return res.status(400).json({ error: "sessionId, role, and content are required" });
       }
-      const message = await storage.createChatMessage({ sessionId, role, content });
+      const session = await storage.getChatSession(sessionId, req.user!.id);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      const message = await storage.createChatMessage({ userId: req.user!.id, sessionId, role, content });
       res.status(201).json(message);
     } catch (error) {
       console.error("Error creating message:", error);
@@ -653,7 +659,7 @@ export async function registerRoutes(
       
       if (documentIds && Array.isArray(documentIds) && documentIds.length > 0) {
         const docs = await Promise.all(
-          documentIds.map((id: string) => storage.getDocument(id))
+          documentIds.map((id: string) => storage.getDocument(id, req.user!.id))
         );
         const validDocs = docs.filter((d) => d && d.extractedText);
         if (validDocs.length > 0) {
@@ -891,27 +897,28 @@ ${documentContext}`;
           modelUsed: tier,
         });
 
-        // Save messages to storage if session exists
+        // Save messages to storage if session exists and belongs to this user
         if (sessionId) {
-          await storage.createChatMessage({
-            sessionId,
-            role: "user",
-            content: message,
-          });
-          await storage.createChatMessage({
-            sessionId,
-            role: "assistant",
-            content: fullContent,
-            modelUsed: tier,
-            confidence: parseFloat(confidence.toFixed(2)),
-            cost,
-            citations: JSON.stringify(citations),
-          });
-          // Update session messageCount
-          const session = await storage.getChatSession(sessionId);
-          if (session) {
-            const messages = await storage.getChatMessages(sessionId);
-            await storage.updateChatSession(sessionId, { messageCount: messages.length });
+          const ownedSession = await storage.getChatSession(sessionId, req.user!.id);
+          if (ownedSession) {
+            await storage.createChatMessage({
+              userId: req.user!.id,
+              sessionId,
+              role: "user",
+              content: message,
+            });
+            await storage.createChatMessage({
+              userId: req.user!.id,
+              sessionId,
+              role: "assistant",
+              content: fullContent,
+              modelUsed: tier,
+              confidence: parseFloat(confidence.toFixed(2)),
+              cost,
+              citations: JSON.stringify(citations),
+            });
+            const updatedMessages = await storage.getChatMessages(sessionId, req.user!.id);
+            await storage.updateChatSession(sessionId, { messageCount: updatedMessages.length });
           }
         }
 
@@ -951,7 +958,7 @@ ${documentContext}`;
 
   app.get("/api/drafts", async (req: Request, res: Response) => {
     try {
-      const drafts = await storage.getDrafts();
+      const drafts = await storage.getDrafts(req.user!.id);
       res.json(drafts);
     } catch (error) {
       console.error("Error fetching drafts:", error);
@@ -961,7 +968,7 @@ ${documentContext}`;
 
   app.get("/api/drafts/:id", async (req: Request, res: Response) => {
     try {
-      const draft = await storage.getDraft(req.params.id);
+      const draft = await storage.getDraft(req.params.id, req.user!.id);
       if (!draft) {
         return res.status(404).json({ error: "Draft not found" });
       }
@@ -974,7 +981,7 @@ ${documentContext}`;
 
   app.post("/api/drafts", async (req: Request, res: Response) => {
     try {
-      const parsed = insertDraftSchema.safeParse(req.body);
+      const parsed = insertDraftSchema.safeParse({ ...req.body, userId: req.user!.id });
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
@@ -1320,6 +1327,7 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
 
         const cost = tier === "standard" ? 1.50 : 0.80;
         const draft = await storage.createDraft({
+          userId: req.user!.id,
           title: draftTitle,
           type,
           content,
@@ -1365,6 +1373,7 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
       const cost = tier === "standard" ? 1.50 : 0.80;
 
       const draft = await storage.createDraft({
+        userId: req.user!.id,
         title: draftTitle,
         type,
         content,
@@ -1406,7 +1415,7 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
   app.patch("/api/drafts/:id", async (req: Request, res: Response) => {
     try {
       const { content, status } = req.body;
-      const draft = await storage.updateDraft(req.params.id, { content, status });
+      const draft = await storage.updateDraft(req.params.id, req.user!.id, { content, status });
       if (!draft) {
         return res.status(404).json({ error: "Draft not found" });
       }
@@ -1419,7 +1428,7 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
 
   app.delete("/api/drafts/:id", async (req: Request, res: Response) => {
     try {
-      await storage.deleteDraft(req.params.id);
+      await storage.deleteDraft(req.params.id, req.user!.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting draft:", error);
@@ -1666,9 +1675,9 @@ Generate the requested content now:`;
 
   app.get("/api/stats", async (req: Request, res: Response) => {
     try {
-      const documents = await storage.getDocuments();
-      const sessions = await storage.getChatSessions();
-      const drafts = await storage.getDrafts();
+      const documents = await storage.getDocuments(req.user!.id);
+      const sessions = await storage.getChatSessions(req.user!.id);
+      const drafts = await storage.getDrafts(req.user!.id);
       const totalCost = await storage.getTotalCost();
 
       res.json({
@@ -2354,7 +2363,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
   app.get("/api/research/notes", async (req: Request, res: Response) => {
     try {
       const draftId = req.query.draftId as string | undefined;
-      const notes = await storage.getResearchNotes();
+      const notes = await storage.getResearchNotes(req.user!.id);
       const filtered = draftId ? notes.filter(n => n.draftId === draftId) : notes;
       res.json(filtered);
     } catch (error) {
@@ -2365,7 +2374,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.post("/api/research/notes", async (req: Request, res: Response) => {
     try {
-      const parsed = insertResearchNoteSchema.safeParse(req.body);
+      const parsed = insertResearchNoteSchema.safeParse({ ...req.body, userId: req.user!.id });
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
@@ -2379,7 +2388,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.delete("/api/research/notes/:id", async (req: Request, res: Response) => {
     try {
-      await storage.deleteResearchNote(req.params.id);
+      await storage.deleteResearchNote(req.params.id, req.user!.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting research note:", error);
@@ -2393,7 +2402,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       if (!name && !content) {
         return res.status(400).json({ error: "Name or content is required" });
       }
-      const note = await storage.updateResearchNote(req.params.id, { name, content });
+      const note = await storage.updateResearchNote(req.params.id, req.user!.id, { name, content });
       if (!note) {
         return res.status(404).json({ error: "Note not found" });
       }
@@ -2406,7 +2415,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.get("/api/cnr/notes", async (req: Request, res: Response) => {
     try {
-      const notes = await storage.getCnrNotes();
+      const notes = await storage.getCnrNotes(req.user!.id);
       res.json(notes);
     } catch (error) {
       console.error("Error fetching CNR notes:", error);
@@ -2416,7 +2425,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.post("/api/cnr/notes", async (req: Request, res: Response) => {
     try {
-      const parsed = insertCnrNoteSchema.safeParse(req.body);
+      const parsed = insertCnrNoteSchema.safeParse({ ...req.body, userId: req.user!.id });
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
@@ -2430,12 +2439,16 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.patch("/api/cnr/notes/:id", async (req: Request, res: Response) => {
     try {
-      const partialSchema = insertCnrNoteSchema.partial();
-      const parsed = partialSchema.safeParse(req.body);
+      const cnrNoteUpdateSchema = z.object({
+        title: z.string().optional(),
+        content: z.string().optional(),
+        cnrNumber: z.string().optional(),
+      });
+      const parsed = cnrNoteUpdateSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
-      const note = await storage.updateCnrNote(req.params.id, parsed.data);
+      const note = await storage.updateCnrNote(req.params.id, req.user!.id, parsed.data);
       if (!note) {
         return res.status(404).json({ error: "Note not found" });
       }
@@ -2448,7 +2461,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.delete("/api/cnr/notes/:id", async (req: Request, res: Response) => {
     try {
-      await storage.deleteCnrNote(req.params.id);
+      await storage.deleteCnrNote(req.params.id, req.user!.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting CNR note:", error);

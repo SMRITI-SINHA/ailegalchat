@@ -43,26 +43,26 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
 
-  getDocuments(): Promise<Document[]>;
-  getDocument(id: string): Promise<Document | undefined>;
+  getDocuments(userId: string): Promise<Document[]>;
+  getDocument(id: string, userId: string): Promise<Document | undefined>;
   createDocument(doc: InsertDocument): Promise<Document>;
   updateDocument(id: string, updates: Partial<Document>): Promise<Document | undefined>;
-  deleteDocument(id: string): Promise<void>;
+  deleteDocument(id: string, userId: string): Promise<void>;
 
-  getChatSessions(): Promise<ChatSession[]>;
-  getChatSession(id: string): Promise<ChatSession | undefined>;
+  getChatSessions(userId: string): Promise<ChatSession[]>;
+  getChatSession(id: string, userId: string): Promise<ChatSession | undefined>;
   createChatSession(session: InsertChatSession): Promise<ChatSession>;
   updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession | undefined>;
-  deleteChatSession(id: string): Promise<void>;
+  deleteChatSession(id: string, userId: string): Promise<void>;
 
-  getChatMessages(sessionId: string): Promise<ChatMessage[]>;
+  getChatMessages(sessionId: string, userId: string): Promise<ChatMessage[]>;
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
 
-  getDrafts(): Promise<Draft[]>;
-  getDraft(id: string): Promise<Draft | undefined>;
+  getDrafts(userId: string): Promise<Draft[]>;
+  getDraft(id: string, userId: string): Promise<Draft | undefined>;
   createDraft(draft: InsertDraft): Promise<Draft>;
-  updateDraft(id: string, updates: Partial<Draft>): Promise<Draft | undefined>;
-  deleteDraft(id: string): Promise<void>;
+  updateDraft(id: string, userId: string, updates: Partial<Draft>): Promise<Draft | undefined>;
+  deleteDraft(id: string, userId: string): Promise<void>;
 
   getCostLedger(): Promise<CostLedger[]>;
   addCostEntry(entry: InsertCostLedger): Promise<CostLedger>;
@@ -73,11 +73,11 @@ export interface IStorage {
   createTrainingDoc(doc: InsertTrainingDoc): Promise<TrainingDoc>;
   deleteTrainingDoc(id: string): Promise<void>;
 
-  getLegalMemos(): Promise<LegalMemo[]>;
-  getLegalMemo(id: string): Promise<LegalMemo | undefined>;
+  getLegalMemos(userId: string): Promise<LegalMemo[]>;
+  getLegalMemo(id: string, userId: string): Promise<LegalMemo | undefined>;
   createLegalMemo(memo: InsertLegalMemo): Promise<LegalMemo>;
   updateLegalMemo(id: string, updates: Partial<LegalMemo>): Promise<LegalMemo | undefined>;
-  deleteLegalMemo(id: string): Promise<void>;
+  deleteLegalMemo(id: string, userId: string): Promise<void>;
 
   getComplianceChecklists(): Promise<ComplianceChecklist[]>;
   getComplianceChecklist(id: string): Promise<ComplianceChecklist | undefined>;
@@ -85,21 +85,21 @@ export interface IStorage {
   updateComplianceChecklist(id: string, updates: Partial<ComplianceChecklist>): Promise<ComplianceChecklist | undefined>;
   deleteComplianceChecklist(id: string): Promise<void>;
 
-  getResearchQueries(): Promise<ResearchQuery[]>;
-  getResearchQuery(id: string): Promise<ResearchQuery | undefined>;
+  getResearchQueries(userId: string): Promise<ResearchQuery[]>;
+  getResearchQuery(id: string, userId: string): Promise<ResearchQuery | undefined>;
   createResearchQuery(query: InsertResearchQuery): Promise<ResearchQuery>;
 
-  getResearchNotes(): Promise<ResearchNote[]>;
-  getResearchNote(id: string): Promise<ResearchNote | undefined>;
+  getResearchNotes(userId: string): Promise<ResearchNote[]>;
+  getResearchNote(id: string, userId: string): Promise<ResearchNote | undefined>;
   createResearchNote(note: InsertResearchNote): Promise<ResearchNote>;
-  updateResearchNote(id: string, updates: Partial<{ name: string; content: string }>): Promise<ResearchNote | undefined>;
-  deleteResearchNote(id: string): Promise<void>;
+  updateResearchNote(id: string, userId: string, updates: Partial<{ name: string; content: string }>): Promise<ResearchNote | undefined>;
+  deleteResearchNote(id: string, userId: string): Promise<void>;
 
-  getCnrNotes(): Promise<CnrNote[]>;
-  getCnrNote(id: string): Promise<CnrNote | undefined>;
+  getCnrNotes(userId: string): Promise<CnrNote[]>;
+  getCnrNote(id: string, userId: string): Promise<CnrNote | undefined>;
   createCnrNote(note: InsertCnrNote): Promise<CnrNote>;
-  updateCnrNote(id: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined>;
-  deleteCnrNote(id: string): Promise<void>;
+  updateCnrNote(id: string, userId: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined>;
+  deleteCnrNote(id: string, userId: string): Promise<void>;
 
   getSavedCases(): Promise<SavedCase[]>;
   getSavedCase(id: string): Promise<SavedCase | undefined>;
@@ -179,20 +179,22 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  async getDocuments(): Promise<Document[]> {
-    return Array.from(this.documents.values()).sort(
-      (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    );
+  async getDocuments(userId: string): Promise<Document[]> {
+    return Array.from(this.documents.values())
+      .filter(d => d.userId === userId)
+      .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
   }
 
-  async getDocument(id: string): Promise<Document | undefined> {
-    return this.documents.get(id);
+  async getDocument(id: string, userId: string): Promise<Document | undefined> {
+    const doc = this.documents.get(id);
+    return doc && doc.userId === userId ? doc : undefined;
   }
 
   async createDocument(insertDoc: InsertDocument): Promise<Document> {
     const id = randomUUID();
     const doc: Document = {
       id,
+      userId: insertDoc.userId,
       name: insertDoc.name,
       type: insertDoc.type,
       size: insertDoc.size,
@@ -218,18 +220,22 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  async deleteDocument(id: string): Promise<void> {
-    this.documents.delete(id);
+  async deleteDocument(id: string, userId: string): Promise<void> {
+    const doc = this.documents.get(id);
+    if (doc && doc.userId === userId) {
+      this.documents.delete(id);
+    }
   }
 
-  async getChatSessions(): Promise<ChatSession[]> {
-    return Array.from(this.chatSessions.values()).sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+  async getChatSessions(userId: string): Promise<ChatSession[]> {
+    return Array.from(this.chatSessions.values())
+      .filter(s => s.userId === userId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
-  async getChatSession(id: string): Promise<ChatSession | undefined> {
-    return this.chatSessions.get(id);
+  async getChatSession(id: string, userId: string): Promise<ChatSession | undefined> {
+    const session = this.chatSessions.get(id);
+    return session && session.userId === userId ? session : undefined;
   }
 
   async createChatSession(insertSession: InsertChatSession): Promise<ChatSession> {
@@ -237,6 +243,7 @@ export class MemStorage implements IStorage {
     const now = new Date();
     const session: ChatSession = {
       id,
+      userId: insertSession.userId,
       title: insertSession.title,
       sessionType: insertSession.sessionType ?? null,
       documentIds: insertSession.documentIds ?? null,
@@ -259,25 +266,35 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  async deleteChatSession(id: string): Promise<void> {
-    this.chatSessions.delete(id);
-    for (const [msgId, msg] of this.chatMessages) {
-      if (msg.sessionId === id) {
-        this.chatMessages.delete(msgId);
+  async deleteChatSession(id: string, userId: string): Promise<void> {
+    const session = this.chatSessions.get(id);
+    if (session && session.userId === userId) {
+      this.chatSessions.delete(id);
+      for (const [msgId, msg] of this.chatMessages) {
+        if (msg.sessionId === id) {
+          this.chatMessages.delete(msgId);
+        }
       }
     }
   }
 
-  async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
+  async getChatMessages(sessionId: string, userId: string): Promise<ChatMessage[]> {
+    const session = this.chatSessions.get(sessionId);
+    if (!session || session.userId !== userId) return [];
     return Array.from(this.chatMessages.values())
       .filter((msg) => msg.sessionId === sessionId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
 
   async createChatMessage(insertMsg: InsertChatMessage): Promise<ChatMessage> {
+    const session = this.chatSessions.get(insertMsg.sessionId);
+    if (!session || session.userId !== insertMsg.userId) {
+      throw new Error("Unauthorized: session does not belong to user");
+    }
     const id = randomUUID();
     const msg: ChatMessage = {
       id,
+      userId: insertMsg.userId,
       sessionId: insertMsg.sessionId,
       role: insertMsg.role,
       content: insertMsg.content,
@@ -291,14 +308,15 @@ export class MemStorage implements IStorage {
     return msg;
   }
 
-  async getDrafts(): Promise<Draft[]> {
-    return Array.from(this.drafts.values()).sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+  async getDrafts(userId: string): Promise<Draft[]> {
+    return Array.from(this.drafts.values())
+      .filter(d => d.userId === userId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
-  async getDraft(id: string): Promise<Draft | undefined> {
-    return this.drafts.get(id);
+  async getDraft(id: string, userId: string): Promise<Draft | undefined> {
+    const draft = this.drafts.get(id);
+    return draft && draft.userId === userId ? draft : undefined;
   }
 
   async createDraft(insertDraft: InsertDraft): Promise<Draft> {
@@ -306,6 +324,7 @@ export class MemStorage implements IStorage {
     const now = new Date();
     const draft: Draft = {
       id,
+      userId: insertDraft.userId,
       title: insertDraft.title,
       type: insertDraft.type,
       content: insertDraft.content ?? null,
@@ -324,16 +343,20 @@ export class MemStorage implements IStorage {
     return draft;
   }
 
-  async updateDraft(id: string, updates: Partial<Draft>): Promise<Draft | undefined> {
+  async updateDraft(id: string, userId: string, updates: Partial<Draft>): Promise<Draft | undefined> {
     const draft = this.drafts.get(id);
-    if (!draft) return undefined;
-    const updated = { ...draft, ...updates, updatedAt: new Date() };
+    if (!draft || draft.userId !== userId) return undefined;
+    const { userId: _stripped, ...safeUpdates } = updates as Draft;
+    const updated = { ...draft, ...safeUpdates, userId, updatedAt: new Date() };
     this.drafts.set(id, updated);
     return updated;
   }
 
-  async deleteDraft(id: string): Promise<void> {
-    this.drafts.delete(id);
+  async deleteDraft(id: string, userId: string): Promise<void> {
+    const draft = this.drafts.get(id);
+    if (draft && draft.userId === userId) {
+      this.drafts.delete(id);
+    }
   }
 
   async getCostLedger(): Promise<CostLedger[]> {
@@ -395,14 +418,15 @@ export class MemStorage implements IStorage {
     this.trainingDocs.delete(id);
   }
 
-  async getLegalMemos(): Promise<LegalMemo[]> {
-    return Array.from(this.legalMemos.values()).sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+  async getLegalMemos(userId: string): Promise<LegalMemo[]> {
+    return Array.from(this.legalMemos.values())
+      .filter(m => m.userId === userId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
-  async getLegalMemo(id: string): Promise<LegalMemo | undefined> {
-    return this.legalMemos.get(id);
+  async getLegalMemo(id: string, userId: string): Promise<LegalMemo | undefined> {
+    const memo = this.legalMemos.get(id);
+    return memo && memo.userId === userId ? memo : undefined;
   }
 
   async createLegalMemo(insertMemo: InsertLegalMemo): Promise<LegalMemo> {
@@ -410,6 +434,7 @@ export class MemStorage implements IStorage {
     const now = new Date();
     const memo: LegalMemo = {
       id,
+      userId: insertMemo.userId,
       title: insertMemo.title,
       facts: insertMemo.facts,
       issues: insertMemo.issues ?? null,
@@ -436,8 +461,11 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  async deleteLegalMemo(id: string): Promise<void> {
-    this.legalMemos.delete(id);
+  async deleteLegalMemo(id: string, userId: string): Promise<void> {
+    const memo = this.legalMemos.get(id);
+    if (memo && memo.userId === userId) {
+      this.legalMemos.delete(id);
+    }
   }
 
   async getComplianceChecklists(): Promise<ComplianceChecklist[]> {
@@ -480,20 +508,22 @@ export class MemStorage implements IStorage {
     this.complianceChecklists.delete(id);
   }
 
-  async getResearchQueries(): Promise<ResearchQuery[]> {
-    return Array.from(this.researchQueries.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+  async getResearchQueries(userId: string): Promise<ResearchQuery[]> {
+    return Array.from(this.researchQueries.values())
+      .filter(q => q.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  async getResearchQuery(id: string): Promise<ResearchQuery | undefined> {
-    return this.researchQueries.get(id);
+  async getResearchQuery(id: string, userId: string): Promise<ResearchQuery | undefined> {
+    const q = this.researchQueries.get(id);
+    return q && q.userId === userId ? q : undefined;
   }
 
   async createResearchQuery(insertQuery: InsertResearchQuery): Promise<ResearchQuery> {
     const id = randomUUID();
     const query: ResearchQuery = {
       id,
+      userId: insertQuery.userId,
       query: insertQuery.query,
       results: insertQuery.results ?? null,
       legalDomain: insertQuery.legalDomain ?? null,
@@ -507,20 +537,22 @@ export class MemStorage implements IStorage {
     return query;
   }
 
-  async getResearchNotes(): Promise<ResearchNote[]> {
-    return Array.from(this.researchNotes.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+  async getResearchNotes(userId: string): Promise<ResearchNote[]> {
+    return Array.from(this.researchNotes.values())
+      .filter(n => n.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  async getResearchNote(id: string): Promise<ResearchNote | undefined> {
-    return this.researchNotes.get(id);
+  async getResearchNote(id: string, userId: string): Promise<ResearchNote | undefined> {
+    const note = this.researchNotes.get(id);
+    return note && note.userId === userId ? note : undefined;
   }
 
   async createResearchNote(insertNote: InsertResearchNote): Promise<ResearchNote> {
     const id = randomUUID();
     const note: ResearchNote = {
       id,
+      userId: insertNote.userId,
       name: insertNote.name,
       content: insertNote.content,
       draftId: insertNote.draftId ?? null,
@@ -530,26 +562,30 @@ export class MemStorage implements IStorage {
     return note;
   }
 
-  async updateResearchNote(id: string, updates: Partial<{ name: string; content: string }>): Promise<ResearchNote | undefined> {
+  async updateResearchNote(id: string, userId: string, updates: Partial<{ name: string; content: string }>): Promise<ResearchNote | undefined> {
     const note = this.researchNotes.get(id);
-    if (!note) return undefined;
+    if (!note || note.userId !== userId) return undefined;
     const updatedNote = { ...note, ...updates };
     this.researchNotes.set(id, updatedNote);
     return updatedNote;
   }
 
-  async deleteResearchNote(id: string): Promise<void> {
-    this.researchNotes.delete(id);
+  async deleteResearchNote(id: string, userId: string): Promise<void> {
+    const note = this.researchNotes.get(id);
+    if (note && note.userId === userId) {
+      this.researchNotes.delete(id);
+    }
   }
 
-  async getCnrNotes(): Promise<CnrNote[]> {
-    return Array.from(this.cnrNotes.values()).sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+  async getCnrNotes(userId: string): Promise<CnrNote[]> {
+    return Array.from(this.cnrNotes.values())
+      .filter(n => n.userId === userId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
-  async getCnrNote(id: string): Promise<CnrNote | undefined> {
-    return this.cnrNotes.get(id);
+  async getCnrNote(id: string, userId: string): Promise<CnrNote | undefined> {
+    const note = this.cnrNotes.get(id);
+    return note && note.userId === userId ? note : undefined;
   }
 
   async createCnrNote(note: InsertCnrNote): Promise<CnrNote> {
@@ -557,6 +593,7 @@ export class MemStorage implements IStorage {
     const now = new Date();
     const newNote: CnrNote = {
       id,
+      userId: note.userId,
       title: note.title,
       content: note.content,
       cnrNumber: note.cnrNumber || null,
@@ -567,16 +604,20 @@ export class MemStorage implements IStorage {
     return newNote;
   }
 
-  async updateCnrNote(id: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined> {
+  async updateCnrNote(id: string, userId: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined> {
     const note = this.cnrNotes.get(id);
-    if (!note) return undefined;
-    const updatedNote = { ...note, ...updates, updatedAt: new Date() };
+    if (!note || note.userId !== userId) return undefined;
+    const { userId: _stripped, ...safeUpdates } = updates as CnrNote;
+    const updatedNote = { ...note, ...safeUpdates, userId, updatedAt: new Date() };
     this.cnrNotes.set(id, updatedNote);
     return updatedNote;
   }
 
-  async deleteCnrNote(id: string): Promise<void> {
-    this.cnrNotes.delete(id);
+  async deleteCnrNote(id: string, userId: string): Promise<void> {
+    const note = this.cnrNotes.get(id);
+    if (note && note.userId === userId) {
+      this.cnrNotes.delete(id);
+    }
   }
 
   async getSavedCases(): Promise<SavedCase[]> {
