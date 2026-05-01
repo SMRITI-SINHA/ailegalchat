@@ -50,11 +50,23 @@ function isOriginTrusted(origin: string): boolean {
 // --- Token state ---
 let _token: string | null = null;
 
+// Lazy reference to the QueryClient — set after queryClient is created below.
+// Used to invalidate all queries the moment a token arrives so they refetch
+// with the correct Authorization header instead of staying in error state.
+let _qcRef: QueryClient | null = null;
+
 function applyToken(t: string) {
+  const isFirstToken = !_token;
   _token = t;
   sessionStorage.setItem("chakshi_token", t);
-  // Log token receipt — show only first 20 chars so we never log the full JWT
   console.log("[chakshi:token] ✅ Token stored. Preview:", t.slice(0, 20) + "...", "| Length:", t.length);
+
+  // If this is the first token we've received (page just loaded and got auth),
+  // invalidate every cached query so they all refetch with the Bearer header.
+  if (isFirstToken && _qcRef) {
+    console.log("[chakshi:token] First token received — invalidating all queries so they refetch with auth");
+    _qcRef.invalidateQueries();
+  }
 }
 
 function initToken(): void {
@@ -311,3 +323,7 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Wire up the lazy reference so applyToken can invalidate queries
+// the moment the first auth token arrives via postMessage.
+_qcRef = queryClient;
