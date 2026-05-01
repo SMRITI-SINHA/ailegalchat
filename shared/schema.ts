@@ -370,7 +370,8 @@ export type CnrNote = typeof cnrNotes.$inferSelect;
 
 export const savedCases = pgTable("saved_cases", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  cnrNumber: text("cnr_number").notNull().unique(),
+  userId: text("user_id").notNull(),
+  cnrNumber: text("cnr_number").notNull(),
   caseType: text("case_type"),
   filingNumber: text("filing_number"),
   filingDate: text("filing_date"),
@@ -387,7 +388,9 @@ export const savedCases = pgTable("saved_cases", {
   caseTransferDetails: text("case_transfer_details"),
   caseHistory: text("case_history"),
   savedAt: timestamp("saved_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+}, (t) => [
+  uniqueIndex("saved_cases_user_cnr_idx").on(t.userId, t.cnrNumber),
+]);
 
 export const insertSavedCaseSchema = createInsertSchema(savedCases).omit({
   id: true,

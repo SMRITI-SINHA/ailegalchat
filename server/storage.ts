@@ -101,11 +101,11 @@ export interface IStorage {
   updateCnrNote(id: string, userId: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined>;
   deleteCnrNote(id: string, userId: string): Promise<void>;
 
-  getSavedCases(): Promise<SavedCase[]>;
-  getSavedCase(id: string): Promise<SavedCase | undefined>;
-  getSavedCaseByCnr(cnrNumber: string): Promise<SavedCase | undefined>;
+  getSavedCases(userId: string): Promise<SavedCase[]>;
+  getSavedCase(id: string, userId: string): Promise<SavedCase | undefined>;
+  getSavedCaseByCnr(cnrNumber: string, userId: string): Promise<SavedCase | undefined>;
   createSavedCase(savedCase: InsertSavedCase): Promise<SavedCase>;
-  deleteSavedCase(id: string): Promise<void>;
+  deleteSavedCase(id: string, userId: string): Promise<void>;
 
   getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined>;
   createGoogleCalendarCredentials(creds: InsertGoogleCalendarCredentials): Promise<GoogleCalendarCredentials>;
@@ -620,19 +620,20 @@ export class MemStorage implements IStorage {
     }
   }
 
-  async getSavedCases(): Promise<SavedCase[]> {
-    return Array.from(this.savedCases.values()).sort(
-      (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
-    );
+  async getSavedCases(userId: string): Promise<SavedCase[]> {
+    return Array.from(this.savedCases.values())
+      .filter((c) => c.userId === userId)
+      .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
   }
 
-  async getSavedCase(id: string): Promise<SavedCase | undefined> {
-    return this.savedCases.get(id);
+  async getSavedCase(id: string, userId: string): Promise<SavedCase | undefined> {
+    const c = this.savedCases.get(id);
+    return c && c.userId === userId ? c : undefined;
   }
 
-  async getSavedCaseByCnr(cnrNumber: string): Promise<SavedCase | undefined> {
+  async getSavedCaseByCnr(cnrNumber: string, userId: string): Promise<SavedCase | undefined> {
     return Array.from(this.savedCases.values()).find(
-      (c) => c.cnrNumber === cnrNumber
+      (c) => c.cnrNumber === cnrNumber && c.userId === userId
     );
   }
 
@@ -640,6 +641,7 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const newCase: SavedCase = {
       id,
+      userId: savedCase.userId,
       cnrNumber: savedCase.cnrNumber,
       caseType: savedCase.caseType || null,
       filingNumber: savedCase.filingNumber || null,
@@ -662,8 +664,11 @@ export class MemStorage implements IStorage {
     return newCase;
   }
 
-  async deleteSavedCase(id: string): Promise<void> {
-    this.savedCases.delete(id);
+  async deleteSavedCase(id: string, userId: string): Promise<void> {
+    const c = this.savedCases.get(id);
+    if (c && c.userId === userId) {
+      this.savedCases.delete(id);
+    }
   }
 
   async getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined> {

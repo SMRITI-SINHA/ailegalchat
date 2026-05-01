@@ -2471,7 +2471,8 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.get("/api/cnr/saved-cases", async (req: Request, res: Response) => {
     try {
-      const cases = await db.select().from(savedCases).orderBy(desc(savedCases.savedAt));
+      const userId = req.user!.id;
+      const cases = await db.select().from(savedCases).where(eq(savedCases.userId, userId)).orderBy(desc(savedCases.savedAt));
       res.json(cases);
     } catch (error) {
       console.error("Error fetching saved cases:", error);
@@ -2481,11 +2482,12 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.post("/api/cnr/saved-cases", async (req: Request, res: Response) => {
     try {
-      const parsed = insertSavedCaseSchema.safeParse(req.body);
+      const userId = req.user!.id;
+      const parsed = insertSavedCaseSchema.safeParse({ ...req.body, userId });
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
-      const existing = await db.select().from(savedCases).where(eq(savedCases.cnrNumber, parsed.data.cnrNumber));
+      const existing = await db.select().from(savedCases).where(and(eq(savedCases.userId, userId), eq(savedCases.cnrNumber, parsed.data.cnrNumber)));
       if (existing.length > 0) {
         return res.status(409).json({ error: "Case already saved", existingCase: existing[0] });
       }
@@ -2499,7 +2501,8 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
 
   app.delete("/api/cnr/saved-cases/:id", async (req: Request, res: Response) => {
     try {
-      await db.delete(savedCases).where(eq(savedCases.id, req.params.id));
+      const userId = req.user!.id;
+      await db.delete(savedCases).where(and(eq(savedCases.id, req.params.id), eq(savedCases.userId, userId)));
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting saved case:", error);
