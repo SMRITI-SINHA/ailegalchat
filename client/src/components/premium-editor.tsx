@@ -1063,7 +1063,7 @@ export function PremiumEditor({
       </div>
 
       <div className="flex-1 overflow-auto bg-muted/20">
-        <div className="flex h-full">
+        <div className="flex min-h-full">
           <div className="flex-1 flex justify-center py-8 px-4">
             <div
               ref={editorRef}
