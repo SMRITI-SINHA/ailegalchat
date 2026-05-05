@@ -570,11 +570,19 @@ export async function registerRoutes(
 
   app.post("/api/chat/sessions", async (req: Request, res: Response) => {
     try {
+      // Validate that any provided document IDs belong to this user
+      const rawDocumentIds: string[] = req.body.documentIds || [];
+      const verifiedDocumentIds: string[] = [];
+      for (const docId of rawDocumentIds) {
+        const doc = await storage.getDocument(docId, req.user!.id);
+        if (doc) verifiedDocumentIds.push(docId);
+      }
+
       const session = await storage.createChatSession({
         userId: req.user!.id,
         title: req.body.title || "New Chat",
         sessionType: req.body.sessionType || "general",
-        documentIds: req.body.documentIds || [],
+        documentIds: verifiedDocumentIds,
         modelTier: "mini",
         totalCost: 0,
         messageCount: 0,
@@ -642,6 +650,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: firstError.message });
       }
       const { message, sessionId, documentIds, includeSources, voiceLanguage } = parsed.data;
+
+      // Verify session ownership before starting the stream — reject unknown/unowned sessions early
+      if (sessionId) {
+        const ownedSession = await storage.getChatSession(sessionId, req.user!.id);
+        if (!ownedSession) {
+          return res.status(403).json({ error: "Session not found or access denied" });
+        }
+      }
 
       const tier = determineModelTier(message);
       const model = MODEL_TIERS[tier];
@@ -2689,6 +2705,9 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       if (!event) {
         return res.status(404).json({ error: "Event not found" });
       }
+      if (event.userId !== req.user!.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
       const updated = await storage.updateCalendarEvent(req.params.id, req.body);
 
@@ -2712,6 +2731,9 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       const event = await storage.getCalendarEvent(req.params.id);
       if (!event) {
         return res.status(404).json({ error: "Event not found" });
+      }
+      if (event.userId !== req.user!.id) {
+        return res.status(403).json({ error: "Forbidden" });
       }
 
       if (event.googleEventId) {
