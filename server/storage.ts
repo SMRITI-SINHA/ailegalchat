@@ -35,8 +35,26 @@ import type {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { getDb } from "./db";
-import { auditLogs as auditLogsTable } from "@shared/schema";
-import { desc, eq, gte, and } from "drizzle-orm";
+import {
+  auditLogs as auditLogsTable,
+  users,
+  documents,
+  chatSessions,
+  chatMessages,
+  drafts,
+  costLedger as costLedgerTable,
+  trainingDocs,
+  legalMemos,
+  complianceChecklists,
+  researchQueries,
+  researchNotes,
+  cnrNotes,
+  savedCases as savedCasesTable,
+  googleCalendarCredentials as googleCalendarCredentialsTable,
+  calendarEvents as calendarEventsTable,
+  aiUsage as aiUsageTable,
+} from "@shared/schema";
+import { desc, asc, eq, gte, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -816,4 +834,381 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  // ── Users ──────────────────────────────────────────────────────────────────
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await getDb().select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await getDb().select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await getDb().insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  // ── Documents ──────────────────────────────────────────────────────────────
+  async getDocuments(userId: string): Promise<Document[]> {
+    return getDb().select().from(documents).where(eq(documents.userId, userId)).orderBy(desc(documents.uploadedAt));
+  }
+
+  async getDocument(id: string, userId: string): Promise<Document | undefined> {
+    const [doc] = await getDb().select().from(documents).where(and(eq(documents.id, id), eq(documents.userId, userId)));
+    return doc;
+  }
+
+  async createDocument(insertDoc: InsertDocument): Promise<Document> {
+    const [doc] = await getDb().insert(documents).values(insertDoc).returning();
+    return doc;
+  }
+
+  async updateDocument(id: string, updates: Partial<Document>): Promise<Document | undefined> {
+    const [doc] = await getDb().update(documents).set(updates).where(eq(documents.id, id)).returning();
+    return doc;
+  }
+
+  async deleteDocument(id: string, userId: string): Promise<void> {
+    await getDb().delete(documents).where(and(eq(documents.id, id), eq(documents.userId, userId)));
+  }
+
+  // ── Chat sessions ──────────────────────────────────────────────────────────
+  async getChatSessions(userId: string): Promise<ChatSession[]> {
+    return getDb().select().from(chatSessions).where(eq(chatSessions.userId, userId)).orderBy(desc(chatSessions.updatedAt));
+  }
+
+  async getChatSession(id: string, userId: string): Promise<ChatSession | undefined> {
+    const [session] = await getDb().select().from(chatSessions).where(and(eq(chatSessions.id, id), eq(chatSessions.userId, userId)));
+    return session;
+  }
+
+  async createChatSession(insertSession: InsertChatSession): Promise<ChatSession> {
+    const [session] = await getDb().insert(chatSessions).values(insertSession).returning();
+    return session;
+  }
+
+  async updateChatSession(id: string, updates: Partial<ChatSession>): Promise<ChatSession | undefined> {
+    const [session] = await getDb().update(chatSessions).set({ ...updates, updatedAt: new Date() }).where(eq(chatSessions.id, id)).returning();
+    return session;
+  }
+
+  async deleteChatSession(id: string, userId: string): Promise<void> {
+    await getDb().delete(chatMessages).where(eq(chatMessages.sessionId, id));
+    await getDb().delete(chatSessions).where(and(eq(chatSessions.id, id), eq(chatSessions.userId, userId)));
+  }
+
+  // ── Chat messages ──────────────────────────────────────────────────────────
+  async getChatMessages(sessionId: string, userId: string): Promise<ChatMessage[]> {
+    const [session] = await getDb().select().from(chatSessions).where(and(eq(chatSessions.id, sessionId), eq(chatSessions.userId, userId)));
+    if (!session) return [];
+    return getDb().select().from(chatMessages).where(eq(chatMessages.sessionId, sessionId)).orderBy(asc(chatMessages.createdAt));
+  }
+
+  async createChatMessage(insertMsg: InsertChatMessage): Promise<ChatMessage> {
+    const [msg] = await getDb().insert(chatMessages).values(insertMsg).returning();
+    return msg;
+  }
+
+  // ── Drafts ─────────────────────────────────────────────────────────────────
+  async getDrafts(userId: string): Promise<Draft[]> {
+    return getDb().select().from(drafts).where(eq(drafts.userId, userId)).orderBy(desc(drafts.updatedAt));
+  }
+
+  async getDraft(id: string, userId: string): Promise<Draft | undefined> {
+    const [draft] = await getDb().select().from(drafts).where(and(eq(drafts.id, id), eq(drafts.userId, userId)));
+    return draft;
+  }
+
+  async createDraft(insertDraft: InsertDraft): Promise<Draft> {
+    const [draft] = await getDb().insert(drafts).values(insertDraft).returning();
+    return draft;
+  }
+
+  async updateDraft(id: string, userId: string, updates: Partial<Draft>): Promise<Draft | undefined> {
+    const { userId: _stripped, ...safeUpdates } = updates as Draft;
+    const [draft] = await getDb().update(drafts).set({ ...safeUpdates, updatedAt: new Date() }).where(and(eq(drafts.id, id), eq(drafts.userId, userId))).returning();
+    return draft;
+  }
+
+  async deleteDraft(id: string, userId: string): Promise<void> {
+    await getDb().delete(drafts).where(and(eq(drafts.id, id), eq(drafts.userId, userId)));
+  }
+
+  // ── Cost ledger ────────────────────────────────────────────────────────────
+  async getCostLedger(): Promise<CostLedger[]> {
+    return getDb().select().from(costLedgerTable).orderBy(desc(costLedgerTable.createdAt));
+  }
+
+  async addCostEntry(entry: InsertCostLedger): Promise<CostLedger> {
+    const [cost] = await getDb().insert(costLedgerTable).values(entry).returning();
+    return cost;
+  }
+
+  async getTotalCost(): Promise<number> {
+    const [result] = await getDb().select({ total: sql<number>`coalesce(sum(amount), 0)` }).from(costLedgerTable);
+    return result?.total ?? 0;
+  }
+
+  // ── Training docs ──────────────────────────────────────────────────────────
+  async getTrainingDocs(userId?: string): Promise<TrainingDoc[]> {
+    if (userId) {
+      return getDb().select().from(trainingDocs).where(eq(trainingDocs.userId, userId)).orderBy(desc(trainingDocs.uploadedAt));
+    }
+    return getDb().select().from(trainingDocs).orderBy(desc(trainingDocs.uploadedAt));
+  }
+
+  async getTrainingDoc(id: string): Promise<TrainingDoc | undefined> {
+    const [doc] = await getDb().select().from(trainingDocs).where(eq(trainingDocs.id, id));
+    return doc;
+  }
+
+  async createTrainingDoc(insertDoc: InsertTrainingDoc): Promise<TrainingDoc> {
+    const [doc] = await getDb().insert(trainingDocs).values(insertDoc).returning();
+    return doc;
+  }
+
+  async deleteTrainingDoc(id: string): Promise<void> {
+    await getDb().delete(trainingDocs).where(eq(trainingDocs.id, id));
+  }
+
+  // ── Legal memos ────────────────────────────────────────────────────────────
+  async getLegalMemos(userId: string): Promise<LegalMemo[]> {
+    return getDb().select().from(legalMemos).where(eq(legalMemos.userId, userId)).orderBy(desc(legalMemos.updatedAt));
+  }
+
+  async getLegalMemo(id: string, userId: string): Promise<LegalMemo | undefined> {
+    const [memo] = await getDb().select().from(legalMemos).where(and(eq(legalMemos.id, id), eq(legalMemos.userId, userId)));
+    return memo;
+  }
+
+  async createLegalMemo(insertMemo: InsertLegalMemo): Promise<LegalMemo> {
+    const [memo] = await getDb().insert(legalMemos).values(insertMemo).returning();
+    return memo;
+  }
+
+  async updateLegalMemo(id: string, updates: Partial<LegalMemo>): Promise<LegalMemo | undefined> {
+    const [memo] = await getDb().update(legalMemos).set({ ...updates, updatedAt: new Date() }).where(eq(legalMemos.id, id)).returning();
+    return memo;
+  }
+
+  async deleteLegalMemo(id: string, userId: string): Promise<void> {
+    await getDb().delete(legalMemos).where(and(eq(legalMemos.id, id), eq(legalMemos.userId, userId)));
+  }
+
+  // ── Compliance checklists ──────────────────────────────────────────────────
+  async getComplianceChecklists(): Promise<ComplianceChecklist[]> {
+    return getDb().select().from(complianceChecklists).orderBy(desc(complianceChecklists.updatedAt));
+  }
+
+  async getComplianceChecklist(id: string): Promise<ComplianceChecklist | undefined> {
+    const [checklist] = await getDb().select().from(complianceChecklists).where(eq(complianceChecklists.id, id));
+    return checklist;
+  }
+
+  async createComplianceChecklist(insertChecklist: InsertComplianceChecklist): Promise<ComplianceChecklist> {
+    const [checklist] = await getDb().insert(complianceChecklists).values(insertChecklist).returning();
+    return checklist;
+  }
+
+  async updateComplianceChecklist(id: string, updates: Partial<ComplianceChecklist>): Promise<ComplianceChecklist | undefined> {
+    const [checklist] = await getDb().update(complianceChecklists).set({ ...updates, updatedAt: new Date() }).where(eq(complianceChecklists.id, id)).returning();
+    return checklist;
+  }
+
+  async deleteComplianceChecklist(id: string): Promise<void> {
+    await getDb().delete(complianceChecklists).where(eq(complianceChecklists.id, id));
+  }
+
+  // ── Research queries ───────────────────────────────────────────────────────
+  async getResearchQueries(userId: string): Promise<ResearchQuery[]> {
+    return getDb().select().from(researchQueries).where(eq(researchQueries.userId, userId)).orderBy(desc(researchQueries.createdAt));
+  }
+
+  async getResearchQuery(id: string, userId: string): Promise<ResearchQuery | undefined> {
+    const [query] = await getDb().select().from(researchQueries).where(and(eq(researchQueries.id, id), eq(researchQueries.userId, userId)));
+    return query;
+  }
+
+  async createResearchQuery(insertQuery: InsertResearchQuery): Promise<ResearchQuery> {
+    const [query] = await getDb().insert(researchQueries).values(insertQuery).returning();
+    return query;
+  }
+
+  // ── Research notes ─────────────────────────────────────────────────────────
+  async getResearchNotes(userId: string): Promise<ResearchNote[]> {
+    return getDb().select().from(researchNotes).where(eq(researchNotes.userId, userId)).orderBy(desc(researchNotes.createdAt));
+  }
+
+  async getResearchNote(id: string, userId: string): Promise<ResearchNote | undefined> {
+    const [note] = await getDb().select().from(researchNotes).where(and(eq(researchNotes.id, id), eq(researchNotes.userId, userId)));
+    return note;
+  }
+
+  async createResearchNote(insertNote: InsertResearchNote): Promise<ResearchNote> {
+    const [note] = await getDb().insert(researchNotes).values(insertNote).returning();
+    return note;
+  }
+
+  async updateResearchNote(id: string, userId: string, updates: Partial<{ name: string; content: string }>): Promise<ResearchNote | undefined> {
+    const [note] = await getDb().update(researchNotes).set(updates).where(and(eq(researchNotes.id, id), eq(researchNotes.userId, userId))).returning();
+    return note;
+  }
+
+  async deleteResearchNote(id: string, userId: string): Promise<void> {
+    await getDb().delete(researchNotes).where(and(eq(researchNotes.id, id), eq(researchNotes.userId, userId)));
+  }
+
+  // ── CNR notes ──────────────────────────────────────────────────────────────
+  async getCnrNotes(userId: string): Promise<CnrNote[]> {
+    return getDb().select().from(cnrNotes).where(eq(cnrNotes.userId, userId)).orderBy(desc(cnrNotes.updatedAt));
+  }
+
+  async getCnrNote(id: string, userId: string): Promise<CnrNote | undefined> {
+    const [note] = await getDb().select().from(cnrNotes).where(and(eq(cnrNotes.id, id), eq(cnrNotes.userId, userId)));
+    return note;
+  }
+
+  async createCnrNote(insertNote: InsertCnrNote): Promise<CnrNote> {
+    const [note] = await getDb().insert(cnrNotes).values(insertNote).returning();
+    return note;
+  }
+
+  async updateCnrNote(id: string, userId: string, updates: Partial<CnrNote>): Promise<CnrNote | undefined> {
+    const { userId: _stripped, ...safeUpdates } = updates as CnrNote;
+    const [note] = await getDb().update(cnrNotes).set({ ...safeUpdates, updatedAt: new Date() }).where(and(eq(cnrNotes.id, id), eq(cnrNotes.userId, userId))).returning();
+    return note;
+  }
+
+  async deleteCnrNote(id: string, userId: string): Promise<void> {
+    await getDb().delete(cnrNotes).where(and(eq(cnrNotes.id, id), eq(cnrNotes.userId, userId)));
+  }
+
+  // ── Saved cases ────────────────────────────────────────────────────────────
+  async getSavedCases(userId: string): Promise<SavedCase[]> {
+    return getDb().select().from(savedCasesTable).where(eq(savedCasesTable.userId, userId)).orderBy(desc(savedCasesTable.savedAt));
+  }
+
+  async getSavedCase(id: string, userId: string): Promise<SavedCase | undefined> {
+    const [c] = await getDb().select().from(savedCasesTable).where(and(eq(savedCasesTable.id, id), eq(savedCasesTable.userId, userId)));
+    return c;
+  }
+
+  async getSavedCaseByCnr(cnrNumber: string, userId: string): Promise<SavedCase | undefined> {
+    const [c] = await getDb().select().from(savedCasesTable).where(and(eq(savedCasesTable.cnrNumber, cnrNumber), eq(savedCasesTable.userId, userId)));
+    return c;
+  }
+
+  async createSavedCase(insertCase: InsertSavedCase): Promise<SavedCase> {
+    const [c] = await getDb().insert(savedCasesTable).values(insertCase).returning();
+    return c;
+  }
+
+  async deleteSavedCase(id: string, userId: string): Promise<void> {
+    await getDb().delete(savedCasesTable).where(and(eq(savedCasesTable.id, id), eq(savedCasesTable.userId, userId)));
+  }
+
+  // ── Google Calendar credentials ────────────────────────────────────────────
+  async getGoogleCalendarCredentials(userId: string): Promise<GoogleCalendarCredentials | undefined> {
+    const [creds] = await getDb().select().from(googleCalendarCredentialsTable).where(eq(googleCalendarCredentialsTable.userId, userId));
+    return creds;
+  }
+
+  async createGoogleCalendarCredentials(insertCreds: InsertGoogleCalendarCredentials): Promise<GoogleCalendarCredentials> {
+    const [creds] = await getDb().insert(googleCalendarCredentialsTable).values(insertCreds).returning();
+    return creds;
+  }
+
+  async updateGoogleCalendarCredentials(userId: string, updates: Partial<GoogleCalendarCredentials>): Promise<GoogleCalendarCredentials | undefined> {
+    const [creds] = await getDb().update(googleCalendarCredentialsTable).set({ ...updates, updatedAt: new Date() }).where(eq(googleCalendarCredentialsTable.userId, userId)).returning();
+    return creds;
+  }
+
+  async deleteGoogleCalendarCredentials(userId: string): Promise<void> {
+    await getDb().delete(googleCalendarCredentialsTable).where(eq(googleCalendarCredentialsTable.userId, userId));
+  }
+
+  // ── Calendar events ────────────────────────────────────────────────────────
+  async getCalendarEvents(userId: string): Promise<CalendarEvent[]> {
+    return getDb().select().from(calendarEventsTable).where(eq(calendarEventsTable.userId, userId)).orderBy(asc(calendarEventsTable.startTime));
+  }
+
+  async getCalendarEvent(id: string): Promise<CalendarEvent | undefined> {
+    const [event] = await getDb().select().from(calendarEventsTable).where(eq(calendarEventsTable.id, id));
+    return event;
+  }
+
+  async getCalendarEventByGoogleId(googleEventId: string): Promise<CalendarEvent | undefined> {
+    const [event] = await getDb().select().from(calendarEventsTable).where(eq(calendarEventsTable.googleEventId, googleEventId));
+    return event;
+  }
+
+  async createCalendarEvent(insertEvent: InsertCalendarEvent): Promise<CalendarEvent> {
+    const [event] = await getDb().insert(calendarEventsTable).values(insertEvent).returning();
+    return event;
+  }
+
+  async updateCalendarEvent(id: string, updates: Partial<CalendarEvent>): Promise<CalendarEvent | undefined> {
+    const [event] = await getDb().update(calendarEventsTable).set({ ...updates, updatedAt: new Date() }).where(eq(calendarEventsTable.id, id)).returning();
+    return event;
+  }
+
+  async deleteCalendarEvent(id: string): Promise<void> {
+    await getDb().delete(calendarEventsTable).where(eq(calendarEventsTable.id, id));
+  }
+
+  // ── AI usage ───────────────────────────────────────────────────────────────
+  async getAIUsage(userId: string, date: string): Promise<AiUsage | undefined> {
+    const [usage] = await getDb().select().from(aiUsageTable).where(and(eq(aiUsageTable.userId, userId), eq(aiUsageTable.date, date)));
+    return usage;
+  }
+
+  async incrementAIUsage(userId: string, date: string): Promise<AiUsage> {
+    const [usage] = await getDb()
+      .insert(aiUsageTable)
+      .values({ userId, date, callCount: 1 })
+      .onConflictDoUpdate({
+        target: [aiUsageTable.userId, aiUsageTable.date],
+        set: { callCount: sql`${aiUsageTable.callCount} + 1` },
+      })
+      .returning();
+    return usage;
+  }
+
+  // ── Audit logs ─────────────────────────────────────────────────────────────
+  async createAuditLog(entry: InsertAuditLog): Promise<AuditLog> {
+    const [log] = await getDb().insert(auditLogsTable).values({
+      userId: entry.userId ?? null,
+      action: entry.action,
+      resourceType: entry.resourceType ?? null,
+      resourceId: entry.resourceId ?? null,
+      ipAddress: entry.ipAddress ?? null,
+      success: entry.success ?? true,
+      errorCode: entry.errorCode ?? null,
+      metadata: entry.metadata ?? null,
+    }).returning();
+    return log;
+  }
+
+  async getAuditLogs(filters?: { userId?: string; action?: string; since?: Date; limit?: number }): Promise<AuditLog[]> {
+    const conditions = [];
+    if (filters?.userId) conditions.push(eq(auditLogsTable.userId, filters.userId));
+    if (filters?.action) conditions.push(eq(auditLogsTable.action, filters.action));
+    if (filters?.since) conditions.push(gte(auditLogsTable.createdAt, filters.since));
+
+    const query = getDb()
+      .select()
+      .from(auditLogsTable)
+      .orderBy(desc(auditLogsTable.createdAt))
+      .limit(filters?.limit ?? 100);
+
+    if (conditions.length > 0) {
+      return query.where(and(...conditions));
+    }
+    return query;
+  }
+}
+
+export const storage = new DatabaseStorage();
