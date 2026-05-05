@@ -115,7 +115,7 @@ export type Draft = typeof drafts.$inferSelect;
 
 export const trainingDocs = pgTable("training_docs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().default("default-user"),
+  userId: varchar("user_id").notNull(),
   name: text("name").notNull(),
   type: text("type").notNull(),
   size: integer("size").notNull(),

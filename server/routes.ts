@@ -1672,8 +1672,11 @@ Generate the requested content now:`;
 
   app.delete("/api/training-docs/:id", async (req: Request, res: Response) => {
     try {
+      const userId = req.user!.id;
       const doc = await storage.getTrainingDoc(req.params.id);
-      if (doc?.storagePath && supabaseStorage.isSupabaseConfigured()) {
+      if (!doc) return res.status(404).json({ error: "Training document not found" });
+      if (doc.userId !== userId) return res.status(403).json({ error: "Forbidden" });
+      if (doc.storagePath && supabaseStorage.isSupabaseConfigured()) {
         try {
           await supabaseStorage.deleteFile(doc.storagePath);
         } catch (e: unknown) {
