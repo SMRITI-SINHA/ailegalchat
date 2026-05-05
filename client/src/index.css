@@ -556,3 +556,39 @@
     inset: -1px;
   }
 }
+
+/* ── Legal document editor typography ─────────────────────────────────────── */
+[data-testid="editor-content"] p {
+  margin: 0.3em 0;
+  line-height: 1.6;
+}
+/* Spacer paragraphs (&nbsp; empty lines) must not balloon */
+[data-testid="editor-content"] p:empty,
+[data-testid="editor-content"] p > br:only-child {
+  margin: 0;
+  line-height: 0.8em;
+  height: 0.8em;
+}
+/* Section dividers should be subtle, not huge */
+[data-testid="editor-content"] hr {
+  margin: 0.75em 0;
+  border: none;
+  border-top: 1px solid #ccc;
+}
+/* Headings inside the editor */
+[data-testid="editor-content"] h1,
+[data-testid="editor-content"] h2,
+[data-testid="editor-content"] h3,
+[data-testid="editor-content"] h4 {
+  margin: 0.75em 0 0.25em 0;
+  line-height: 1.3;
+}
+/* Lists inside the editor */
+[data-testid="editor-content"] ul,
+[data-testid="editor-content"] ol {
+  margin: 0.4em 0;
+  padding-left: 2em;
+}
+[data-testid="editor-content"] li {
+  margin: 0.2em 0;
+}

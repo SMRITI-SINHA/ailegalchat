@@ -114,9 +114,12 @@ function textToLegalHtml(text: string): string {
     const line = lines[i];
     const trimmedLine = line.trim();
     
-    // Empty line - preserve as spacing
+    // Empty line — collapse ALL consecutive blank lines into a single small spacer
     if (trimmedLine === '') {
-      htmlParts.push('<p>&nbsp;</p>');
+      while (i + 1 < lines.length && lines[i + 1].trim() === '') {
+        i++;
+      }
+      htmlParts.push('<p style="margin:0;line-height:0.8em;">&nbsp;</p>');
       i++;
       continue;
     }

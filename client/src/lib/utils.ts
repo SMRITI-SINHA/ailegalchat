@@ -111,9 +111,9 @@ export function markdownToHtml(markdown: string | undefined | null): string {
         inUnorderedList = false;
       }
       
-      // Handle empty lines as paragraph breaks
+      // Handle empty lines as paragraph breaks — skip consecutive blanks
       if (line.trim() === '') {
-        processedLines.push('<br><br>');
+        processedLines.push('<br>');
       } else if (!line.startsWith('<h') && !line.startsWith('<hr')) {
         // Apply emphasis AFTER list check for regular paragraphs
         line = line.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
