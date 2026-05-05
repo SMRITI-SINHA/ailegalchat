@@ -50,16 +50,21 @@ function escapeHtml(str: string): string {
 
 // Sanitize HTML using sanitize-html library for proper XSS protection
 function sanitizeHtml(html: string): string {
+  // Convert table cells to paragraphs BEFORE sanitisation so the text is preserved
+  // (legal documents never need real HTML tables; AI sometimes outputs <table> for party sections)
+  let preprocessed = html
+    .replace(/<t[hd][^>]*>\s*/gi, '<p>')   // open <td>/<th>  → <p>
+    .replace(/\s*<\/t[hd]>/gi, '</p>')     // close </td></th> → </p>
+    .replace(/<\/?(table|thead|tbody|tfoot|tr|colgroup|col|caption)[^>]*>/gi, ''); // strip wrappers
+
   // Use sanitize-html with whitelist of safe tags for legal documents
-  let sanitized = sanitizeHtmlLib(html, {
-    allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-                   'ul', 'ol', 'li', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr'],
+  let sanitized = sanitizeHtmlLib(preprocessed, {
+    allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                   'ul', 'ol', 'li', 'div', 'span', 'hr'],
     allowedAttributes: {
       'p': ['style'],
       'div': ['style'],
       'span': ['style'],
-      'td': ['style', 'colspan', 'rowspan'],
-      'th': ['style', 'colspan', 'rowspan'],
     },
     allowedStyles: {
       '*': {

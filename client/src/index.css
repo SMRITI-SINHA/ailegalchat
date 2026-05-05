@@ -592,3 +592,21 @@
 [data-testid="editor-content"] li {
   margin: 0.2em 0;
 }
+/* Tables — reset any AI-generated table that slips through so rows never show a highlight band */
+[data-testid="editor-content"] table {
+  border-collapse: collapse;
+  border: none;
+  width: 100%;
+  background: transparent;
+}
+[data-testid="editor-content"] tr {
+  background-color: transparent !important;
+  border: none;
+}
+[data-testid="editor-content"] td,
+[data-testid="editor-content"] th {
+  border: none;
+  padding: 0 0.25em;
+  background: transparent;
+  vertical-align: top;
+}
