@@ -61,6 +61,7 @@ export function markdownToHtml(markdown: string | undefined | null): string {
   const processedLines: string[] = [];
   let inOrderedList = false;
   let inUnorderedList = false;
+  let lastWasBlank = false;
   
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
@@ -113,8 +114,13 @@ export function markdownToHtml(markdown: string | undefined | null): string {
       
       // Handle empty lines as paragraph breaks — skip consecutive blanks
       if (line.trim() === '') {
-        processedLines.push('<br>');
+        if (!lastWasBlank) {
+          processedLines.push('<br>');
+        }
+        lastWasBlank = true;
+        continue;
       } else if (!line.startsWith('<h') && !line.startsWith('<hr')) {
+        lastWasBlank = false;
         // Apply emphasis AFTER list check for regular paragraphs
         line = line.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         line = line.replace(/__([^_]+)__/g, '<strong>$1</strong>');
@@ -123,6 +129,7 @@ export function markdownToHtml(markdown: string | undefined | null): string {
         // Wrap non-header content in paragraph
         processedLines.push(`<p style="margin: 0.75em 0; line-height: 1.6;">${line}</p>`);
       } else {
+        lastWasBlank = false;
         processedLines.push(line);
       }
     }
