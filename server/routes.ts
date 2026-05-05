@@ -2607,22 +2607,27 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       const tokens = await GoogleCalendarService.exchangeCodeForTokens(code as string, redirectUri);
       const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000);
 
-      const existingCreds = await storage.getGoogleCalendarCredentials(userId);
-      if (existingCreds) {
-        await storage.updateGoogleCalendarCredentials(userId, {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token || existingCreds.refreshToken,
-          tokenExpiry,
-        });
-      } else {
-        await storage.createGoogleCalendarCredentials({
-          userId,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token || "",
-          tokenExpiry,
-          calendarId: "primary",
-        });
-      }
+      // Wrap credential writes in withUserContext so RLS policies on
+      // google_calendar_credentials are satisfied (app.current_user_id must be
+      // set even though this is a public OAuth callback route).
+      await withUserContext(userId, async () => {
+        const existingCreds = await storage.getGoogleCalendarCredentials(userId);
+        if (existingCreds) {
+          await storage.updateGoogleCalendarCredentials(userId, {
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token || existingCreds.refreshToken,
+            tokenExpiry,
+          });
+        } else {
+          await storage.createGoogleCalendarCredentials({
+            userId,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token || "",
+            tokenExpiry,
+            calendarId: "primary",
+          });
+        }
+      });
 
       logAudit(req, {
         action: "calendar_connect",

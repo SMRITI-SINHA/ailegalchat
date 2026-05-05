@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { db } from "../db";
+import { getDb } from "../db";
 import { aiUsage } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
@@ -40,7 +40,7 @@ function getMidnightISTResetISO(): string {
 }
 
 async function getUsageCount(userId: string, date: string): Promise<number> {
-  const rows = await db
+  const rows = await getDb()
     .select({ callCount: aiUsage.callCount })
     .from(aiUsage)
     .where(and(eq(aiUsage.userId, userId), eq(aiUsage.date, date)));
@@ -48,7 +48,7 @@ async function getUsageCount(userId: string, date: string): Promise<number> {
 }
 
 async function atomicIncrementUsage(userId: string, date: string): Promise<void> {
-  await db
+  await getDb()
     .insert(aiUsage)
     .values({ userId, date, callCount: 1 })
     .onConflictDoUpdate({
