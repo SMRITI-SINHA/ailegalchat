@@ -19,7 +19,7 @@ async function getPDFParseClass() {
 }
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema, savedCases, embedUsage } from "@shared/schema";
-import { db } from "./db";
+import { db, getDb, withUserContext } from "./db";
 import { eq, desc, and } from "drizzle-orm";
 import { indianKanoon } from "./indian-kanoon";
 import { legalWebSearch } from "./legal-web-search";
@@ -421,6 +421,34 @@ export async function registerRoutes(
       return next();
     }
     return requireAuth(req, res, next);
+  });
+
+  // After authentication, bind a dedicated database connection to this request
+  // inside an open transaction and set app.current_user_id as a transaction-LOCAL
+  // variable (is_local=true / SET LOCAL). The setting is automatically cleared
+  // when the transaction commits or rolls back, so a stale user ID can never leak
+  // to a later request that reuses the same pooled connection.
+  //
+  // withUserContext() manages the connection lifecycle (BEGIN → SET LOCAL →
+  // callback → COMMIT/ROLLBACK → release). The Promise resolves when the HTTP
+  // response finishes, keeping the transaction open for the full request duration.
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+    if (!userId) {
+      return next();
+    }
+
+    withUserContext(userId, () =>
+      new Promise<void>((resolve, reject) => {
+        res.on("finish", resolve);
+        res.on("close", reject);
+        next();
+      }),
+    ).catch(() => {
+      // Errors from route handlers are already handled by Express error middleware.
+      // We only suppress the rejection here to avoid an unhandled-promise warning
+      // on the withUserContext wrapper itself.
+    });
   });
 
   app.get("/api/documents", async (req: Request, res: Response) => {
@@ -2491,7 +2519,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
   app.get("/api/cnr/saved-cases", async (req: Request, res: Response) => {
     try {
       const userId = req.user!.id;
-      const cases = await db.select().from(savedCases).where(eq(savedCases.userId, userId)).orderBy(desc(savedCases.savedAt));
+      const cases = await getDb().select().from(savedCases).where(eq(savedCases.userId, userId)).orderBy(desc(savedCases.savedAt));
       res.json(cases);
     } catch (error) {
       console.error("Error fetching saved cases:", error);
@@ -2506,11 +2534,11 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
-      const existing = await db.select().from(savedCases).where(and(eq(savedCases.userId, userId), eq(savedCases.cnrNumber, parsed.data.cnrNumber)));
+      const existing = await getDb().select().from(savedCases).where(and(eq(savedCases.userId, userId), eq(savedCases.cnrNumber, parsed.data.cnrNumber)));
       if (existing.length > 0) {
         return res.status(409).json({ error: "Case already saved", existingCase: existing[0] });
       }
-      const [newCase] = await db.insert(savedCases).values(parsed.data).returning();
+      const [newCase] = await getDb().insert(savedCases).values(parsed.data).returning();
       res.status(201).json(newCase);
     } catch (error) {
       console.error("Error saving case:", error);
@@ -2521,7 +2549,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
   app.delete("/api/cnr/saved-cases/:id", async (req: Request, res: Response) => {
     try {
       const userId = req.user!.id;
-      await db.delete(savedCases).where(and(eq(savedCases.id, req.params.id), eq(savedCases.userId, userId)));
+      await getDb().delete(savedCases).where(and(eq(savedCases.id, req.params.id), eq(savedCases.userId, userId)));
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting saved case:", error);

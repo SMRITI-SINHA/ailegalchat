@@ -34,7 +34,7 @@ import type {
   InsertAuditLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { db } from "./db";
+import { getDb } from "./db";
 import { auditLogs as auditLogsTable } from "@shared/schema";
 import { desc, eq, gte, and } from "drizzle-orm";
 
@@ -784,7 +784,7 @@ export class MemStorage implements IStorage {
   }
 
   async createAuditLog(entry: InsertAuditLog): Promise<AuditLog> {
-    const [log] = await db.insert(auditLogsTable).values({
+    const [log] = await getDb().insert(auditLogsTable).values({
       userId: entry.userId ?? null,
       action: entry.action,
       resourceType: entry.resourceType ?? null,
@@ -803,7 +803,7 @@ export class MemStorage implements IStorage {
     if (filters?.action) conditions.push(eq(auditLogsTable.action, filters.action));
     if (filters?.since) conditions.push(gte(auditLogsTable.createdAt, filters.since));
 
-    const query = db
+    const query = getDb()
       .select()
       .from(auditLogsTable)
       .orderBy(desc(auditLogsTable.createdAt))
