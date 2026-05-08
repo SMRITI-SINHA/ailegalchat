@@ -720,16 +720,33 @@ export async function registerRoutes(
         const docs = await Promise.all(
           documentIds.map((id: string) => storage.getDocument(id, req.user!.id))
         );
-        const validDocs = docs.filter((d) => d && d.extractedText);
+        const validDocs = docs.filter((d) => d !== null && d !== undefined);
         if (validDocs.length > 0) {
           // Build document context with smart truncation for large documents
           const docParts: string[] = [];
-          const charsPerDoc = Math.floor(MAX_DOC_CONTEXT_CHARS / validDocs.length);
+          const textDocs = validDocs.filter((d) => d!.extractedText);
+          const charsPerDoc = textDocs.length > 0
+            ? Math.floor(MAX_DOC_CONTEXT_CHARS / textDocs.length)
+            : MAX_DOC_CONTEXT_CHARS;
           
           for (const doc of validDocs) {
             const docText = doc!.extractedText || "";
             const docName = doc!.name;
-            const estimatedPages = Math.max(1, Math.round(docText.length / 3000));
+            const estimatedPages = doc!.pages
+              || (docText ? Math.max(1, Math.round(docText.length / 3000)) : 1);
+
+            // Scanned / no-text document — give the AI metadata so it can still cite pages
+            if (!docText) {
+              docParts.push(
+                `=== Document: ${docName} (${estimatedPages} pages — scanned image, text not available) ===\n` +
+                `This document could not be parsed as text (likely a scanned image or encrypted PDF).\n` +
+                `Total pages: ${estimatedPages}.\n` +
+                `When referencing information from this document, cite pages by their likely structural position ` +
+                `(e.g., cover page → [Page 1], middle section → [Page ${Math.ceil(estimatedPages / 2)}], ` +
+                `conclusion → [Page ${estimatedPages}]) and clearly state that the content is inferred from document structure, not extracted text.`
+              );
+              continue;
+            }
             
             if (docText.length <= charsPerDoc) {
               // Document fits within allocation
