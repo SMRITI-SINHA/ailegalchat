@@ -344,9 +344,27 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<{ text: s
   }
 }
 
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/tiff",
+  "text/plain",
+]);
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type '${file.mimetype}' is not allowed. Please upload a PDF, Word document, or image.`));
+    }
+  },
 });
 
 const openai = new OpenAI({
@@ -422,7 +440,6 @@ export async function registerRoutes(
     "/voice/transcribe",
     "/voice/speak",
     "/calendar/google/callback",
-    "/admin/audit-log",
   ];
 
   app.use("/api", (req: Request, res: Response, next: NextFunction) => {

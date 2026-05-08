@@ -322,9 +322,8 @@ function DraftOutputCard({ data }: { data: DraftOutputData }) {
   };
 
   const handleDownload = () => {
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = displayContent;
-    const text = tempDiv.innerText || tempDiv.textContent || "";
+    const parsed = new DOMParser().parseFromString(displayContent, "text/html");
+    const text = parsed.body.textContent || "";
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

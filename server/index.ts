@@ -19,6 +19,8 @@ declare module "http" {
   }
 }
 
+const isDev = process.env.NODE_ENV !== "production";
+
 const replitDomains = process.env.REPLIT_DOMAINS
   ? process.env.REPLIT_DOMAINS.split(",").map((d) => `https://${d.trim()}`)
   : [];
@@ -39,14 +41,16 @@ app.use(
   })
 );
 
-// Allow Chakshi AI Hub to be embedded as an iframe inside chakshi.in and chakshi.com
+// Allow Chakshi AI Hub to be embedded as an iframe only inside trusted Chakshi domains
+const FRAME_ANCESTORS = isDev
+  ? "frame-ancestors 'self' http://localhost:* https://chakshi.in https://www.chakshi.in https://chakshi.com https://www.chakshi.com"
+  : "frame-ancestors https://chakshi.in https://www.chakshi.in https://chakshi.com https://www.chakshi.com";
+
 app.use((_req, res, next) => {
   res.removeHeader("X-Frame-Options");
-  res.setHeader("Content-Security-Policy", "frame-ancestors *");
+  res.setHeader("Content-Security-Policy", FRAME_ANCESTORS);
   next();
 });
-
-const isDev = process.env.NODE_ENV !== "production";
 
 app.use(
   cors({
@@ -146,23 +150,13 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      log(logLine);
+      // Log only method/path/status/duration — never log response body
+      // (responses may contain legal documents, PII, or AI output)
+      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });
 

@@ -103,9 +103,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const kid = header.kid as string | undefined;
   const iss = payload.iss as string | undefined;
 
-  console.log("[auth] JWT alg:", alg, "| iss:", iss || "none", "| kid:", kid || "none");
-  console.log("[auth] JWT exp:", payload.exp ? new Date((payload.exp as number) * 1000).toISOString() : "no exp");
-  console.log("[auth] JWT sub:", payload.sub ? String(payload.sub).slice(0, 8) + "..." : "no sub");
+  // Minimal debug log — no sub, no exp, no key material
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[auth] JWT alg:", alg, "| kid:", kid || "none");
+  }
 
   try {
     let decoded: Record<string, unknown>;
@@ -127,7 +128,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         res.status(500).json({ error: "Server misconfiguration: JWT secret missing" });
         return;
       }
-      console.log("[auth] HS256 secret length:", secret.length);
       decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as Record<string, unknown>;
     }
 
