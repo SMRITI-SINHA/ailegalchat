@@ -163,6 +163,9 @@ export function PremiumEditor({
   const [isRefining, setIsRefining] = useState(false);
   const [refineAction, setRefineAction] = useState<string>("");
   const [customRefinePrompt, setCustomRefinePrompt] = useState("");
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [selectedHtml, setSelectedHtml] = useState("");
+  const [refinedIsHtml, setRefinedIsHtml] = useState(false);
   const refineButtonRef = useRef<HTMLDivElement>(null);
 
   const saveSelection = () => {
@@ -313,6 +316,10 @@ export function PremiumEditor({
     }
     setSelectedText(text);
     setSelectedRange(range.cloneRange());
+    const htmlFragment = range.cloneContents();
+    const htmlDiv = document.createElement('div');
+    htmlDiv.appendChild(htmlFragment);
+    setSelectedHtml(htmlDiv.innerHTML);
 
     const rect = range.getBoundingClientRect();
     const editorRect = editorRef.current?.getBoundingClientRect();
@@ -343,12 +350,14 @@ export function PremiumEditor({
           text: selectedText,
           action,
           customPrompt,
+          selectedHtml,
         }),
       });
       if (!response.ok) throw new Error("Refine failed");
       const data = await response.json();
       setRefinedText(data.refined || "");
       setRefineNote(data.note || "");
+      setRefinedIsHtml(data.isHtml || false);
     } catch (error) {
       console.error("Refine error:", error);
       setRefinedText("");
@@ -364,24 +373,32 @@ export function PremiumEditor({
     try {
       if (!contentEditableRef.current.contains(selectedRange.startContainer) ||
           !contentEditableRef.current.contains(selectedRange.endContainer)) {
-        console.error("Selected range is no longer valid in the editor");
         return;
       }
 
+      const currentHtml = contentEditableRef.current.innerHTML;
+      setUndoStack(prev => [...prev, currentHtml]);
+
       selectedRange.deleteContents();
 
-      const lines = refinedText.split('\n').filter(l => l.length > 0);
-      const fragment = document.createDocumentFragment();
-      if (lines.length <= 1) {
-        fragment.appendChild(document.createTextNode(refinedText));
+      if (refinedIsHtml) {
+        const template = document.createElement('template');
+        template.innerHTML = refinedText;
+        selectedRange.insertNode(template.content.cloneNode(true) as DocumentFragment);
       } else {
-        lines.forEach((line, i) => {
-          const p = document.createElement('p');
-          p.textContent = line;
-          fragment.appendChild(p);
-        });
+        const lines = refinedText.split('\n').filter(l => l.length > 0);
+        const fragment = document.createDocumentFragment();
+        if (lines.length <= 1) {
+          fragment.appendChild(document.createTextNode(refinedText));
+        } else {
+          lines.forEach((line) => {
+            const p = document.createElement('p');
+            p.textContent = line;
+            fragment.appendChild(p);
+          });
+        }
+        selectedRange.insertNode(fragment);
       }
-      selectedRange.insertNode(fragment);
 
       isInternalUpdate.current = true;
       onContentChange(contentEditableRef.current.innerHTML || "");
@@ -389,11 +406,22 @@ export function PremiumEditor({
       console.error("Error applying refined text:", error);
     }
 
-    setShowRefinePanel(false);
     setRefinedText("");
     setRefineNote("");
-    setSelectedText("");
+    setRefinedIsHtml(false);
     setSelectedRange(null);
+    setSelectedText("");
+    setSelectedHtml("");
+    setCustomRefinePrompt("");
+  };
+
+  const handleRefineUndo = () => {
+    if (undoStack.length === 0 || !contentEditableRef.current) return;
+    const previousHtml = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    contentEditableRef.current.innerHTML = previousHtml;
+    isInternalUpdate.current = true;
+    onContentChange(previousHtml);
   };
 
   const handleDiscardRefine = () => {
@@ -402,7 +430,10 @@ export function PremiumEditor({
     setRefineNote("");
     setSelectedText("");
     setSelectedRange(null);
+    setSelectedHtml("");
     setCustomRefinePrompt("");
+    setRefinedIsHtml(false);
+    setUndoStack([]);
   };
 
   useEffect(() => {
@@ -1195,75 +1226,114 @@ export function PremiumEditor({
           </div>
 
           {showRefinePanel && (
-            <div className="w-[360px] min-w-[320px] border-l bg-background flex flex-col shrink-0 sticky top-0 h-screen overflow-hidden" data-testid="refine-panel">
-              <div className="flex items-center gap-2 justify-between px-4 py-3 border-b bg-muted/30">
+            <div className="w-[300px] min-w-[260px] border-l bg-background flex flex-col shrink-0 sticky top-0 h-screen overflow-hidden" data-testid="refine-panel">
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-3 py-2.5 border-b bg-muted/30 shrink-0">
                 <div className="flex items-center gap-2">
-                  <Wand2 className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-sm">Refine</span>
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  <span className="font-semibold text-sm">AI Refine</span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDiscardRefine} data-testid="button-refine-close">
-                  <X className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleDiscardRefine} data-testid="button-refine-close">
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
 
-              <div className="px-4 py-3 border-b shrink-0">
-                <p className="text-xs text-muted-foreground mb-2">Quick actions</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`text-xs gap-1 ${refineAction === "concise" ? "border-primary" : ""}`}
-                    onClick={() => handleRefine("concise")}
-                    disabled={isRefining}
-                    data-testid="refine-action-concise"
-                  >
-                    <Minimize2 className="h-3 w-3" />
-                    Make more concise
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`text-xs gap-1 ${refineAction === "formal" ? "border-primary" : ""}`}
-                    onClick={() => handleRefine("formal")}
-                    disabled={isRefining}
-                    data-testid="refine-action-formal"
-                  >
-                    <Scale className="h-3 w-3" />
-                    Make more formal
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`text-xs gap-1 ${refineAction === "persuasive" ? "border-primary" : ""}`}
-                    onClick={() => handleRefine("persuasive")}
-                    disabled={isRefining}
-                    data-testid="refine-action-persuasive"
-                  >
-                    <Zap className="h-3 w-3" />
-                    Make more persuasive
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`text-xs gap-1 ${refineAction === "judicial" ? "border-primary" : ""}`}
-                    onClick={() => handleRefine("judicial")}
-                    disabled={isRefining}
-                    data-testid="refine-action-judicial"
-                  >
-                    <Gavel className="h-3 w-3" />
-                    Judicial tone
-                  </Button>
+              {/* Quick action chips */}
+              <div className="px-3 pt-2.5 pb-2 border-b shrink-0">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Quick actions</p>
+                <div className="flex flex-wrap gap-1">
+                  {([
+                    { action: "concise", icon: Minimize2, label: "Concise" },
+                    { action: "formal", icon: Scale, label: "Formal" },
+                    { action: "persuasive", icon: Zap, label: "Persuasive" },
+                    { action: "judicial", icon: Gavel, label: "Judicial" },
+                  ] as const).map(({ action, icon: Icon, label }) => (
+                    <Button
+                      key={action}
+                      variant="outline"
+                      size="sm"
+                      className={`text-xs h-7 px-2 gap-1 ${refineAction === action && (isRefining || refinedText) ? "border-primary bg-primary/5" : ""}`}
+                      onClick={() => handleRefine(action)}
+                      disabled={isRefining}
+                      data-testid={`refine-action-${action}`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      {label}
+                    </Button>
+                  ))}
                 </div>
               </div>
 
-              <div className="px-4 py-3 border-b shrink-0">
-                <p className="text-xs text-muted-foreground mb-2">Custom instruction</p>
+              {/* Selected text preview — compact */}
+              <div className="px-3 py-2 border-b shrink-0">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Selected text</p>
+                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{selectedText}</p>
+              </div>
+
+              {/* Result area — fills remaining space */}
+              <div className="flex-1 px-3 py-2.5 overflow-auto min-h-0">
+                {isRefining ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <p className="text-xs text-muted-foreground">Thinking…</p>
+                  </div>
+                ) : refinedText ? (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Result</p>
+                    {refinedIsHtml ? (
+                      <div
+                        className="text-xs leading-relaxed p-2.5 rounded-md bg-primary/5 border border-primary/20"
+                        dangerouslySetInnerHTML={{ __html: refinedText }}
+                      />
+                    ) : (
+                      <Textarea
+                        value={refinedText}
+                        onChange={(e) => setRefinedText(e.target.value)}
+                        className="text-xs leading-relaxed min-h-[120px] resize-none bg-primary/5 border-primary/20"
+                        data-testid="textarea-refined-text"
+                      />
+                    )}
+                    {refineNote && (
+                      <div className="flex items-start gap-1.5 p-2 bg-muted/50 rounded-md">
+                        <MessageSquare className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{refineNote}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+                    <div className="p-3 rounded-full bg-muted/50">
+                      <Sparkles className="h-5 w-5 text-muted-foreground/50" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Transform selected text</p>
+                      <p className="text-[11px] text-muted-foreground/70 leading-relaxed">Use quick actions or type any instruction below</p>
+                    </div>
+                    <div className="w-full space-y-0.5">
+                      <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide font-medium mb-1">Try asking</p>
+                      {["Convert to bullet points", "Remove the heading", "Make bold and italic", "Summarize in 2 lines", "Simplify for layperson"].map(example => (
+                        <button
+                          key={example}
+                          className="w-full text-left text-[11px] text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors"
+                          onClick={() => setCustomRefinePrompt(example)}
+                        >
+                          → {example}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat-like prompt input */}
+              <div className="px-3 py-2.5 border-t shrink-0">
                 <div className="flex gap-1.5">
                   <Input
                     value={customRefinePrompt}
                     onChange={(e) => setCustomRefinePrompt(e.target.value)}
-                    placeholder="e.g., Simplify for a layperson..."
-                    className="text-xs h-8"
+                    placeholder="Ask anything… e.g. convert to bullets"
+                    className="text-xs h-8 flex-1"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && customRefinePrompt.trim()) {
                         handleRefine("custom", customRefinePrompt.trim());
@@ -1273,11 +1343,9 @@ export function PremiumEditor({
                   />
                   <Button
                     size="sm"
-                    className="h-8 shrink-0"
+                    className="h-8 w-8 shrink-0 p-0"
                     onClick={() => {
-                      if (customRefinePrompt.trim()) {
-                        handleRefine("custom", customRefinePrompt.trim());
-                      }
+                      if (customRefinePrompt.trim()) handleRefine("custom", customRefinePrompt.trim());
                     }}
                     disabled={!customRefinePrompt.trim() || isRefining}
                     data-testid="button-refine-custom-submit"
@@ -1287,66 +1355,30 @@ export function PremiumEditor({
                 </div>
               </div>
 
-              <div className="px-4 py-3 border-b shrink-0">
-                <p className="text-xs text-muted-foreground mb-1.5">Original text</p>
-                <div className="bg-muted/50 rounded-md p-3 max-h-[120px] overflow-auto">
-                  <p className="text-xs leading-relaxed whitespace-pre-wrap">{selectedText}</p>
-                </div>
+              {/* Undo + Apply — always visible at bottom */}
+              <div className="flex gap-2 px-3 py-2.5 border-t shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 h-8 text-xs"
+                  onClick={handleRefineUndo}
+                  disabled={undoStack.length === 0}
+                  data-testid="button-refine-undo"
+                >
+                  <Undo2 className="h-3.5 w-3.5 mr-1" />
+                  Undo{undoStack.length > 0 ? ` (${undoStack.length})` : ""}
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1 h-8 text-xs"
+                  onClick={handleApplyRefine}
+                  disabled={!refinedText || isRefining}
+                  data-testid="button-refine-apply"
+                >
+                  <Check className="h-3.5 w-3.5 mr-1" />
+                  Apply
+                </Button>
               </div>
-
-              <div className="flex-1 px-4 py-3 overflow-auto min-h-0">
-                <p className="text-xs text-muted-foreground mb-1.5">Refined version</p>
-                {isRefining ? (
-                  <div className="flex flex-col items-center justify-center py-8 gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    <p className="text-xs text-muted-foreground">Refining your text...</p>
-                  </div>
-                ) : refinedText ? (
-                  <div className="space-y-3">
-                    <Textarea
-                      value={refinedText}
-                      onChange={(e) => setRefinedText(e.target.value)}
-                      className="text-xs leading-relaxed min-h-[150px] resize-none bg-primary/5 border-primary/20"
-                      data-testid="textarea-refined-text"
-                    />
-                    {refineNote && (
-                      <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-md">
-                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                        <p className="text-xs text-muted-foreground leading-relaxed">{refineNote}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
-                    <Wand2 className="h-5 w-5 text-muted-foreground/50" />
-                    <p className="text-xs text-muted-foreground">
-                      Choose a quick action or write a custom instruction to refine the selected text.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {refinedText && !isRefining && (
-                <div className="flex gap-2 px-4 py-3 border-t shrink-0">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={handleDiscardRefine}
-                    data-testid="button-refine-discard"
-                  >
-                    <X className="h-4 w-4 mr-1.5" />
-                    Discard
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={handleApplyRefine}
-                    data-testid="button-refine-apply"
-                  >
-                    <Check className="h-4 w-4 mr-1.5" />
-                    Apply
-                  </Button>
-                </div>
-              )}
             </div>
           )}
         </div>

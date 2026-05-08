@@ -2802,6 +2802,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
         text: z.string().min(1, "Text is required").max(80000, "Input too long — please shorten your text"),
         action: z.string().optional(),
         customPrompt: z.string().optional(),
+        selectedHtml: z.string().optional(),
       });
       const parsed = refineSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -2811,53 +2812,53 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
         }
         return res.status(400).json({ error: firstError.message });
       }
-      const { text, action, customPrompt } = parsed.data;
+      const { text, action, customPrompt, selectedHtml } = parsed.data;
 
       let refinementInstruction = "";
       switch (action) {
         case "concise":
-          refinementInstruction = "Make the text more concise while preserving all legal meaning. Remove redundancy and tighten the language.";
+          refinementInstruction = "Make the text more concise while preserving all legal meaning. Remove redundancy and tighten the language. Return plain text (isHtml: false).";
           break;
         case "formal":
-          refinementInstruction = "Make the text more formal and professional. Use elevated legal register appropriate for court filings.";
+          refinementInstruction = "Make the text more formal and professional. Use elevated legal register appropriate for court filings. Return plain text (isHtml: false).";
           break;
         case "persuasive":
-          refinementInstruction = "Make the text more persuasive and compelling while maintaining legal accuracy. Strengthen the argumentation.";
+          refinementInstruction = "Make the text more persuasive and compelling while maintaining legal accuracy. Strengthen the argumentation. Return plain text (isHtml: false).";
           break;
         case "judicial":
-          refinementInstruction = "Rewrite the text in a judicial tone, as if written by a judge in a court order or judgment. Use measured, authoritative language.";
+          refinementInstruction = "Rewrite the text in a judicial tone, as if written by a judge in a court order or judgment. Use measured, authoritative language. Return plain text (isHtml: false).";
           break;
         case "custom":
           refinementInstruction = customPrompt || "Improve clarity and legal precision.";
           break;
         default:
-          refinementInstruction = "Improve clarity, structure, and professional tone.";
+          refinementInstruction = "Improve clarity, structure, and professional tone. Return plain text (isHtml: false).";
       }
 
-      const systemPrompt = `You are a senior Indian legal drafting assistant.
+      const htmlContext = selectedHtml ? `\nCurrent HTML format of the selection:\n${selectedHtml}\n` : "";
 
-Task:
-Refine the selected text provided by the user.
+      const systemPrompt = `You are an AI writing assistant embedded in a legal document editor. You help users transform and refine selected text — think of yourself as ChatGPT for the selected text.
 
-Rules:
-- Do not change legal meaning.
-- Improve clarity, structure, and professional tone.
-- Use formal, court-appropriate Indian legal language.
-- Do not add new facts or law.
-- Do not hallucinate statutes or cases.
-- Preserve the original document structure, headings, and sequence if the text is a full document.
-- Do not use markdown formatting - output clean text without ** symbols or # headers.
+You can perform ANY transformation requested, including:
+- Wording improvements: concise, formal, persuasive, clearer, simpler, expand
+- Format changes: convert paragraph to bullet list, numbered list, remove a heading, make text bold/italic, combine or split paragraphs, convert to table
+- Structural changes: add/remove headings, convert between formats, reorder content${htmlContext}
 
-Specific refinement instruction: ${refinementInstruction}
+Specific instruction: ${refinementInstruction}
 
-Output format:
-Return ONLY a JSON object with exactly these two fields:
+Output rules:
+- For format/structure changes (bullet points, numbered list, headings, bold, italic, tables, removing heading tags etc.): return valid HTML in "refined", set "isHtml": true. Use proper HTML tags: <ul><li>, <ol><li>, <strong>, <em>, <h2>, <h3>, <p>, <table> etc.
+- For wording/tone changes (concise, formal, persuasive, rewording, clarity): return plain text in "refined", set "isHtml": false
+- Do NOT use markdown — use proper HTML tags only when isHtml is true
+- Do not add new facts or make up legal citations
+- Preserve legal meaning unless explicitly asked to change it
+
+Return ONLY a valid JSON object, no other text:
 {
-  "refined": "The refined version of the text here",
-  "note": "Brief 1-2 line note explaining the improvement"
-}
-
-Do not include any other text outside the JSON object.`;
+  "refined": "the transformed text or HTML here",
+  "isHtml": false,
+  "note": "Brief 1-2 line explanation of what was done"
+}`;
 
       const response = await callAI(openai, {
         model: MODEL_TIERS.mini,
@@ -2877,6 +2878,7 @@ Do not include any other text outside the JSON object.`;
           await recordAIUsage(req);
           return res.json({
             refined: parsed.refined || raw,
+            isHtml: parsed.isHtml || false,
             note: parsed.note || "",
           });
         }
@@ -2885,7 +2887,7 @@ Do not include any other text outside the JSON object.`;
       }
 
       await recordAIUsage(req);
-      res.json({ refined: raw, note: "" });
+      res.json({ refined: raw, isHtml: false, note: "" });
     } catch (error) {
       console.error("Error refining text:", error);
       res.status(500).json({ error: "Failed to refine text" });
