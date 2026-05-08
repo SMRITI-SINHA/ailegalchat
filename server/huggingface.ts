@@ -137,7 +137,7 @@ export class InLegalBERTService {
           const errorData = await response.json().catch(() => ({}));
           const waitTime = (errorData as any)?.estimated_time || 20;
           console.log(`[InLegalBERT] Model loading, waiting ${Math.ceil(waitTime)}s...`);
-          await new Promise(r => setTimeout(r, Math.min(waitTime * 1000, 30000)));
+          await new Promise(r => setTimeout(r, Math.min(waitTime * 1000, 5000)));
           continue;
         }
 
