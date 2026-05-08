@@ -1195,7 +1195,7 @@ export function PremiumEditor({
           </div>
 
           {showRefinePanel && (
-            <div className="w-[360px] min-w-[320px] border-l bg-background flex flex-col shrink-0" data-testid="refine-panel">
+            <div className="w-[360px] min-w-[320px] border-l bg-background flex flex-col shrink-0 sticky top-0 h-screen overflow-hidden" data-testid="refine-panel">
               <div className="flex items-center gap-2 justify-between px-4 py-3 border-b bg-muted/30">
                 <div className="flex items-center gap-2">
                   <Wand2 className="h-4 w-4 text-primary" />
