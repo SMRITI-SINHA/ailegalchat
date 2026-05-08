@@ -236,7 +236,7 @@ export class InLegalBERTService {
       let bestLabel = "Facts";
       let bestScore = -1;
 
-      for (const [label, labelEmb] of this.labelEmbeddingsCache.entries()) {
+      for (const [label, labelEmb] of Array.from(this.labelEmbeddingsCache.entries())) {
         const sim = this.cosineSimilarity(paraEmbedding, labelEmb);
         const normalized = Math.max(0, Math.min(1, (sim + 1) / 2));
         if (normalized > bestScore) {

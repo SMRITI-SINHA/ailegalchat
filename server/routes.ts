@@ -18,7 +18,7 @@ async function getPDFParseClass() {
   return PDFParseClass;
 }
 import { storage } from "./storage";
-import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema, savedCases, embedUsage } from "@shared/schema";
+import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema, savedCases, embedUsage, type IndianKanoonResult } from "@shared/schema";
 import { db, getDb, withUserContext } from "./db";
 import { eq, desc, and } from "drizzle-orm";
 import { indianKanoon } from "./indian-kanoon";
@@ -1843,7 +1843,7 @@ Generate the requested content now:`;
 
       // Cache Indian Kanoon results for 24h — same query always returns same statutes/cases
       const kanoonCacheKey = { query: query.toLowerCase().trim(), page };
-      let results = aiCache.get<typeof results>("kanoon-search", kanoonCacheKey) ?? null;
+      let results: IndianKanoonResult[] | null = aiCache.get<IndianKanoonResult[]>("kanoon-search", kanoonCacheKey) ?? null;
       if (!results) {
         results = await indianKanoon.search(query, page);
         if (results?.length) aiCache.set("kanoon-search", kanoonCacheKey, results);
@@ -1862,7 +1862,7 @@ Generate the requested content now:`;
             }));
             const ranked = await inLegalBERT.rankByRelevance(query, docsToRank);
             results = ranked.map(rd => {
-              const original = results.find(r => r.docId === rd.id);
+              const original = results!.find(r => r.docId === rd.id);
               return original ? { ...original, relevanceScore: rd.relevanceScore } : original!;
             }).filter(Boolean);
           }

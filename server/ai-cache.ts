@@ -80,7 +80,7 @@ class AICache {
   /** Remove expired entries */
   private sweep(): void {
     const now = Date.now();
-    for (const [key, entry] of this.store) {
+    for (const [key, entry] of Array.from(this.store)) {
       if (now > entry.expiresAt) this.store.delete(key);
     }
   }

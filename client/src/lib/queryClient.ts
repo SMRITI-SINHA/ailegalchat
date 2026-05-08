@@ -38,7 +38,7 @@ const TRUSTED_PARENT_ORIGINS: Set<string> = (() => {
     return new Set<string>();
   }
   const origins = new Set(raw.split(",").map((o) => o.trim()).filter(Boolean));
-  console.log("[chakshi:token] Trusted parent origins:", [...origins]);
+  console.log("[chakshi:token] Trusted parent origins:", Array.from(origins));
   return origins;
 })();
 
@@ -107,7 +107,7 @@ window.addEventListener("message", (event) => {
 
     if (!isOriginTrusted(event.origin)) {
       console.warn("[chakshi:token] ❌ REJECTED — origin not in trusted list:", event.origin);
-      console.warn("[chakshi:token]    Trusted origins are:", [...TRUSTED_PARENT_ORIGINS]);
+      console.warn("[chakshi:token]    Trusted origins are:", Array.from(TRUSTED_PARENT_ORIGINS));
       return;
     }
 
@@ -245,7 +245,7 @@ export async function apiRequest(
   url: string,
   data?: unknown,
 ): Promise<Response> {
-  const contentHeaders = data ? { "Content-Type": "application/json" } : {};
+  const contentHeaders: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
   const res = await fetch(url, {
     method,
     headers: authHeaders(contentHeaders),

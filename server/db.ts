@@ -32,7 +32,7 @@ export const requestClientStorage = new AsyncLocalStorage<pg.PoolClient>();
 export function getDb() {
   const client = requestClientStorage.getStore();
   if (client) {
-    return drizzle(client as pg.ClientBase, { schema });
+    return drizzle(client as unknown as pg.Client, { schema });
   }
   return db;
 }
