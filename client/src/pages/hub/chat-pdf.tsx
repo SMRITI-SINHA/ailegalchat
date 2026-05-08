@@ -83,6 +83,17 @@ function parseAndCleanContent(raw: string): { clean: string; pageRefs: PageRef[]
 }
 
 function HighlightedPageText({ text, highlight }: { text: string; highlight: string }) {
+  if (!text) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <FileText className="h-10 w-10 text-muted-foreground/25 mb-3" />
+        <p className="text-sm text-muted-foreground">No text content for this page</p>
+        <p className="text-xs text-muted-foreground/50 mt-1">
+          This may be a scanned image — the original file is preserved above.
+        </p>
+      </div>
+    );
+  }
   if (!highlight || highlight.length < 4) {
     return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text}</pre>;
   }
@@ -821,13 +832,14 @@ export default function ChatWithPDFPage() {
 
   const CHARS_PER_PAGE = 3000;
   const docContent = uploadedDocs[0]?.content || "";
+  const docTotalPages = uploadedDocs[0]?.pages || 1;
   const docPages = docContent
     ? Array.from(
         { length: Math.max(1, Math.ceil(docContent.length / CHARS_PER_PAGE)) },
         (_, i) => docContent.slice(i * CHARS_PER_PAGE, (i + 1) * CHARS_PER_PAGE)
       )
-    : [];
-  const hasDocViewer = docPages.length > 0 && !!docContent;
+    : Array.from({ length: Math.max(1, docTotalPages) }, () => "");
+  const hasDocViewer = uploadedDocs.length > 0;
 
   if (viewMode === "list") {
     return (
@@ -1261,7 +1273,7 @@ export default function ChatWithPDFPage() {
                     </Button>
                   </div>
                 </div>
-                {highlightText && (
+                {highlightText && !!docPages[activeDocPage - 1] && (
                   <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/40 flex items-center justify-between shrink-0">
                     <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
                       Highlighted text referenced in the answer
