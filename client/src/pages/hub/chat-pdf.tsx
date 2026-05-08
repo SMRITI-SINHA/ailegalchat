@@ -36,11 +36,76 @@ import {
   X,
   Save,
   Loader2,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
 import type { ChatSession, ModelTier, Citation } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+
+type RightPanel = "doc" | "nyaya" | "notes";
+
+interface PageRef {
+  page: number;
+  refText?: string;
+}
+
+function parseAndCleanContent(raw: string): { clean: string; pageRefs: PageRef[] } {
+  const refs: PageRef[] = [];
+  const seen = new Set<number>();
+
+  let clean = raw.replace(
+    /([^.!?\n]{0,160}?)\s*\[Pages?\s*(\d+)(?:\s*[-–]\s*(\d+))?\]/gi,
+    (_, ctx, p1, p2) => {
+      const start = parseInt(p1);
+      const end = p2 ? parseInt(p2) : start;
+      const refText = (ctx || "").trim().slice(-90);
+      for (let p = start; p <= Math.min(end, 9999); p++) {
+        if (!seen.has(p)) { seen.add(p); refs.push({ page: p, refText }); }
+      }
+      return ctx || "";
+    }
+  );
+
+  clean = clean.replace(/\(Pages?\s*(\d+)(?:\s*[-–]\s*(\d+))?\)/gi, (_, p1, p2) => {
+    const start = parseInt(p1);
+    const end = p2 ? parseInt(p2) : start;
+    for (let p = start; p <= Math.min(end, 9999); p++) {
+      if (!seen.has(p)) { seen.add(p); refs.push({ page: p }); }
+    }
+    return "";
+  });
+
+  refs.sort((a, b) => a.page - b.page);
+  return { clean: clean.replace(/\s{2,}/g, " ").trim(), pageRefs: refs };
+}
+
+function HighlightedPageText({ text, highlight }: { text: string; highlight: string }) {
+  if (!highlight || highlight.length < 4) {
+    return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text}</pre>;
+  }
+  const search = highlight.slice(0, 60);
+  const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let parts: string[];
+  try {
+    parts = text.split(new RegExp(`(${escaped})`, "gi"));
+  } catch {
+    return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text}</pre>;
+  }
+  return (
+    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+      {parts.map((part, i) =>
+        part.toLowerCase() === search.toLowerCase() ? (
+          <mark key={i} className="bg-amber-200 dark:bg-amber-700/60 text-inherit rounded-sm px-0.5 py-px">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </pre>
+  );
+}
 
 function stripMarkdown(text: string): string {
   return text
@@ -59,6 +124,7 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  pageRefs?: PageRef[];
 }
 
 interface NyayaMessage {
@@ -107,11 +173,13 @@ export default function ChatWithPDFPage() {
   const [nyayaMessages, setNyayaMessages] = useState<NyayaMessage[]>([]);
   const [nyayaInput, setNyayaInput] = useState("");
   const [nyayaLoading, setNyayaLoading] = useState(false);
-  const [nyayaExpanded, setNyayaExpanded] = useState(false);
   const [nyayaSessionId, setNyayaSessionId] = useState<string | null>(null);
   const [selectionPosition, setSelectionPosition] = useState<SelectionPosition | null>(null);
-  
-  const [showNotesPanel, setShowNotesPanel] = useState(false);
+
+  const [rightPanel, setRightPanel] = useState<RightPanel>("doc");
+  const [activeDocPage, setActiveDocPage] = useState(1);
+  const [highlightText, setHighlightText] = useState("");
+
   const [notes, setNotes] = useState<PdfNote[]>([]);
   const [newNote, setNewNote] = useState("");
   const [notesTab, setNotesTab] = useState<"write" | "saved">("write");
@@ -275,7 +343,7 @@ export default function ChatWithPDFPage() {
       : `Regarding this text from my document: "${pendingSelectedText}"\n\nPlease provide legal analysis and explanation.`;
     
     setShowNyayaPromptDialog(false);
-    setNyayaExpanded(true);
+    setRightPanel("nyaya");
     setNyayaInput("");
 
     let sessionId = nyayaSessionId;
@@ -710,6 +778,11 @@ export default function ChatWithPDFPage() {
         }
       }
       
+      const { clean, pageRefs } = parseAndCleanContent(fullContent);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(clean), pageRefs } : m))
+      );
+
       if (currentSessionId && fullContent) {
         fetch("/api/chat/messages", {
           method: "POST",
@@ -745,6 +818,16 @@ export default function ChatWithPDFPage() {
     { title: "Issue Tagging", description: "AI-powered legal issue identification", icon: ListChecks },
     { title: "Evidence Finder", description: "Locate key evidence across documents", icon: Lightbulb },
   ];
+
+  const CHARS_PER_PAGE = 3000;
+  const docContent = uploadedDocs[0]?.content || "";
+  const docPages = docContent
+    ? Array.from(
+        { length: Math.max(1, Math.ceil(docContent.length / CHARS_PER_PAGE)) },
+        (_, i) => docContent.slice(i * CHARS_PER_PAGE, (i + 1) * CHARS_PER_PAGE)
+      )
+    : [];
+  const hasDocViewer = docPages.length > 0 && !!docContent;
 
   if (viewMode === "list") {
     return (
@@ -948,6 +1031,7 @@ export default function ChatWithPDFPage() {
 
   return (
     <div className="h-full flex flex-col">
+      {/* ── Top bar ── */}
       <div className="p-3 border-b flex items-center justify-between gap-4 flex-wrap bg-background">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setViewMode("list")} data-testid="button-back">
@@ -958,52 +1042,70 @@ export default function ChatWithPDFPage() {
           </div>
           <div>
             <h1 className="font-semibold text-sm truncate max-w-[200px]" title={currentDocName}>
-              {currentDocName ? (currentDocName.length > 30 ? currentDocName.slice(0, 30) + '...' : currentDocName) : "DocuChat"}
+              {currentDocName ? (currentDocName.length > 30 ? currentDocName.slice(0, 30) + "…" : currentDocName) : "DocuChat"}
             </h1>
             {uploadedDocs.length > 1 && (
               <p className="text-xs text-muted-foreground">+{uploadedDocs.length - 1} more documents</p>
             )}
           </div>
           {uploadedDocs.length > 0 && (
-            <Badge variant="secondary" className="text-[10px]">{uploadedDocs.length} documents</Badge>
+            <Badge variant="secondary" className="text-[10px]">{uploadedDocs.length} doc{uploadedDocs.length > 1 ? "s" : ""}</Badge>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant={nyayaExpanded ? "default" : "outline"}
+
+        <div className="flex gap-1.5">
+          {hasDocViewer && (
+            <Button
+              variant={rightPanel === "doc" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setRightPanel("doc")}
+              data-testid="button-toggle-doc"
+            >
+              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+              Document
+            </Button>
+          )}
+          <Button
+            variant={rightPanel === "nyaya" ? "default" : "outline"}
             size="sm"
-            onClick={() => setNyayaExpanded(!nyayaExpanded)}
+            onClick={() => setRightPanel(rightPanel === "nyaya" ? "doc" : "nyaya")}
             data-testid="button-toggle-nyaya"
-            className={nyayaExpanded ? "bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-600 border-amber-500/50 shadow-md" : "border-amber-600/30 text-amber-800 hover:bg-amber-50 hover:border-amber-600/50"}
+            className={
+              rightPanel === "nyaya"
+                ? "bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-600 border-amber-500/50 shadow-md"
+                : "border-amber-600/30 text-amber-800 hover:bg-amber-50 hover:border-amber-600/50 dark:text-amber-400 dark:hover:bg-amber-950/30"
+            }
           >
-            <Scale className="mr-2 h-4 w-4" />
+            <Scale className="mr-1.5 h-3.5 w-3.5" />
             Nyaya AI
             {nyayaMessages.length > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px]">{nyayaMessages.length}</Badge>
             )}
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant={rightPanel === "notes" ? "default" : "outline"}
             size="sm"
-            onClick={() => setShowNotesPanel(!showNotesPanel)}
+            onClick={() => setRightPanel(rightPanel === "notes" ? "doc" : "notes")}
             data-testid="button-toggle-notes"
           >
-            <FileText className="mr-2 h-4 w-4" />
+            <FileText className="mr-1.5 h-3.5 w-3.5" />
             Notes
           </Button>
         </div>
       </div>
 
+      {/* ── Main area: chat left + right panel ── */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 flex flex-col relative" ref={chatContainerRef}>
+
+        {/* LEFT — Chat */}
+        <div
+          className={`flex flex-col overflow-hidden relative ${hasDocViewer || rightPanel !== "doc" ? "w-[42%] border-r" : "flex-1"}`}
+          ref={chatContainerRef}
+        >
           {selectionPosition && (
             <div
               className="absolute z-50 animate-in fade-in duration-150"
-              style={{
-                left: `${selectionPosition.x}px`,
-                top: `${selectionPosition.y}px`,
-                transform: "translateX(-50%)",
-              }}
+              style={{ left: `${selectionPosition.x}px`, top: `${selectionPosition.y}px`, transform: "translateX(-50%)" }}
             >
               <Button
                 size="sm"
@@ -1031,17 +1133,14 @@ export default function ChatWithPDFPage() {
                     Tip: Select any text in responses and click "Ask Nyaya AI" for legal analysis
                   </p>
                 </div>
-                
                 <div className="grid grid-cols-2 gap-3 max-w-lg">
                   {quickActions.map((action) => (
-                    <Button 
-                      key={action.label} 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      key={action.label}
+                      variant="outline"
+                      size="sm"
                       className="justify-start h-auto py-3 px-4"
-                      onClick={() => {
-                        setInput(action.label);
-                      }}
+                      onClick={() => setInput(action.label)}
                       data-testid={`button-suggestion-${action.label.toLowerCase().replace(/\s+/g, "-")}`}
                     >
                       <action.icon className="mr-2 h-4 w-4 text-primary" />
@@ -1056,24 +1155,41 @@ export default function ChatWithPDFPage() {
             ) : (
               <div className="space-y-4 max-w-3xl mx-auto">
                 {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
+                  <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
-                      className={`max-w-[80%] p-3 rounded-lg ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
+                      className={`max-w-[85%] p-3 rounded-lg ${
+                        msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                       }`}
                     >
                       {msg.role === "user" ? (
                         <p className="text-sm">{msg.content}</p>
                       ) : (
-                        <div 
-                          className="text-sm prose prose-sm dark:prose-invert max-w-none"
-                          dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
-                        />
+                        <>
+                          <div
+                            className="text-sm prose prose-sm dark:prose-invert max-w-none"
+                            dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
+                          />
+                          {msg.pageRefs && msg.pageRefs.length > 0 && (
+                            <div className="mt-2.5 pt-2 border-t border-border/40 flex flex-wrap gap-1.5 items-center">
+                              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">References:</span>
+                              {msg.pageRefs.map((ref) => (
+                                <button
+                                  key={ref.page}
+                                  onClick={() => {
+                                    setActiveDocPage(ref.page);
+                                    setHighlightText(ref.refText || "");
+                                    setRightPanel("doc");
+                                  }}
+                                  data-testid={`button-page-ref-${ref.page}`}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-colors cursor-pointer"
+                                >
+                                  <BookOpen className="h-2.5 w-2.5" />
+                                  pg.{ref.page}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -1091,9 +1207,9 @@ export default function ChatWithPDFPage() {
           </ScrollArea>
 
           <div className="p-4 border-t bg-background">
-            <div className="flex gap-2 max-w-3xl mx-auto">
+            <div className="flex gap-2">
               <Input
-                placeholder="Ask about your documents..."
+                placeholder="Ask about your documents…"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -1106,207 +1222,250 @@ export default function ChatWithPDFPage() {
           </div>
         </div>
 
-        {showNotesPanel && (
-          <div className="w-80 border-l flex flex-col bg-background">
-            <div className="p-3 border-b flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                <span className="font-medium text-sm">Notes</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setShowNotesPanel(false)}
-                data-testid="button-close-notes"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-            
-            <div className="flex border-b">
-              <button
-                className={`flex-1 py-2 text-xs font-medium ${notesTab === "write" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-                onClick={() => setNotesTab("write")}
-              >
-                Write
-              </button>
-              <button
-                className={`flex-1 py-2 text-xs font-medium ${notesTab === "saved" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-                onClick={() => setNotesTab("saved")}
-              >
-                Saved ({notes.length})
-              </button>
-            </div>
+        {/* RIGHT — tabbed panel (Document / Nyaya AI / Notes) */}
+        {(hasDocViewer || rightPanel === "nyaya" || rightPanel === "notes") && (
+          <div className={`flex flex-col overflow-hidden ${hasDocViewer ? "flex-1" : "w-80"}`}>
 
-            <ScrollArea className="flex-1 p-3">
-              {notesTab === "write" ? (
-                <div className="space-y-3">
-                  <textarea
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    placeholder="Write your notes here..."
-                    className="w-full h-48 p-3 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background text-foreground"
-                    data-testid="textarea-note"
-                  />
-                  <Button 
-                    className="w-full" 
-                    size="sm"
-                    onClick={handleSaveNote}
-                    disabled={!newNote.trim()}
-                    data-testid="button-save-note"
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Note
-                  </Button>
+            {/* ── Document viewer ── */}
+            {rightPanel === "doc" && hasDocViewer && (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="p-3 border-b flex items-center justify-between bg-muted/20 shrink-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <BookOpen className="h-4 w-4 text-primary shrink-0" />
+                    <span className="text-sm font-medium truncate">{uploadedDocs[0]?.name || "Document"}</span>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{docPages.length} pg</Badge>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      disabled={activeDocPage <= 1}
+                      onClick={() => { setActiveDocPage((p) => Math.max(1, p - 1)); setHighlightText(""); }}
+                      data-testid="button-prev-page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground min-w-[52px] text-center tabular-nums">
+                      {activeDocPage} / {docPages.length}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      disabled={activeDocPage >= docPages.length}
+                      onClick={() => { setActiveDocPage((p) => Math.min(docPages.length, p + 1)); setHighlightText(""); }}
+                      data-testid="button-next-page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {notes.length === 0 ? (
-                    <div className="text-center py-8">
-                      <FileText className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                      <p className="text-xs text-muted-foreground">No saved notes yet</p>
-                    </div>
-                  ) : (
-                    notes.map((note) => (
-                      <Card key={note.id} className="border-0 shadow-sm">
-                        <CardContent className="p-3">
-                          <p className="text-xs whitespace-pre-wrap mb-2">{note.content}</p>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-muted-foreground">
-                              {formatDistanceToNow(note.createdAt, { addSuffix: true })}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 text-destructive"
-                              onClick={() => handleDeleteNote(note.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
+                {highlightText && (
+                  <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/40 flex items-center justify-between shrink-0">
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                      Highlighted text referenced in the answer
+                    </span>
+                    <button
+                      onClick={() => setHighlightText("")}
+                      className="text-[10px] text-amber-600 hover:text-amber-800 underline"
+                      data-testid="button-clear-highlight"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+                <ScrollArea className="flex-1 p-5">
+                  <div className="text-foreground leading-relaxed">
+                    <HighlightedPageText
+                      text={docPages[activeDocPage - 1] || ""}
+                      highlight={highlightText}
+                    />
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* ── Nyaya AI panel ── */}
+            {rightPanel === "nyaya" && (
+              <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-b from-amber-50/80 via-orange-50/30 to-background dark:from-amber-950/20 dark:via-background dark:to-background">
+                <div className="p-3 border-b border-amber-200/50 flex items-center gap-2 bg-gradient-to-r from-amber-100/80 via-yellow-50/60 to-orange-50/40 dark:from-amber-950/40 dark:via-background dark:to-background shrink-0">
+                  <div className="p-1.5 rounded-md bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-500 shadow-sm shadow-amber-400/30">
+                    <Scale className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <span className="font-medium text-sm text-amber-900 dark:text-amber-400">Nyaya AI</span>
+                  {nyayaMessages.length > 0 && (
+                    <Badge variant="secondary" className="text-[10px]">{nyayaMessages.length} messages</Badge>
                   )}
                 </div>
-              )}
-            </ScrollArea>
-          </div>
-        )}
 
-        {nyayaExpanded && (
-          <div className="w-80 border-l border-amber-200/50 flex flex-col bg-gradient-to-b from-amber-50/80 via-orange-50/30 to-background">
-            <div className="p-3 border-b border-amber-200/50 flex items-center justify-between bg-gradient-to-r from-amber-100/80 via-yellow-50/60 to-orange-50/40">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-gradient-to-br from-amber-600 via-amber-500 to-yellow-500 shadow-sm shadow-amber-400/30">
-                  <Scale className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="font-medium text-sm text-amber-900">Nyaya AI</span>
-                {nyayaMessages.length > 0 && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    {nyayaMessages.length} messages
-                  </Badge>
-                )}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setNyayaExpanded(false)}
-                data-testid="button-close-nyaya"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-
-            <ScrollArea className="flex-1 p-3">
-              {nyayaMessages.length === 0 ? (
-                <div className="h-48 flex flex-col items-center justify-center text-center p-4">
-                  <Scale className="h-8 w-8 text-muted-foreground/30 mb-3" />
-                  <p className="text-xs text-muted-foreground">
-                    Select text from the document chat and click "Ask Nyaya AI" for legal analysis
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {nyayaMessages.map((msg) => (
-                    <div key={msg.id}>
-                      {msg.role === "user" ? (
-                        <div className="bg-primary/10 p-2.5 rounded-md">
-                          {msg.selectedText && (
-                            <div className="text-[10px] text-muted-foreground mb-1.5 pb-1.5 border-b border-muted">
-                              Selected: "{msg.selectedText.substring(0, 60)}..."
+                <ScrollArea className="flex-1 p-3">
+                  {nyayaMessages.length === 0 ? (
+                    <div className="h-48 flex flex-col items-center justify-center text-center p-4">
+                      <Scale className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                      <p className="text-xs text-muted-foreground">
+                        Select text from the chat and click "Ask Nyaya AI" for legal analysis
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {nyayaMessages.map((msg) => (
+                        <div key={msg.id}>
+                          {msg.role === "user" ? (
+                            <div className="bg-primary/10 p-2.5 rounded-md">
+                              {msg.selectedText && (
+                                <div className="text-[10px] text-muted-foreground mb-1.5 pb-1.5 border-b border-muted">
+                                  Selected: "{msg.selectedText.substring(0, 60)}…"
+                                </div>
+                              )}
+                              <p className="text-xs">{msg.content}</p>
                             </div>
+                          ) : (
+                            <Card className="border-0 shadow-sm">
+                              <CardContent className="p-2.5">
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <Scale className="h-3 w-3 text-primary" />
+                                  <span className="text-[10px] font-medium">Nyaya AI</span>
+                                  {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
+                                </div>
+                                <div
+                                  className="text-xs leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                                  dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
+                                />
+                                {msg.citations && msg.citations.length > 0 && (
+                                  <div className="mt-2 pt-2 border-t space-y-1">
+                                    <h4 className="text-[10px] font-medium text-muted-foreground">Sources</h4>
+                                    {msg.citations.map((cite) => (
+                                      <CitationCard key={cite.id} citation={cite} />
+                                    ))}
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
                           )}
-                          <p className="text-xs">{msg.content}</p>
                         </div>
-                      ) : (
+                      ))}
+                      {nyayaLoading && (
                         <Card className="border-0 shadow-sm">
                           <CardContent className="p-2.5">
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <Scale className="h-3 w-3 text-primary" />
-                              <span className="text-[10px] font-medium">Nyaya AI</span>
-                              {msg.confidence && <ConfidenceIndicator value={msg.confidence} showLabel={false} />}
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="h-3 w-3 animate-pulse text-primary" />
+                              <span className="text-xs text-muted-foreground">Thinking…</span>
                             </div>
-                            <div 
-                              className="text-xs leading-relaxed prose prose-sm dark:prose-invert max-w-none"
-                              dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
-                            />
-                            {msg.citations && msg.citations.length > 0 && (
-                              <div className="mt-2 pt-2 border-t space-y-1">
-                                <h4 className="text-[10px] font-medium text-muted-foreground">Sources</h4>
-                                {msg.citations.map((cite) => (
-                                  <CitationCard key={cite.id} citation={cite} />
-                                ))}
-                              </div>
-                            )}
                           </CardContent>
                         </Card>
                       )}
+                      <div ref={nyayaMessagesEndRef} />
                     </div>
-                  ))}
-                  {nyayaLoading && (
-                    <Card className="border-0 shadow-sm">
-                      <CardContent className="p-2.5">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="h-3 w-3 animate-pulse text-primary" />
-                          <span className="text-xs text-muted-foreground">Thinking...</span>
-                        </div>
-                      </CardContent>
-                    </Card>
                   )}
-                  <div ref={nyayaMessagesEndRef} />
-                </div>
-              )}
-            </ScrollArea>
+                </ScrollArea>
 
-            <div className="p-3 border-t">
-              <div className="flex gap-1.5">
-                <Input
-                  placeholder="Ask Nyaya AI..."
-                  value={nyayaInput}
-                  onChange={(e) => setNyayaInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleNyayaSend()}
-                  className="text-xs h-8"
-                  disabled={nyayaLoading}
-                  data-testid="input-nyaya"
-                />
-                <Button
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={handleNyayaSend}
-                  disabled={nyayaLoading || !nyayaInput.trim()}
-                  data-testid="button-send-nyaya"
-                >
-                  <Send className="h-3 w-3" />
-                </Button>
+                <div className="p-3 border-t shrink-0">
+                  <div className="flex gap-1.5">
+                    <Input
+                      placeholder="Ask Nyaya AI…"
+                      value={nyayaInput}
+                      onChange={(e) => setNyayaInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleNyayaSend()}
+                      className="text-xs h-8"
+                      disabled={nyayaLoading}
+                      data-testid="input-nyaya"
+                    />
+                    <Button
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={handleNyayaSend}
+                      disabled={nyayaLoading || !nyayaInput.trim()}
+                      data-testid="button-send-nyaya"
+                    >
+                      <Send className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* ── Notes panel ── */}
+            {rightPanel === "notes" && (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="p-3 border-b flex items-center gap-2 shrink-0">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">Notes</span>
+                </div>
+                <div className="flex border-b shrink-0">
+                  <button
+                    className={`flex-1 py-2 text-xs font-medium ${notesTab === "write" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                    onClick={() => setNotesTab("write")}
+                  >
+                    Write
+                  </button>
+                  <button
+                    className={`flex-1 py-2 text-xs font-medium ${notesTab === "saved" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                    onClick={() => setNotesTab("saved")}
+                  >
+                    Saved ({notes.length})
+                  </button>
+                </div>
+                <ScrollArea className="flex-1 p-3">
+                  {notesTab === "write" ? (
+                    <div className="space-y-3">
+                      <textarea
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        placeholder="Write your notes here…"
+                        className="w-full h-48 p-3 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background text-foreground"
+                        data-testid="textarea-note"
+                      />
+                      <Button
+                        className="w-full"
+                        size="sm"
+                        onClick={handleSaveNote}
+                        disabled={!newNote.trim()}
+                        data-testid="button-save-note"
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Note
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {notes.length === 0 ? (
+                        <div className="text-center py-8">
+                          <FileText className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                          <p className="text-xs text-muted-foreground">No saved notes yet</p>
+                        </div>
+                      ) : (
+                        notes.map((note) => (
+                          <Card key={note.id} className="border-0 shadow-sm">
+                            <CardContent className="p-3">
+                              <p className="text-xs whitespace-pre-wrap mb-2">{note.content}</p>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-muted-foreground">
+                                  {formatDistanceToNow(note.createdAt, { addSuffix: true })}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 text-destructive"
+                                  onClick={() => handleDeleteNote(note.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
+            )}
           </div>
         )}
       </div>
-      
+
+      {/* ── Nyaya prompt dialog ── */}
       <Dialog open={showNyayaPromptDialog} onOpenChange={setShowNyayaPromptDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -1318,17 +1477,17 @@ export default function ChatWithPDFPage() {
               Ask a question about the selected text from your document
             </DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4 py-4">
             <div className="p-3 bg-muted rounded-md">
               <p className="text-xs text-muted-foreground mb-1">Selected text:</p>
-              <p className="text-sm italic">"{pendingSelectedText.length > 200 ? pendingSelectedText.slice(0, 200) + "..." : pendingSelectedText}"</p>
+              <p className="text-sm italic">
+                "{pendingSelectedText.length > 200 ? pendingSelectedText.slice(0, 200) + "…" : pendingSelectedText}"
+              </p>
             </div>
-            
             <div className="flex items-center gap-2">
               <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
               <Input
-                placeholder="Ask anything..."
+                placeholder="Ask anything…"
                 value={nyayaInput}
                 onChange={(e) => setNyayaInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSendNyayaPrompt()}
@@ -1336,7 +1495,6 @@ export default function ChatWithPDFPage() {
                 data-testid="input-nyaya-prompt"
               />
             </div>
-            
             <div className="flex gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowNyayaPromptDialog(false)} className="flex-1">
                 Cancel
