@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -205,6 +205,26 @@ export default function AIDraftingPage() {
   const { data: drafts = [], isLoading: draftsLoading } = useQuery<Draft[]>({
     queryKey: ["/api/drafts"],
   });
+
+  // Auto-open draft navigated from Nyaya AI
+  const openDraftIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const nyayaDraftId = sessionStorage.getItem("nyaya_open_draft_id");
+    if (nyayaDraftId) {
+      sessionStorage.removeItem("nyaya_open_draft_id");
+      openDraftIdRef.current = nyayaDraftId;
+    }
+  }, []);
+  useEffect(() => {
+    if (openDraftIdRef.current && !draftsLoading && drafts.length > 0) {
+      const draft = drafts.find((d) => d.id === openDraftIdRef.current);
+      if (draft) {
+        openDraftIdRef.current = null;
+        handleOpenDraft(draft);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drafts, draftsLoading]);
 
   const filteredDrafts = drafts.filter((draft) => {
     if (filter === "all") return true;

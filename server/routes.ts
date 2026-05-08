@@ -1008,6 +1008,69 @@ ${documentContext}`;
     }
   });
 
+  app.post("/api/nyaya/detect-draft", checkAIUsage, async (req: Request, res: Response) => {
+    try {
+      const schema = z.object({ message: z.string().min(1).max(2000) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.json({ isDraft: false, questions: [] });
+      const { message } = parsed.data;
+
+      const systemPrompt = `You are a legal AI assistant. Determine if the user's message is asking you to DRAFT/WRITE/PREPARE/CREATE a specific legal document.
+
+Return ONLY a valid JSON object.
+
+If it IS a drafting request:
+{
+  "isDraft": true,
+  "documentType": "e.g. Non-Disclosure Agreement / Legal Notice / Bail Application / Writ Petition",
+  "suggestedTitle": "A concise, specific title for this document",
+  "questions": [
+    {
+      "id": "snake_case_id",
+      "label": "Question text shown to the user",
+      "type": "text | textarea | select | multi_select | radio",
+      "options": ["opt1", "opt2"],
+      "placeholder": "example placeholder",
+      "required": true,
+      "hint": "optional helper text"
+    }
+  ]
+}
+
+If NOT a drafting request: { "isDraft": false, "questions": [] }
+
+Question generation rules:
+- Always include: parties involved, jurisdiction, key facts, relief/purpose sought
+- For jurisdiction use type "select" with options: ["Delhi High Court", "Bombay High Court", "Madras High Court", "Calcutta High Court", "Allahabad High Court", "Karnataka High Court", "Punjab & Haryana High Court", "Gujarat High Court", "Rajasthan High Court", "Supreme Court of India", "NCLT", "Consumer Forum", "Family Court", "District Court", "Any / Not Applicable"]
+- For language use type "select" with options: ["English", "Hindi", "Bengali", "Tamil", "Telugu", "Marathi", "Gujarati", "Kannada", "Malayalam", "Punjabi"]
+- Use "radio" for 2-5 binary/small choices, "select" for large lists, "textarea" for detailed info, "multi_select" for picking multiple items
+- Tailor questions specifically to the document type (e.g. for NDA include confidentiality period, for bail include offence and court)
+- Maximum 6 questions — keep it concise and actionable
+- Mark all critical fields as required: true`;
+
+      const response = await callAI(openai, {
+        model: MODEL_TIERS.mini,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message },
+        ],
+        temperature: 0.2,
+      }, "detect-draft");
+
+      const raw = response.choices[0]?.message?.content || "";
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        await recordAIUsage(req);
+        return res.json(result);
+      }
+      res.json({ isDraft: false, questions: [] });
+    } catch (error) {
+      console.error("Error detecting draft intent:", error);
+      res.json({ isDraft: false, questions: [] });
+    }
+  });
+
   app.get("/api/drafts", async (req: Request, res: Response) => {
     try {
       const drafts = await storage.getDrafts(req.user!.id);
