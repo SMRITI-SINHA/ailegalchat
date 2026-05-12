@@ -585,7 +585,19 @@ export async function registerRoutes(
         })
       );
 
-      res.status(201).json(documents);
+      // Return metadata only — exclude extractedText/extractedHtml from upload response.
+      // For large documents (800+ pages) these fields can be 2–5 MB each.
+      // The client fetches content lazily via GET /api/documents/:id when it opens a session.
+      res.status(201).json(documents.map(doc => ({
+        id: doc.id,
+        name: doc.name,
+        type: doc.type,
+        size: doc.size,
+        pages: doc.pages,
+        status: doc.status,
+        processingCost: doc.processingCost,
+        uploadedAt: doc.uploadedAt,
+      })));
     } catch (error) {
       console.error("[AUDIT] Error uploading documents");
       logAudit(req, { action: "document_upload", resourceType: "document", success: false, errorCode: "UPLOAD_FAILED" });

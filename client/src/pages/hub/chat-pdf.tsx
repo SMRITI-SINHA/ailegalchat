@@ -194,6 +194,7 @@ export default function ChatWithPDFPage() {
   const [notes, setNotes] = useState<PdfNote[]>([]);
   const [newNote, setNewNote] = useState("");
   const [notesTab, setNotesTab] = useState<"write" | "saved">("write");
+  const [notesLoaded, setNotesLoaded] = useState(false);
   
   const [showNyayaPromptDialog, setShowNyayaPromptDialog] = useState(false);
   const [pendingSelectedText, setPendingSelectedText] = useState("");
@@ -256,6 +257,32 @@ export default function ChatWithPDFPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load notes from localStorage when session changes
+  useEffect(() => {
+    if (!currentSessionId) return;
+    try {
+      const raw = localStorage.getItem(`docuchat-notes-${currentSessionId}`);
+      const parsed: PdfNote[] = raw ? JSON.parse(raw).map((n: { id: string; content: string; createdAt: string | Date }) => ({
+        ...n,
+        createdAt: new Date(n.createdAt),
+      })) : [];
+      setNotes(parsed);
+    } catch {
+      setNotes([]);
+    }
+    setNotesLoaded(true);
+  }, [currentSessionId]);
+
+  // Persist notes to localStorage on every change
+  useEffect(() => {
+    if (!currentSessionId || !notesLoaded) return;
+    try {
+      localStorage.setItem(`docuchat-notes-${currentSessionId}`, JSON.stringify(notes));
+    } catch {
+      // localStorage quota exceeded — fail silently
+    }
+  }, [notes, currentSessionId, notesLoaded]);
 
   const handleSaveNote = () => {
     if (!newNote.trim()) return;
@@ -653,6 +680,9 @@ export default function ChatWithPDFPage() {
     setMessages([]);
     setNyayaMessages([]);
     setNyayaSessionId(null);
+    setUploadedDocs([]);    // clear immediately so stale docs never leak into handleSend
+    setActiveDocPage(1);
+    setHighlightText("");
     setViewMode("chat");
     
     const docIds = session.documentIds || [];
@@ -665,7 +695,7 @@ export default function ChatWithPDFPage() {
         setMessages(loadedMessages.map((m: { id: string; role: string; content: string }) => ({
           id: m.id,
           role: m.role as "user" | "assistant",
-          content: m.role === "assistant" ? stripMarkdown(m.content) : m.content,
+          content: m.content,
         })));
       }
     } catch (error) {
@@ -684,7 +714,7 @@ export default function ChatWithPDFPage() {
           setNyayaMessages(loadedNyayaMessages.map((m: { id: string; role: string; content: string }) => ({
             id: m.id,
             role: m.role as "user" | "assistant",
-            content: m.role === "assistant" ? stripMarkdown(m.content) : m.content,
+            content: m.content,
           })));
         }
       } catch (error) {
@@ -739,12 +769,12 @@ export default function ChatWithPDFPage() {
     }
 
     try {
-      const localDocIds = uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
-      const documentIds = localDocIds.length > 0 ? localDocIds : (sessionDocumentIds.length > 0 ? sessionDocumentIds : []);
-
-      if (documentIds.length === 0) {
-        console.warn("No documents available for query - response may not be grounded in documents");
-      }
+      // sessionDocumentIds is set synchronously when a session is opened/created,
+      // so it is always the authoritative source. Fall back to uploadedDocs only when
+      // a brand-new session has just been created and sessionDocumentIds hasn't propagated yet.
+      const documentIds = sessionDocumentIds.length > 0
+        ? sessionDocumentIds
+        : uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
 
       const response = await authFetch("/api/chat/query", {
         method: "POST",
@@ -779,7 +809,7 @@ export default function ChatWithPDFPage() {
               if (data.content) {
                 fullContent += data.content;
                 setMessages((prev) =>
-                  prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent) } : m))
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
                 );
               }
             } catch {
@@ -791,7 +821,7 @@ export default function ChatWithPDFPage() {
       
       const { clean, pageRefs } = parseAndCleanContent(fullContent);
       setMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(clean), pageRefs } : m))
+        prev.map((m) => (m.id === assistantId ? { ...m, content: clean, pageRefs } : m))
       );
 
       if (currentSessionId && fullContent) {
@@ -1406,51 +1436,55 @@ export default function ChatWithPDFPage() {
                 </div>
                 <div className="flex border-b shrink-0">
                   <button
-                    className={`flex-1 py-2 text-xs font-medium ${notesTab === "write" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                    className={`flex-1 py-2 text-xs font-medium transition-colors ${notesTab === "write" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
                     onClick={() => setNotesTab("write")}
+                    data-testid="button-notes-tab-write"
                   >
                     Write
                   </button>
                   <button
-                    className={`flex-1 py-2 text-xs font-medium ${notesTab === "saved" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                    className={`flex-1 py-2 text-xs font-medium transition-colors ${notesTab === "saved" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
                     onClick={() => setNotesTab("saved")}
+                    data-testid="button-notes-tab-saved"
                   >
-                    Saved ({notes.length})
+                    Saved {notes.length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px]">{notes.length}</span>}
                   </button>
                 </div>
-                <ScrollArea className="flex-1 p-3">
-                  {notesTab === "write" ? (
-                    <div className="space-y-3">
-                      <textarea
-                        value={newNote}
-                        onChange={(e) => setNewNote(e.target.value)}
-                        placeholder="Write your notes here…"
-                        className="w-full h-48 p-3 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background text-foreground"
-                        data-testid="textarea-note"
-                      />
-                      <Button
-                        className="w-full"
-                        size="sm"
-                        onClick={handleSaveNote}
-                        disabled={!newNote.trim()}
-                        data-testid="button-save-note"
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Note
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {notes.length === 0 ? (
-                        <div className="text-center py-8">
-                          <FileText className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                          <p className="text-xs text-muted-foreground">No saved notes yet</p>
-                        </div>
-                      ) : (
-                        notes.map((note) => (
-                          <Card key={note.id} className="border-0 shadow-sm">
+
+                {notesTab === "write" ? (
+                  <div className="flex flex-col flex-1 overflow-hidden p-3 gap-3">
+                    <textarea
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder="Write your notes here…"
+                      className="flex-1 min-h-0 p-3 text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 bg-background text-foreground"
+                      data-testid="textarea-note"
+                    />
+                    <Button
+                      className="w-full shrink-0"
+                      size="sm"
+                      onClick={handleSaveNote}
+                      disabled={!newNote.trim()}
+                      data-testid="button-save-note"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Note
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto p-3">
+                    {notes.length === 0 ? (
+                      <div className="text-center py-12">
+                        <FileText className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                        <p className="text-xs text-muted-foreground">No saved notes yet</p>
+                        <p className="text-[10px] text-muted-foreground/60 mt-1">Switch to Write tab to add one</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {notes.map((note) => (
+                          <Card key={note.id} className="border shadow-sm">
                             <CardContent className="p-3">
-                              <p className="text-xs whitespace-pre-wrap mb-2">{note.content}</p>
+                              <p className="text-xs whitespace-pre-wrap mb-2 text-foreground">{note.content}</p>
                               <div className="flex items-center justify-between">
                                 <span className="text-[10px] text-muted-foreground">
                                   {formatDistanceToNow(note.createdAt, { addSuffix: true })}
@@ -1458,19 +1492,20 @@ export default function ChatWithPDFPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-5 w-5 text-destructive"
+                                  className="h-5 w-5 text-destructive hover:text-destructive"
                                   onClick={() => handleDeleteNote(note.id)}
+                                  data-testid={`button-delete-note-${note.id}`}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
                             </CardContent>
                           </Card>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </ScrollArea>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
