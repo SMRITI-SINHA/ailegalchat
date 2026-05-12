@@ -39,6 +39,8 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
@@ -195,6 +197,7 @@ export default function ChatWithPDFPage() {
   const [newNote, setNewNote] = useState("");
   const [notesTab, setNotesTab] = useState<"write" | "saved">("write");
   const [notesLoaded, setNotesLoaded] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   
   const [showNyayaPromptDialog, setShowNyayaPromptDialog] = useState(false);
   const [pendingSelectedText, setPendingSelectedText] = useState("");
@@ -1095,12 +1098,12 @@ export default function ChatWithPDFPage() {
           )}
         </div>
 
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 items-center">
           {hasDocViewer && (
             <Button
-              variant={rightPanel === "doc" ? "default" : "outline"}
+              variant={rightPanel === "doc" && !panelCollapsed ? "default" : "outline"}
               size="sm"
-              onClick={() => setRightPanel("doc")}
+              onClick={() => { setRightPanel("doc"); setPanelCollapsed(false); }}
               data-testid="button-toggle-doc"
             >
               <BookOpen className="mr-1.5 h-3.5 w-3.5" />
@@ -1108,12 +1111,19 @@ export default function ChatWithPDFPage() {
             </Button>
           )}
           <Button
-            variant={rightPanel === "nyaya" ? "default" : "outline"}
+            variant={rightPanel === "nyaya" && !panelCollapsed ? "default" : "outline"}
             size="sm"
-            onClick={() => setRightPanel(rightPanel === "nyaya" ? "doc" : "nyaya")}
+            onClick={() => {
+              if (rightPanel === "nyaya" && !panelCollapsed) {
+                setPanelCollapsed(true);
+              } else {
+                setRightPanel("nyaya");
+                setPanelCollapsed(false);
+              }
+            }}
             data-testid="button-toggle-nyaya"
             className={
-              rightPanel === "nyaya"
+              rightPanel === "nyaya" && !panelCollapsed
                 ? "bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-600 border-amber-500/50 shadow-md"
                 : "border-amber-600/30 text-amber-800 hover:bg-amber-50 hover:border-amber-600/50 dark:text-amber-400 dark:hover:bg-amber-950/30"
             }
@@ -1125,14 +1135,38 @@ export default function ChatWithPDFPage() {
             )}
           </Button>
           <Button
-            variant={rightPanel === "notes" ? "default" : "outline"}
+            variant={rightPanel === "notes" && !panelCollapsed ? "default" : "outline"}
             size="sm"
-            onClick={() => setRightPanel(rightPanel === "notes" ? "doc" : "notes")}
+            onClick={() => {
+              if (rightPanel === "notes" && !panelCollapsed) {
+                setPanelCollapsed(true);
+              } else {
+                setRightPanel("notes");
+                setPanelCollapsed(false);
+              }
+            }}
             data-testid="button-toggle-notes"
           >
             <FileText className="mr-1.5 h-3.5 w-3.5" />
             Notes
           </Button>
+
+          {/* ── Panel collapse/expand toggle ── */}
+          {(hasDocViewer || rightPanel !== "doc") && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setPanelCollapsed(c => !c)}
+              title={panelCollapsed ? "Show panel" : "Hide panel — full-width chat"}
+              data-testid="button-toggle-panel-collapse"
+              className="ml-1 text-muted-foreground hover:text-foreground"
+            >
+              {panelCollapsed
+                ? <PanelRightOpen className="h-4 w-4" />
+                : <PanelRightClose className="h-4 w-4" />
+              }
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1141,7 +1175,7 @@ export default function ChatWithPDFPage() {
 
         {/* LEFT — Chat */}
         <div
-          className={`flex flex-col overflow-hidden relative ${hasDocViewer || rightPanel !== "doc" ? "w-[42%] border-r" : "flex-1"}`}
+          className={`flex flex-col overflow-hidden relative ${(hasDocViewer || rightPanel !== "doc") && !panelCollapsed ? "w-[42%] border-r" : "flex-1"}`}
           ref={chatContainerRef}
         >
           {selectionPosition && (
@@ -1265,7 +1299,7 @@ export default function ChatWithPDFPage() {
         </div>
 
         {/* RIGHT — tabbed panel (Document / Nyaya AI / Notes) */}
-        {(hasDocViewer || rightPanel === "nyaya" || rightPanel === "notes") && (
+        {(hasDocViewer || rightPanel === "nyaya" || rightPanel === "notes") && !panelCollapsed && (
           <div className={`flex flex-col overflow-hidden ${hasDocViewer ? "flex-1" : "w-80"}`}>
 
             {/* ── Document viewer ── */}
