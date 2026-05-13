@@ -1255,6 +1255,7 @@ export default function ChatWithPDFPage() {
                                     setActiveDocPage(ref.page);
                                     setHighlightText(ref.refText || "");
                                     setRightPanel("doc");
+                                    setPanelCollapsed(false);
                                   }}
                                   data-testid={`button-page-ref-${ref.page}`}
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-colors cursor-pointer"
