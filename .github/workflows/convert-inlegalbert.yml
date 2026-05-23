@@ -1,0 +1,64 @@
+name: Convert InLegalBERT to ONNX (one-time)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Git LFS
+        run: git lfs install
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if model already exists
+        id: check
+        run: |
+          if [ -f "server/models/inlegalbert/model_quantized.onnx" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Model already exists, skipping conversion."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Python 3.11
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install transformers optimum[onnxruntime] onnxruntime
+
+      - name: Run conversion script
+        if: steps.check.outputs.exists == 'false'
+        run: python scripts/convert_inlegalbert.py
+
+      - name: Track ONNX file with Git LFS
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git lfs track "*.onnx"
+          git add .gitattributes
+
+      - name: Commit model files
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add server/models/inlegalbert/
+          git diff --cached --stat
+          git commit -m "feat: add InLegalBERT ONNX model (one-time conversion)" || echo "Nothing to commit"
+          git push
