@@ -129,7 +129,13 @@ window.addEventListener("message", (event) => {
 // --- Ready signal with retry ---
 function emitReady() {
   if (window.parent !== window) {
-    window.parent.postMessage({ type: "CHAKSHI_HUB_READY" }, "*");
+    if (TRUSTED_PARENT_ORIGINS.size > 0) {
+      TRUSTED_PARENT_ORIGINS.forEach((origin) => {
+        window.parent.postMessage({ type: "CHAKSHI_HUB_READY" }, origin);
+      });
+    } else {
+      window.parent.postMessage({ type: "CHAKSHI_HUB_READY" }, "*");
+    }
   }
 }
 

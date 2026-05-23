@@ -1,0 +1,7 @@
+Contact: security@chakshi.in
+Expires: 2026-12-31T23:59:00.000Z
+Preferred-Languages: en, hi
+Scope: https://chakshi.in
+Scope: https://www.chakshi.in
+Policy: https://chakshi.in/security-policy
+Acknowledgments: https://chakshi.in/security-acknowledgments

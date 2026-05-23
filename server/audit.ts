@@ -34,6 +34,7 @@ export function logAudit(req: Request, details: AuditDetails): void {
     success: details.success ?? true,
     errorCode: details.errorCode ?? null,
     metadata: details.metadata ?? null,
-  }).catch(() => {
+  }).catch((err: unknown) => {
+    console.error("[audit] Failed to write audit log:", err instanceof Error ? err.message : String(err));
   });
 }

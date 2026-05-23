@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import DOMPurify from "dompurify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -383,7 +384,10 @@ export function PremiumEditor({
 
       if (refinedIsHtml) {
         const template = document.createElement('template');
-        template.innerHTML = refinedText;
+        template.innerHTML = DOMPurify.sanitize(refinedText, {
+          ALLOWED_TAGS: ['p','br','strong','em','u','s','ol','ul','li','h1','h2','h3','h4','h5','h6','blockquote','span','div','table','thead','tbody','tr','th','td'],
+          ALLOWED_ATTR: ['style','class'],
+        });
         selectedRange.insertNode(template.content.cloneNode(true) as DocumentFragment);
       } else {
         const lines = refinedText.split('\n').filter(l => l.length > 0);
