@@ -59,6 +59,7 @@ jobs:
         run: npx playwright test --grep-invert "@ai"
         env:
           CI: true
+          TEST_MODE: "true"
 
       - name: Upload Playwright HTML report
         if: always()

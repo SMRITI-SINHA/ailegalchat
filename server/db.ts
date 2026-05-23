@@ -5,15 +5,21 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
+export const TEST_MODE = process.env.TEST_MODE === "true";
+
+if (!TEST_MODE && !process.env.DATABASE_URL) {
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = TEST_MODE
+  ? (null as unknown as pg.Pool)
+  : new Pool({ connectionString: process.env.DATABASE_URL });
 
-export const db = drizzle(pool, { schema });
+export const db = TEST_MODE
+  ? (null as unknown as ReturnType<typeof drizzle>)
+  : drizzle(pool, { schema });
 
 /**
  * Per-request AsyncLocalStorage holding a dedicated PoolClient that is inside
@@ -51,6 +57,9 @@ export async function withUserContext<T>(
   userId: string,
   callback: () => Promise<T>,
 ): Promise<T> {
+  if (TEST_MODE) {
+    return callback();
+  }
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

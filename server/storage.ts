@@ -34,7 +34,7 @@ import type {
   InsertAuditLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { getDb } from "./db";
+import { getDb, TEST_MODE } from "./db";
 import {
   auditLogs as auditLogsTable,
   users,
@@ -1211,4 +1211,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage: IStorage = TEST_MODE ? new MemStorage() : new DatabaseStorage();
