@@ -155,7 +155,19 @@ export class InLegalBERTService {
         const data = await response.json();
         this.setCache(cacheKey, data);
         return data;
-      } catch (error) {
+      } catch (error: any) {
+        const msg: string = (error?.cause?.message ?? error?.message ?? "").toLowerCase();
+        const isNetworkErr =
+          msg.includes("enotfound") ||
+          msg.includes("econnrefused") ||
+          msg.includes("econnreset") ||
+          msg.includes("fetch failed") ||
+          msg.includes("getaddrinfo");
+        // Network/DNS errors will not resolve by retrying — fail immediately.
+        if (isNetworkErr) {
+          console.warn(`[InLegalBERT] Network unreachable, skipping retries`);
+          return null;
+        }
         console.error(`[InLegalBERT] Request error (attempt ${attempt + 1}):`, error);
         if (attempt === retries) return null;
         await new Promise(r => setTimeout(r, 2000));

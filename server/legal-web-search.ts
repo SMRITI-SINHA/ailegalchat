@@ -226,7 +226,8 @@ export class LegalWebSearchService {
     this.perplexityKey = process.env.PERPLEXITY_API_KEY || null;
     this.perplexityMinIntervalMs = Number(process.env.PERPLEXITY_MIN_INTERVAL_MS || 1200);
     this.perplexityBurstSize = Number(process.env.PERPLEXITY_BURST_SIZE || 5);
-    this.perplexityTimeoutMs = Number(process.env.PERPLEXITY_TIMEOUT_MS || 6000);
+    // Reduced from 6 000 ms → 3 000 ms so a dead/slow Perplexity fails fast.
+    this.perplexityTimeoutMs = Number(process.env.PERPLEXITY_TIMEOUT_MS || 3000);
     LegalWebSearchService.availableTokens = Math.min(
       LegalWebSearchService.availableTokens,
       this.perplexityBurstSize
@@ -364,7 +365,7 @@ Be precise and always cite your sources with proper legal citations.`
           return_related_questions: false,
           search_recency_filter: "month",
           stream: false,
-        }, "perplexity legal search"), 3, "perplexity legal search");
+        }, "perplexity legal search"), 1, "perplexity legal search");
       
       const answer = data.choices?.[0]?.message?.content || "";
       const sources: WebSearchResult[] = (data.citations || []).map((url, index) => ({
@@ -475,7 +476,7 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
           return_related_questions: false,
           search_recency_filter: "month",
           stream: false,
-        }, "perplexity compliance search"), 3, "perplexity compliance search");
+        }, "perplexity compliance search"), 1, "perplexity compliance search");
       
       const answer = data.choices?.[0]?.message?.content || "";
       const sources: WebSearchResult[] = (data.citations || []).map((url) => ({
@@ -549,7 +550,7 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
           search_domain_filter: searchDomains,
           search_recency_filter: "week",
           stream: false,
-        }, "perplexity regulatory search"), 3, "perplexity regulatory search");
+        }, "perplexity regulatory search"), 1, "perplexity regulatory search");
       
       const result = {
         answer: data.choices?.[0]?.message?.content || "",
@@ -696,7 +697,7 @@ Your response must be a JSON object with this exact structure:
               return_images: false,
               search_recency_filter: "month",
               stream: false,
-            }, `perplexity advanced search batch ${index + 1}`), 3, `perplexity advanced search batch ${index + 1}`);
+            }, `perplexity advanced search batch ${index + 1}`), 1, `perplexity advanced search batch ${index + 1}`);
           return {
             content: data.choices?.[0]?.message?.content || "{}",
             citations: data.citations || [],

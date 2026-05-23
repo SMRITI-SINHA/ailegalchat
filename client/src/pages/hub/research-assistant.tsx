@@ -112,7 +112,7 @@ export default function ResearchAssistantPage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (data: { title: string; content: string; query: string }) => {
+    mutationFn: async (data: { name: string; content: string; query: string }) => {
       const res = await apiRequest("POST", "/api/research/notes", data);
       return res.json();
     },
@@ -179,7 +179,7 @@ export default function ResearchAssistantPage() {
   const handleSaveNotes = () => {
     if (!noteName.trim() || !notes.trim()) return;
     saveMutation.mutate({
-      title: noteName,
+      name: noteName,
       content: notes,
       query: query || "Research Notes",
     });
