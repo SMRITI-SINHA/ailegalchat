@@ -13,6 +13,7 @@ import { promisify } from "util";
 import { writeFile, unlink } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+const execFileAsync = promisify(execFile);
 
 import { storage } from "./storage";
 import { insertDocumentSchema, insertDraftSchema, draftTypes, insertResearchNoteSchema, insertCalendarEventSchema, insertCnrNoteSchema, insertSavedCaseSchema, savedCases, embedUsage, type IndianKanoonResult } from "@shared/schema";
