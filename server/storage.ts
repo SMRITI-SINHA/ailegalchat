@@ -34,7 +34,7 @@ import type {
   InsertAuditLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { getDb, TEST_MODE } from "./db";
+import { db as sharedDb, getDb, TEST_MODE } from "./db";
 import {
   auditLogs as auditLogsTable,
   users,
@@ -89,6 +89,7 @@ export interface IStorage {
   getTrainingDocs(userId?: string): Promise<TrainingDoc[]>;
   getTrainingDoc(id: string): Promise<TrainingDoc | undefined>;
   createTrainingDoc(doc: InsertTrainingDoc): Promise<TrainingDoc>;
+  updateTrainingDoc(id: string, updates: Partial<Pick<TrainingDoc, "content" | "extractedHtml" | "status" | "storagePath" | "storageUrl">>): Promise<TrainingDoc | undefined>;
   deleteTrainingDoc(id: string): Promise<void>;
 
   getLegalMemos(userId: string): Promise<LegalMemo[]>;
@@ -430,6 +431,14 @@ export class MemStorage implements IStorage {
     };
     this.trainingDocs.set(id, doc);
     return doc;
+  }
+
+  async updateTrainingDoc(id: string, updates: Partial<Pick<TrainingDoc, "content" | "extractedHtml" | "status" | "storagePath" | "storageUrl">>): Promise<TrainingDoc | undefined> {
+    const doc = this.trainingDocs.get(id);
+    if (!doc) return undefined;
+    const updated = { ...doc, ...updates };
+    this.trainingDocs.set(id, updated);
+    return updated;
   }
 
   async deleteTrainingDoc(id: string): Promise<void> {
@@ -955,23 +964,28 @@ export class DatabaseStorage implements IStorage {
   // ── Training docs ──────────────────────────────────────────────────────────
   async getTrainingDocs(userId?: string): Promise<TrainingDoc[]> {
     if (userId) {
-      return getDb().select().from(trainingDocs).where(eq(trainingDocs.userId, userId)).orderBy(desc(trainingDocs.uploadedAt));
+      return sharedDb.select().from(trainingDocs).where(eq(trainingDocs.userId, userId)).orderBy(desc(trainingDocs.uploadedAt));
     }
-    return getDb().select().from(trainingDocs).orderBy(desc(trainingDocs.uploadedAt));
+    return sharedDb.select().from(trainingDocs).orderBy(desc(trainingDocs.uploadedAt));
   }
 
   async getTrainingDoc(id: string): Promise<TrainingDoc | undefined> {
-    const [doc] = await getDb().select().from(trainingDocs).where(eq(trainingDocs.id, id));
+    const [doc] = await sharedDb.select().from(trainingDocs).where(eq(trainingDocs.id, id));
     return doc;
   }
 
   async createTrainingDoc(insertDoc: InsertTrainingDoc): Promise<TrainingDoc> {
-    const [doc] = await getDb().insert(trainingDocs).values(insertDoc).returning();
+    const [doc] = await sharedDb.insert(trainingDocs).values(insertDoc).returning();
+    return doc;
+  }
+
+  async updateTrainingDoc(id: string, updates: Partial<Pick<TrainingDoc, "content" | "extractedHtml" | "status" | "storagePath" | "storageUrl">>): Promise<TrainingDoc | undefined> {
+    const [doc] = await sharedDb.update(trainingDocs).set(updates).where(eq(trainingDocs.id, id)).returning();
     return doc;
   }
 
   async deleteTrainingDoc(id: string): Promise<void> {
-    await getDb().delete(trainingDocs).where(eq(trainingDocs.id, id));
+    await sharedDb.delete(trainingDocs).where(eq(trainingDocs.id, id));
   }
 
   // ── Legal memos ────────────────────────────────────────────────────────────

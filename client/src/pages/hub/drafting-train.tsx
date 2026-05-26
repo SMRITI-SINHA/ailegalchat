@@ -16,20 +16,26 @@ import {
   Loader2,
 } from "lucide-react";
 import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { TrainingDoc } from "@shared/schema";
 
 export default function TrainDraftsPage() {
   const [isUploading, setIsUploading] = useState(false);
+  const { toast } = useToast();
 
   const { data: trainingDocs = [], isLoading } = useQuery<TrainingDoc[]>({
     queryKey: ["/api/training-docs"],
+    refetchInterval: (query) => {
+      const docs = query.state.data as TrainingDoc[] | undefined;
+      const hasProcessing = docs?.some(d => d.status === "processing");
+      return hasProcessing ? 3000 : false;
+    },
   });
 
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
-      formData.append("userId", "default-user");
       
       const response = await authFetch("/api/training-docs/upload", {
         method: "POST",
@@ -37,16 +43,22 @@ export default function TrainDraftsPage() {
       });
       
       if (!response.ok) {
-        throw new Error("Upload failed");
+        const errText = await response.text().catch(() => "");
+        let msg = "Upload failed. Please try again.";
+        try { msg = JSON.parse(errText).error || msg; } catch { if (errText.length < 120) msg = errText || msg; }
+        throw new Error(msg);
       }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/training-docs"] });
       setIsUploading(false);
+      toast({ title: "Documents uploaded", description: "Processing in the background. They'll be ready shortly." });
     },
-    onError: () => {
+    onError: (error: Error) => {
       setIsUploading(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/training-docs"] });
+      toast({ title: "Upload failed", description: error.message, variant: "destructive" });
     },
   });
 

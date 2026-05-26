@@ -1721,43 +1721,64 @@ Generate the requested content now:`;
         return res.status(400).json({ error: "No files uploaded" });
       }
 
-      const trainingDocs = await Promise.all(
+      // Step 1: Create doc records immediately with "processing" status so the
+      // client sees them right away and they survive any request timeout.
+      const pendingDocs = await Promise.all(
         files.map(async (file) => {
-          // Extract text and HTML structure using the same technique as document upload
-          const extracted = await extractTextFromFile(file);
           const decodedName = decodeFilename(file.originalname);
-
-          const docId = require("crypto").randomUUID();
-          let storagePath: string | null = null;
-          let storageUrl: string | null = null;
-
-          if (supabaseStorage.isSupabaseConfigured()) {
-            try {
-              const uploaded = await supabaseStorage.uploadTrainingDoc(userId, docId, file);
-              storagePath = uploaded.path;
-              storageUrl = uploaded.signedUrl;
-            } catch (e: any) {
-              console.warn(`[TRAINING DOC UPLOAD] Supabase upload failed: ${e.message}`);
-            }
-          }
-          
-          const doc = await storage.createTrainingDoc({
+          return storage.createTrainingDoc({
             userId,
             name: decodedName,
             type: file.mimetype,
             size: file.size,
-            content: extracted.text,
-            extractedHtml: extracted.html,
-            status: "completed",
-            storagePath,
-            storageUrl,
+            content: null,
+            extractedHtml: null,
+            status: "processing",
+            storagePath: null,
+            storageUrl: null,
           });
-
-          return doc;
         })
       );
 
-      res.status(201).json(trainingDocs);
+      // Step 2: Respond immediately — the client can start polling.
+      res.status(201).json(pendingDocs);
+
+      // Step 3: Process extraction in the background (non-blocking).
+      // Errors here only affect the doc's final status, not the HTTP response.
+      setImmediate(async () => {
+        await Promise.all(
+          pendingDocs.map(async (doc, i) => {
+            const file = files[i];
+            try {
+              const extracted = await extractTextFromFile(file);
+
+              let storagePath: string | null = null;
+              let storageUrl: string | null = null;
+              if (supabaseStorage.isSupabaseConfigured()) {
+                try {
+                  const uploaded = await supabaseStorage.uploadTrainingDoc(userId, doc.id, file);
+                  storagePath = uploaded.path;
+                  storageUrl = uploaded.signedUrl;
+                } catch (e: any) {
+                  console.warn(`[TRAINING DOC UPLOAD] Supabase upload failed for ${doc.name}: ${e.message}`);
+                }
+              }
+
+              await storage.updateTrainingDoc(doc.id, {
+                content: extracted.text,
+                extractedHtml: extracted.html,
+                status: "completed",
+                storagePath,
+                storageUrl,
+              });
+              console.log(`[TRAINING DOC] Processed: ${doc.name}`);
+            } catch (e: any) {
+              console.error(`[TRAINING DOC] Extraction failed for ${doc.name}:`, e.message);
+              await storage.updateTrainingDoc(doc.id, { status: "pending" }).catch(() => {});
+            }
+          })
+        );
+      });
     } catch (error) {
       console.error("Error uploading training docs:", error);
       res.status(500).json({ error: "Failed to upload training documents" });
@@ -2574,7 +2595,7 @@ Generate 8-12 VERIFIED compliance items with exact legal references. Include any
       const cnrNoteUpdateSchema = z.object({
         title: z.string().optional(),
         content: z.string().optional(),
-        cnrNumber: z.string().optional(),
+        cnrNumber: z.string().nullable().optional(),
       });
       const parsed = cnrNoteUpdateSchema.safeParse(req.body);
       if (!parsed.success) {

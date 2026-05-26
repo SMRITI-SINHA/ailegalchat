@@ -593,13 +593,13 @@ export default function ChatWithPDFPage() {
   };
 
   const handleFilesSelected = async (files: File[]) => {
-    const newDocs: UploadedDoc[] = files.map((file, i) => ({
+    const tempDocs: UploadedDoc[] = files.map((file, i) => ({
       id: `temp-${Date.now()}-${i}`,
       name: file.name,
       pages: 0,
       status: "processing" as const,
     }));
-    setUploadedDocs(newDocs);
+    setUploadedDocs(tempDocs);
 
     try {
       const formData = new FormData();
@@ -610,7 +610,12 @@ export default function ChatWithPDFPage() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Upload failed");
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        let errMsg = "Document upload failed. Please try again.";
+        try { errMsg = JSON.parse(errText).error || errMsg; } catch { if (errText.length < 120) errMsg = errText || errMsg; }
+        throw new Error(errMsg);
+      }
 
       const uploadedDocuments = await response.json();
       
@@ -625,9 +630,9 @@ export default function ChatWithPDFPage() {
       );
     } catch (error) {
       console.error("Upload error:", error);
-      setUploadedDocs((prev) =>
-        prev.map((doc) => ({ ...doc, status: "ready" as const }))
-      );
+      const msg = error instanceof Error ? error.message : "Document upload failed. Please try again.";
+      toast({ title: "Upload failed", description: msg, variant: "destructive" });
+      setUploadedDocs([]);
     }
   };
 
@@ -640,9 +645,12 @@ export default function ChatWithPDFPage() {
     
     const documentIds = uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
     
-    // If no valid document IDs (all still temp), don't proceed
     if (documentIds.length === 0) {
-      console.error("No valid document IDs - documents may still be uploading");
+      toast({
+        title: "Upload not complete",
+        description: "Please wait for the document to finish uploading, or re-upload it.",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -655,13 +663,6 @@ export default function ChatWithPDFPage() {
         documentIds,
       });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Failed to create chat session:", errorText);
-        setIsStartingChat(false);
-        return;
-      }
-      
       const session = await response.json() as ChatSession;
       
       setSessionDocumentIds(documentIds);
@@ -671,6 +672,8 @@ export default function ChatWithPDFPage() {
       setViewMode("chat");
     } catch (error) {
       console.error("Error starting chat:", error);
+      const msg = error instanceof Error ? error.message : "Failed to start chat. Please try again.";
+      toast({ title: "Failed to start chat", description: msg, variant: "destructive" });
     } finally {
       setIsStartingChat(false);
     }
