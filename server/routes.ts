@@ -443,7 +443,7 @@ async function extractDocxFast(buffer: Buffer): Promise<{ text: string; html: st
 
 async function extractTextFromFile(
   file: Express.Multer.File,
-  options: { maxPages?: number } = {},
+  options: { maxPages?: number; skipStructuredHtml?: boolean } = {},
 ): Promise<{ text: string; html: string }> {
   const mimeType = file.mimetype.toLowerCase();
   const fileName = file.originalname.toLowerCase();
@@ -458,17 +458,29 @@ async function extractTextFromFile(
 
   try {
     // ── PDF ──────────────────────────────────────────────────────────────────
-    // Run pdftotext (plain text) and pdftohtml -xml (structured HTML) in
-    // parallel — zero extra latency. HTML preserves bold, italic, and
-    // font-size-based headings so extractFormatPatterns() and firm style
-    // training actually see <h1>/<h2>/<strong> instead of flat <p> tags.
+    // For routes that need structure (training docs, format templates, drafting
+    // reference): run pdftotext + pdftohtml -xml in parallel — zero extra
+    // latency. HTML preserves bold, italic, and font-size-based headings.
+    //
+    // For chat-only routes (DocuChat uploads): skipStructuredHtml=true skips
+    // pdftohtml entirely. Chat Q&A only needs plain text; this makes uploads
+    // respond 2-4x faster and enables Start Chat sooner.
     if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
+      if (options.skipStructuredHtml) {
+        const raw = await withTimeout(
+          extractPdfWithNativeTool(file.buffer, options.maxPages),
+          fileName,
+        );
+        const text = raw.slice(0, MAX_TEXT_CHARS);
+        return { text, html: textToLegalHtml(text) };
+      }
+
       const [raw, structuredHtml] = await withTimeout(
         Promise.all([
           extractPdfWithNativeTool(file.buffer, options.maxPages),
           extractPdfStructuredHtml(file.buffer, options.maxPages).catch((err) => {
             console.warn("[DOC PROCESSING] pdftohtml fallback:", err?.message);
-            return null; // fall back to textToLegalHtml below
+            return null;
           }),
         ]),
         fileName,
@@ -697,7 +709,7 @@ export async function registerRoutes(
 
       const documents = await Promise.all(
         files.map(async (file) => {
-          const extracted = await extractTextFromFile(file, { maxPages: 100 });
+          const extracted = await extractTextFromFile(file, { maxPages: 100, skipStructuredHtml: true });
           const pageCount = Math.max(1, Math.ceil(extracted.text.length / 3000));
           const decodedName = decodeFilename(file.originalname);
 

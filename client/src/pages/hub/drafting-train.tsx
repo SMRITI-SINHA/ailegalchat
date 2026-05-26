@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
@@ -22,15 +22,30 @@ import type { TrainingDoc } from "@shared/schema";
 export default function TrainDraftsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
+  const prevProcessingCount = useRef(0);
 
   const { data: trainingDocs = [], isLoading } = useQuery<TrainingDoc[]>({
     queryKey: ["/api/training-docs"],
     refetchInterval: (query) => {
       const docs = query.state.data as TrainingDoc[] | undefined;
       const hasProcessing = docs?.some(d => d.status === "processing");
-      return hasProcessing ? 3000 : false;
+      return hasProcessing ? 1000 : false;
     },
   });
+
+  // Toast when processing finishes (all docs flip from processing → completed/error)
+  useEffect(() => {
+    const processingNow = trainingDocs.filter(d => d.status === "processing").length;
+    if (prevProcessingCount.current > 0 && processingNow === 0 && trainingDocs.length > 0) {
+      const failed = trainingDocs.filter(d => d.status === "error").length;
+      if (failed > 0) {
+        toast({ title: `${failed} document${failed > 1 ? "s" : ""} failed to process`, variant: "destructive" });
+      } else {
+        toast({ title: "Documents trained and ready", description: "Chakshi has learned your firm's style." });
+      }
+    }
+    prevProcessingCount.current = processingNow;
+  }, [trainingDocs, toast]);
 
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {

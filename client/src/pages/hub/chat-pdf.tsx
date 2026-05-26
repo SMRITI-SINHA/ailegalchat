@@ -202,6 +202,7 @@ export default function ChatWithPDFPage() {
   const [showNyayaPromptDialog, setShowNyayaPromptDialog] = useState(false);
   const [pendingSelectedText, setPendingSelectedText] = useState("");
   const [isStartingChat, setIsStartingChat] = useState(false);
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
   
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const nyayaMessagesEndRef = useRef<HTMLDivElement>(null);
@@ -600,6 +601,7 @@ export default function ChatWithPDFPage() {
       status: "processing" as const,
     }));
     setUploadedDocs(tempDocs);
+    setIsUploadingDocs(true);
 
     try {
       const formData = new FormData();
@@ -633,6 +635,8 @@ export default function ChatWithPDFPage() {
       const msg = error instanceof Error ? error.message : "Document upload failed. Please try again.";
       toast({ title: "Upload failed", description: msg, variant: "destructive" });
       setUploadedDocs([]);
+    } finally {
+      setIsUploadingDocs(false);
     }
   };
 
@@ -1022,15 +1026,30 @@ export default function ChatWithPDFPage() {
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              <UploadDropzone
-                onUpload={handleFilesSelected}
-                maxFiles={1}
-                maxSize={200 * 1024 * 1024}
-                maxPages={800}
-                description="Max 800 pages, 200MB per document. One document per session (read-only, extractive mode)."
-              />
+              {isUploadingDocs ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-3 text-muted-foreground">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-foreground">Extracting document text…</p>
+                    <p className="text-xs mt-1">This takes a few seconds. Start Chat will enable automatically.</p>
+                  </div>
+                  {uploadedDocs.length > 0 && (
+                    <p className="text-xs text-muted-foreground/70 truncate max-w-[280px]" title={uploadedDocs[0]?.name}>
+                      {uploadedDocs[0]?.name}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <UploadDropzone
+                  onUpload={handleFilesSelected}
+                  maxFiles={1}
+                  maxSize={200 * 1024 * 1024}
+                  maxPages={800}
+                  description="Max 800 pages, 200MB per document. One document per session (read-only, extractive mode)."
+                />
+              )}
 
-              {uploadedDocs.length > 0 && (
+              {!isUploadingDocs && uploadedDocs.length > 0 && (
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   <h4 className="text-sm font-medium">Uploaded Documents</h4>
                   {uploadedDocs.map((doc) => (
@@ -1040,7 +1059,7 @@ export default function ChatWithPDFPage() {
                         {doc.name.length > 35 ? doc.name.slice(0, 35) + "..." : doc.name}
                       </span>
                       <Badge variant={doc.status === "ready" ? "outline" : "secondary"} className="text-[10px] shrink-0">
-                        {doc.status}
+                        {doc.status === "ready" ? "Ready" : doc.status}
                       </Badge>
                     </div>
                   ))}
@@ -1048,19 +1067,24 @@ export default function ChatWithPDFPage() {
               )}
 
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" onClick={() => setShowUploadDialog(false)} className="flex-1 shrink-0" disabled={isStartingChat}>
+                <Button variant="outline" onClick={() => setShowUploadDialog(false)} className="flex-1 shrink-0" disabled={isStartingChat || isUploadingDocs}>
                   Cancel
                 </Button>
                 <Button
                   onClick={handleStartChat}
-                  disabled={uploadedDocs.length === 0 || uploadedDocs.some(d => d.status === "processing") || isStartingChat}
+                  disabled={uploadedDocs.length === 0 || isUploadingDocs || uploadedDocs.some(d => d.status === "processing") || isStartingChat}
                   className="flex-1 shrink-0"
                   data-testid="button-start-chat"
                 >
                   {isStartingChat ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Starting...
+                      Starting…
+                    </>
+                  ) : isUploadingDocs ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Extracting…
                     </>
                   ) : (
                     <>
