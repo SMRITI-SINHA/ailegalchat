@@ -273,7 +273,6 @@ function extractFormatPatterns(html: string): string {
 
 // ---------------------------------------------------------------------------
 // Fast PDF extraction using the native pdftotext binary (poppler-utils).
-// Falls back to pdf-parse if pdftotext is unavailable.
 // ---------------------------------------------------------------------------
 const EXTRACT_TIMEOUT_MS = 25_000; // 25 s hard cap per file
 const MAX_TEXT_CHARS = 400_000;    // ~100 k tokens — plenty for AI context
@@ -293,6 +292,143 @@ async function extractPdfWithNativeTool(buffer: Buffer, maxPages?: number): Prom
   } finally {
     await unlink(tmpPath).catch(() => {});
   }
+}
+
+// ---------------------------------------------------------------------------
+// Structured HTML from PDF using pdftohtml -xml (poppler-utils).
+// Preserves bold, italic, font-size-based headings — critical for firm style
+// training, format templates, and document structure analysis.
+// Runs in parallel with extractPdfWithNativeTool (no extra latency).
+// Falls back to textToLegalHtml(text) if pdftohtml fails.
+// ---------------------------------------------------------------------------
+async function extractPdfStructuredHtml(buffer: Buffer, maxPages?: number): Promise<string> {
+  const tmpPath = join(tmpdir(), `chakshi-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
+  try {
+    await writeFile(tmpPath, buffer);
+    const args: string[] = ["-xml", "-stdout", "-q"];
+    if (maxPages) { args.push("-l", String(maxPages)); }
+    args.push(tmpPath);
+    const { stdout: xml } = await execFileAsync("pdftohtml", args, {
+      maxBuffer: 30 * 1024 * 1024,
+      timeout: EXTRACT_TIMEOUT_MS,
+    });
+    return xmlToSemanticHtml(xml);
+  } finally {
+    await unlink(tmpPath).catch(() => {});
+  }
+}
+
+function xmlToSemanticHtml(xml: string): string {
+  // ── 1. Parse <fontspec> entries ───────────────────────────────────────────
+  // <fontspec id="0" size="16" family="HELVETICA-Bold" color="#000000"/>
+  const fontSizes   = new Map<string, number>();
+  const fontIsBold  = new Map<string, boolean>();
+  const fontIsItalic = new Map<string, boolean>();
+
+  const fontSpecRe = /<fontspec\s+id="([^"]+)"\s+size="([^"]+)"\s+family="([^"]*)"[^/]*/g;
+  let m: RegExpExecArray | null;
+  while ((m = fontSpecRe.exec(xml)) !== null) {
+    const [, id, size, family] = m;
+    fontSizes.set(id,   parseInt(size, 10));
+    fontIsBold.set(id,  /bold/i.test(family));
+    fontIsItalic.set(id, /italic|oblique/i.test(family));
+  }
+
+  // ── 2. Find body font size (most frequent) ────────────────────────────────
+  const sizeFreq = new Map<number, number>();
+  for (const sz of fontSizes.values()) {
+    sizeFreq.set(sz, (sizeFreq.get(sz) || 0) + 1);
+  }
+  let bodySize = 12;
+  let maxFreq = 0;
+  for (const [sz, freq] of sizeFreq) {
+    if (freq > maxFreq) { maxFreq = freq; bodySize = sz; }
+  }
+  const h1Threshold = bodySize * 1.45;
+  const h2Threshold = bodySize * 1.2;
+  const h3Threshold = bodySize * 1.05;
+
+  // ── 3. Parse <text> elements ──────────────────────────────────────────────
+  // <text top="100" left="50" width="300" height="14" font="0">Content</text>
+  interface Elem {
+    top: number; left: number; content: string;
+    size: number; bold: boolean; italic: boolean;
+  }
+  const elems: Elem[] = [];
+  const textRe = /<text\s+top="([^"]+)"\s+left="([^"]+)"\s+width="[^"]+"\s+height="[^"]+"\s+font="([^"]*)"[^>]*>([\s\S]*?)<\/text>/g;
+  while ((m = textRe.exec(xml)) !== null) {
+    const [, top, left, fontId, rawContent] = m;
+    const content = rawContent.replace(/<[^>]+>/g, "").trim();
+    if (!content) continue;
+    elems.push({
+      top:    parseInt(top, 10),
+      left:   parseInt(left, 10),
+      content,
+      size:   fontSizes.get(fontId)   ?? bodySize,
+      bold:   fontIsBold.get(fontId)  ?? false,
+      italic: fontIsItalic.get(fontId) ?? false,
+    });
+  }
+  if (elems.length === 0) return "";
+
+  // ── 4. Group elements into lines by top position (±4 px tolerance) ────────
+  const lines: Elem[][] = [];
+  let curLine: Elem[] = [];
+  let curTop = -999;
+  for (const el of elems) {
+    if (Math.abs(el.top - curTop) > 4) {
+      if (curLine.length) lines.push(curLine);
+      curLine = [el];
+      curTop  = el.top;
+    } else {
+      curLine.push(el);
+    }
+  }
+  if (curLine.length) lines.push(curLine);
+
+  // ── 5. Convert lines to semantic HTML ─────────────────────────────────────
+  const CLAUSE_RE = /^(\d+[\.\)]|(?:\d+\.)+\d*|[IVXLCDM]+[\.\)]|\([ivxlcdm]+\)|\([a-z]\)|[a-z][\.\)]|[\-\*\•])\s+/i;
+
+  const htmlParts: string[] = [];
+  for (const line of lines) {
+    line.sort((a, b) => a.left - b.left);
+
+    const maxSize  = Math.max(...line.map(e => e.size));
+    const anyBold  = line.some(e => e.bold);
+    const lineText = line.map(e => e.content).join(" ").trim();
+    if (!lineText) continue;
+
+    const isUpperCase = lineText === lineText.toUpperCase() && /[A-Z]/.test(lineText);
+    const isShortLine = lineText.length > 2 && lineText.length < 90;
+
+    // Build inline content preserving bold/italic per element
+    const inline = line.map(e => {
+      const t = escapeHtml(e.content);
+      if (e.bold && e.italic) return `<strong><em>${t}</em></strong>`;
+      if (e.bold)             return `<strong>${t}</strong>`;
+      if (e.italic)           return `<em>${t}</em>`;
+      return t;
+    }).join(" ");
+
+    let tag: string;
+    if (maxSize >= h1Threshold && isShortLine) {
+      tag = `<h1>${inline}</h1>`;
+    } else if (maxSize >= h2Threshold && isShortLine) {
+      tag = `<h2>${inline}</h2>`;
+    } else if (maxSize >= h3Threshold && anyBold && isShortLine) {
+      tag = `<h3>${inline}</h3>`;
+    } else if (isUpperCase && anyBold && isShortLine) {
+      tag = `<h2>${inline}</h2>`;
+    } else if (isUpperCase && isShortLine && maxSize >= bodySize) {
+      tag = `<h3>${inline}</h3>`;
+    } else if (CLAUSE_RE.test(lineText)) {
+      tag = `<p class="clause">${inline}</p>`;
+    } else {
+      tag = `<p>${inline}</p>`;
+    }
+    htmlParts.push(tag);
+  }
+  return htmlParts.join("\n");
 }
 
 async function extractDocxFast(buffer: Buffer): Promise<{ text: string; html: string }> {
@@ -322,13 +458,26 @@ async function extractTextFromFile(
 
   try {
     // ── PDF ──────────────────────────────────────────────────────────────────
+    // Run pdftotext (plain text) and pdftohtml -xml (structured HTML) in
+    // parallel — zero extra latency. HTML preserves bold, italic, and
+    // font-size-based headings so extractFormatPatterns() and firm style
+    // training actually see <h1>/<h2>/<strong> instead of flat <p> tags.
     if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
-      const raw = await withTimeout(
-        extractPdfWithNativeTool(file.buffer, options.maxPages),
+      const [raw, structuredHtml] = await withTimeout(
+        Promise.all([
+          extractPdfWithNativeTool(file.buffer, options.maxPages),
+          extractPdfStructuredHtml(file.buffer, options.maxPages).catch((err) => {
+            console.warn("[DOC PROCESSING] pdftohtml fallback:", err?.message);
+            return null; // fall back to textToLegalHtml below
+          }),
+        ]),
         fileName,
       );
       const text = raw.slice(0, MAX_TEXT_CHARS);
-      return { text, html: textToLegalHtml(text) };
+      const html = structuredHtml && structuredHtml.length > 20
+        ? structuredHtml
+        : textToLegalHtml(text);
+      return { text, html };
     }
 
     // ── DOCX ─────────────────────────────────────────────────────────────────
