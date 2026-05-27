@@ -1529,6 +1529,38 @@ export default function ChatWithPDFPage() {
                     )}
                   </div>
 
+                  {/* ── Reference banners — shown for BOTH PDF iframe and text view ── */}
+                  {highlightText && (
+                    <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/40 flex items-center justify-between shrink-0">
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                        {usePdfIframe
+                          ? `AI referenced a passage on page ${activeDocPage} — see highlighted section`
+                          : "Highlighted text referenced in the answer"}
+                      </span>
+                      <button
+                        onClick={() => { setHighlightText(""); setIsFullPageRef(false); }}
+                        className="text-[10px] text-amber-600 hover:text-amber-800 underline"
+                        data-testid="button-clear-highlight"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                  {isFullPageRef && !highlightText && (
+                    <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-200/50 dark:border-blue-800/40 flex items-center justify-between shrink-0">
+                      <span className="text-[10px] text-blue-700 dark:text-blue-400 font-medium">
+                        The answer referenced page {activeDocPage} broadly — no specific passage was cited
+                      </span>
+                      <button
+                        onClick={() => setIsFullPageRef(false)}
+                        className="text-[10px] text-blue-600 hover:text-blue-800 underline"
+                        data-testid="button-clear-fullpage-ref"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+
                   {/* Native PDF / image iframe */}
                   {usePdfIframe && (
                     <div className="flex-1 overflow-hidden">
@@ -1544,44 +1576,14 @@ export default function ChatWithPDFPage() {
 
                   {/* Text viewer — for DOCX or docs without file */}
                   {!usePdfIframe && (
-                    <>
-                      {highlightText && !!docPages[activeDocPage - 1] && (
-                        <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/40 flex items-center justify-between shrink-0">
-                          <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
-                            Highlighted text referenced in the answer
-                          </span>
-                          <button
-                            onClick={() => { setHighlightText(""); setIsFullPageRef(false); }}
-                            className="text-[10px] text-amber-600 hover:text-amber-800 underline"
-                            data-testid="button-clear-highlight"
-                          >
-                            Clear
-                          </button>
-                        </div>
-                      )}
-                      {isFullPageRef && !highlightText && (
-                        <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-200/50 dark:border-blue-800/40 flex items-center justify-between shrink-0">
-                          <span className="text-[10px] text-blue-700 dark:text-blue-400 font-medium">
-                            The answer referenced this page broadly — no specific passage was cited
-                          </span>
-                          <button
-                            onClick={() => setIsFullPageRef(false)}
-                            className="text-[10px] text-blue-600 hover:text-blue-800 underline"
-                            data-testid="button-clear-fullpage-ref"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      )}
-                      <ScrollArea className="flex-1 p-5">
-                        <div ref={docPanelRef} className="text-foreground leading-relaxed">
-                          <HighlightedPageText
-                            text={docPages[activeDocPage - 1] || ""}
-                            highlight={highlightText}
-                          />
-                        </div>
-                      </ScrollArea>
-                    </>
+                    <ScrollArea className="flex-1 p-5">
+                      <div ref={docPanelRef} className="text-foreground leading-relaxed">
+                        <HighlightedPageText
+                          text={docPages[activeDocPage - 1] || ""}
+                          highlight={highlightText}
+                        />
+                      </div>
+                    </ScrollArea>
                   )}
                 </div>
               );
