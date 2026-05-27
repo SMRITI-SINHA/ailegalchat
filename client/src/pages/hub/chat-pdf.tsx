@@ -1597,9 +1597,6 @@ export default function ChatWithPDFPage() {
                     <Scale className="h-3.5 w-3.5 text-white" />
                   </div>
                   <span className="font-medium text-sm text-amber-900 dark:text-amber-400">Nyaya AI</span>
-                  {nyayaMessages.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px]">{nyayaMessages.length} messages</Badge>
-                  )}
                 </div>
 
                 <ScrollArea className="flex-1 p-3">
