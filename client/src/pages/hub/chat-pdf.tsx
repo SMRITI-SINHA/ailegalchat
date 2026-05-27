@@ -570,13 +570,6 @@ export default function ChatWithPDFPage() {
         )
       );
       
-      if (sessionId && fullContent) {
-        authFetch("/api/chat/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, role: "assistant", content: fullContent }),
-        }).catch(console.error);
-      }
     } catch (error) {
       console.error("Nyaya AI error:", error);
       setNyayaMessages((prev) => [
@@ -685,13 +678,6 @@ export default function ChatWithPDFPage() {
         )
       );
       
-      if (sessionId && fullContent) {
-        authFetch("/api/chat/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, role: "assistant", content: fullContent }),
-        }).catch(console.error);
-      }
     } catch (error) {
       console.error("Nyaya AI error:", error);
       setNyayaMessages((prev) => [
@@ -933,14 +919,6 @@ export default function ChatWithPDFPage() {
     setInput("");
     setIsLoading(true);
 
-    if (currentSessionId) {
-      fetch("/api/chat/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: currentSessionId, role: "user", content: userQuestion }),
-      }).catch(console.error);
-    }
-
     try {
       // sessionDocumentIds is set synchronously when a session is opened/created,
       // so it is always the authoritative source. Fall back to uploadedDocs only when
@@ -1007,13 +985,6 @@ export default function ChatWithPDFPage() {
         )
       );
 
-      if (currentSessionId && fullContent) {
-        fetch("/api/chat/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: currentSessionId, role: "assistant", content: fullContent }),
-        }).catch(console.error);
-      }
     } catch (error) {
       console.error("Chat error:", error);
       setMessages((prev) => [
