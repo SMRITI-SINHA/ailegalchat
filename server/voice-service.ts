@@ -1,7 +1,12 @@
 import OpenAI from "openai";
 import { Readable } from "stream";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function makeOpenAI() {
+  const apiKey =
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  return new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
+}
 
 export async function transcribeAudio(
   audioBuffer: Buffer,
@@ -25,7 +30,7 @@ export async function transcribeAudio(
 
   const file = new File([audioBuffer], filename, { type: mimeType });
 
-  const result = await openai.audio.transcriptions.create({
+  const result = await makeOpenAI().audio.transcriptions.create({
     file,
     model: "whisper-1",
     response_format: "verbose_json",
@@ -80,7 +85,7 @@ export async function generateSpeech(
     `TTS (OpenAI): ${speakText.length} chars, voice=${voice}`
   );
 
-  const response = await openai.audio.speech.create({
+  const response = await makeOpenAI().audio.speech.create({
     model: "tts-1",
     voice: voice as any,
     input: speakText,
