@@ -711,57 +711,34 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No files uploaded" });
       }
 
-      // Phase 1: extract text + save to DB — respond immediately so user can start chatting
-      const uploadResults = await Promise.all(
-        files.map(async (file) => {
-          const extracted = await extractTextFromFile(file, { maxPages: 100, skipStructuredHtml: true });
-          const pageCount = Math.max(1, Math.ceil(extracted.text.length / 3000));
-          const decodedName = decodeFilename(file.originalname);
+      const userId = req.user!.id;
 
-          const doc = await storage.createDocument({
-            userId: req.user!.id,
+      // Phase 1: Create DB records immediately with "processing" status.
+      // Text extraction (pdftotext) can take 5–30 s for large files and must
+      // NOT block the HTTP response — the client polls GET /api/documents/:id
+      // until status changes to "completed".
+      const pendingDocs = await Promise.all(
+        files.map(async (file) => {
+          const decodedName = decodeFilename(file.originalname);
+          return storage.createDocument({
+            userId,
             name: decodedName,
             type: file.mimetype,
             size: file.size,
-            pages: pageCount,
-            status: "completed",
+            pages: 0,
+            status: "processing",
             processingCost: 0,
             summary: null,
-            extractedText: extracted.text,
-            extractedHtml: extracted.html,
+            extractedText: null,
+            extractedHtml: null,
             storagePath: null,
             storageUrl: null,
           });
-
-          const cost = 0.50 + (pageCount * 0.01);
-          await storage.updateDocument(doc.id, {
-            processingCost: parseFloat(cost.toFixed(2)),
-          });
-          await storage.addCostEntry({
-            type: "document_processing",
-            description: `Processed document (${pageCount} pages)`,
-            amount: cost,
-            modelUsed: "mini",
-          });
-
-          logAudit(req, {
-            action: "document_upload",
-            resourceType: "document",
-            resourceId: doc.id,
-            success: true,
-            metadata: { fileType: file.mimetype, sizeBytes: file.size, pages: pageCount },
-          });
-
-          return { doc, extracted, file };
         })
       );
 
-      const documents = uploadResults.map(r => r.doc);
-
-      // Return metadata only — exclude extractedText/extractedHtml from upload response.
-      // For large documents (800+ pages) these fields can be 2–5 MB each.
-      // The client fetches content lazily via GET /api/documents/:id when it opens a session.
-      res.status(201).json(documents.map(doc => ({
+      // Respond immediately — client shows "processing" and polls for completion.
+      res.status(201).json(pendingDocs.map(doc => ({
         id: doc.id,
         name: doc.name,
         type: doc.type,
@@ -772,51 +749,75 @@ export async function registerRoutes(
         uploadedAt: doc.uploadedAt,
       })));
 
-      // Phase 2: Background enrichment — runs AFTER response is sent.
-      // Supabase cloud backup + InLegalBERT structural analysis don't block chat.
-      const bgUserId = req.user!.id;
-      for (const { doc, extracted, file } of uploadResults) {
+      // Phase 2: Extract text + enrich in background (runs after response is sent).
+      for (const [i, doc] of pendingDocs.entries()) {
+        const file = files[i];
         (async () => {
-          const updates: Record<string, unknown> = {};
+          try {
+            const extracted = await extractTextFromFile(file, { maxPages: 100, skipStructuredHtml: true });
+            const pageCount = Math.max(1, Math.ceil(extracted.text.length / 3000));
+            const cost = 0.50 + (pageCount * 0.01);
 
-          // Cloud backup (Supabase)
-          if (supabaseStorage.isSupabaseConfigured()) {
-            try {
-              const tempId = require("crypto").randomUUID();
-              const uploaded = await withTimeout(
-                supabaseStorage.uploadDocument(bgUserId, tempId, file),
-                10000,
-                null,
-              );
-              if (uploaded) {
-                updates.storagePath = uploaded.path;
-                updates.storageUrl = uploaded.signedUrl;
-              } else {
-                console.warn(`[DOC BG] Supabase upload timed out for doc ${doc.id}`);
+            const updates: Record<string, unknown> = {
+              extractedText: extracted.text,
+              extractedHtml: extracted.html,
+              pages: pageCount,
+              status: "completed",
+              processingCost: parseFloat(cost.toFixed(2)),
+            };
+
+            // Supabase cloud backup
+            if (supabaseStorage.isSupabaseConfigured()) {
+              try {
+                const uploaded = await withTimeout(
+                  supabaseStorage.uploadDocument(userId, doc.id, file),
+                  10000,
+                  null,
+                );
+                if (uploaded) {
+                  updates.storagePath = uploaded.path;
+                  updates.storageUrl = uploaded.signedUrl;
+                }
+              } catch (e: any) {
+                console.warn(`[DOC BG] Supabase upload failed for doc ${doc.id}: ${e.message}`);
               }
-            } catch (e: any) {
-              console.warn(`[DOC BG] Supabase upload failed for doc ${doc.id}: ${e.message}`);
             }
-          }
 
-          // InLegalBERT structural classification
-          if (inLegalBERT.isConfigured() && extracted.text.length > 100) {
-            try {
-              const segments = await withTimeout(inLegalBERT.classifySegments(extracted.text), 8000, []);
-              if (segments.length > 0) {
-                const segmentSummary = segments.map((s: any) => `[${s.label}] ${s.text.substring(0, 100)}`).join("\n");
-                updates.extractedText = `=== DOCUMENT STRUCTURE (InLegalBERT Analysis) ===\n${segmentSummary}\n=== END STRUCTURE ===\n\n${extracted.text}`;
-                console.log(`[DOC BG] InLegalBERT classified ${segments.length} segments for doc ${doc.id}`);
+            // InLegalBERT structural classification
+            if (inLegalBERT.isConfigured() && extracted.text.length > 100) {
+              try {
+                const segments = await withTimeout(inLegalBERT.classifySegments(extracted.text), 8000, []);
+                if (segments.length > 0) {
+                  const segmentSummary = segments.map((s: any) => `[${s.label}] ${s.text.substring(0, 100)}`).join("\n");
+                  updates.extractedText = `=== DOCUMENT STRUCTURE (InLegalBERT Analysis) ===\n${segmentSummary}\n=== END STRUCTURE ===\n\n${extracted.text}`;
+                  console.log(`[DOC BG] InLegalBERT classified ${segments.length} segments for doc ${doc.id}`);
+                }
+              } catch (e) {
+                console.warn(`[DOC BG] InLegalBERT failed for doc ${doc.id}`);
               }
-            } catch (e) {
-              console.warn(`[DOC BG] InLegalBERT failed for doc ${doc.id}`);
             }
-          }
 
-          if (Object.keys(updates).length > 0) {
             await storage.updateDocument(doc.id, updates);
+            await storage.addCostEntry({
+              type: "document_processing",
+              description: `Processed document (${pageCount} pages)`,
+              amount: cost,
+              modelUsed: "mini",
+            });
+            console.log(`[DOC] Processed: ${doc.name} (${pageCount} pages)`);
+
+            logAudit(req, {
+              action: "document_upload",
+              resourceType: "document",
+              resourceId: doc.id,
+              success: true,
+              metadata: { fileType: file.mimetype, sizeBytes: file.size, pages: pageCount },
+            });
+          } catch (e: any) {
+            console.error(`[DOC] Extraction failed for ${doc.name}:`, e.message);
+            await storage.updateDocument(doc.id, { status: "failed" }).catch(() => {});
           }
-        })().catch(e => console.warn(`[DOC BG] Enrichment error for doc ${doc.id}: ${e.message}`));
+        })().catch(e => console.warn(`[DOC BG] Unhandled error for doc ${doc.id}: ${e.message}`));
       }
     } catch (error) {
       console.error("[AUDIT] Error uploading documents");

@@ -593,7 +593,44 @@ export default function ChatWithPDFPage() {
     }
   };
 
+  const pollDocRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pollDocumentStatus = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+
+    const check = async () => {
+      const stillPending: string[] = [];
+      for (const id of ids) {
+        try {
+          const res = await authFetch(`/api/documents/${id}`);
+          if (!res.ok) { stillPending.push(id); continue; }
+          const doc = await res.json();
+          if (doc.status === "completed" || doc.status === "ready") {
+            setUploadedDocs(prev =>
+              prev.map(d => d.id === id ? { ...d, status: "ready" as const, pages: doc.pages || d.pages } : d)
+            );
+          } else if (doc.status === "failed") {
+            setUploadedDocs(prev =>
+              prev.map(d => d.id === id ? { ...d, status: "ready" as const } : d)
+            );
+            toast({ title: "Processing issue", description: `${doc.name}: text extraction encountered an error. Chat may be limited.`, variant: "destructive" });
+          } else {
+            stillPending.push(id);
+          }
+        } catch {
+          stillPending.push(id);
+        }
+      }
+      if (stillPending.length > 0) {
+        pollDocRef.current = setTimeout(() => pollDocumentStatus(stillPending), 2000);
+      }
+    };
+    check();
+  }, [toast]);
+
   const handleFilesSelected = async (files: File[]) => {
+    if (pollDocRef.current) { clearTimeout(pollDocRef.current); pollDocRef.current = null; }
+
     const tempDocs: UploadedDoc[] = files.map((file, i) => ({
       id: `temp-${Date.now()}-${i}`,
       name: file.name,
@@ -620,22 +657,25 @@ export default function ChatWithPDFPage() {
       }
 
       const uploadedDocuments = await response.json();
-      
-      setUploadedDocs(
-        uploadedDocuments.map((doc: { id: string; name: string; pages: number; extractedText?: string }) => ({
-          id: doc.id,
-          name: doc.name,
-          pages: doc.pages || 0,
-          status: "ready" as const,
-          content: doc.extractedText || "",
-        }))
-      );
+      const initialDocs = uploadedDocuments.map((doc: { id: string; name: string; pages: number; status?: string }) => ({
+        id: doc.id,
+        name: doc.name,
+        pages: doc.pages || 0,
+        status: (doc.status === "completed" ? "ready" : "processing") as "ready" | "processing",
+        content: "",
+      }));
+      setUploadedDocs(initialDocs);
+      setIsUploadingDocs(false);
+
+      const pendingIds = initialDocs.filter((d: UploadedDoc) => d.status === "processing").map((d: UploadedDoc) => d.id);
+      if (pendingIds.length > 0) {
+        pollDocumentStatus(pendingIds);
+      }
     } catch (error) {
       console.error("Upload error:", error);
       const msg = error instanceof Error ? error.message : "Document upload failed. Please try again.";
       toast({ title: "Upload failed", description: msg, variant: "destructive" });
       setUploadedDocs([]);
-    } finally {
       setIsUploadingDocs(false);
     }
   };
