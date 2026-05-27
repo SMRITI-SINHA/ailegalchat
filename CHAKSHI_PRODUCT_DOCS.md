@@ -88,16 +88,27 @@ A 400-page charge-sheet or a 200-page agreement takes days to manually review an
 **Key capabilities:**
 - Upload PDF, DOCX, DOC, and scanned images (OCR for scanned docs)
 - Ask any question: "What are the payment terms?", "Summarise the facts", "List all dates mentioned", "What are the obligations of Party A?"
-- Every AI answer includes `[Page X]` inline citations — click any citation to jump directly to that page in the document viewer
+- Every AI answer includes `[Page X]` inline citations that are extracted from the response text and converted into clickable page-reference badges — click any badge to jump directly to that page in the document viewer
 - **Split-panel layout** — chat on the left, document on the right. The divider is draggable (28%–72% flex). Clicking a page citation automatically opens the document panel and scrolls to that page
 - **Yellow text highlighting** — when the AI references a specific passage, clicking the page badge highlights that exact paragraph in the text view
 - **Blue banner** for full-page references (when no specific passage is cited, just the page broadly)
-- **Persistent conversation history** — every question and answer is stored per session; the AI remembers the full conversation context across all follow-up questions
+- **Persistent conversation history** — every question and answer is stored per session; the AI remembers the full conversation context across all follow-up questions. Messages are saved once by the server after each AI response — no duplicates
 - **Smart history compression for long sessions** — for sessions longer than 8 messages, older turns are compressed into a summary block while the last 8 messages are kept verbatim, so context is never lost regardless of how long the conversation runs
-- **Nyaya AI panel** — a dedicated sub-panel inside DocuChat that also has full access to the uploaded document. Use it to get a second expert opinion without leaving the document view
+- **Nyaya AI panel** — a dedicated sub-panel inside DocuChat that also has full access to the uploaded document. Use it to get a second expert opinion, check the legal basis for clauses, or ask general law questions — all without leaving the document view
 - **Text selection → Ask Nyaya AI** — select any passage in the AI response, click "Ask Nyaya AI", and the Nyaya panel opens with that text pre-loaded as context, alongside the full document
 - **Notes panel** — save important findings from the session as private notes
 - **Quick action buttons** — one-click prompts: Summarise, Timeline, Key Issues, Legal Analysis
+
+**Nyaya AI panel inside DocuChat — Sources section:**
+
+When Nyaya AI answers a question that involves statutes, cases, judgments, or recent legal developments, a **Sources** section appears below the answer. It is split into two sub-groups:
+
+- **Case Law** — Indian Kanoon results. Each card shows the case/statute title and a short excerpt in an amber-tinted card with a Scale ⚖️ icon. Clicking opens `indiankanoon.org/doc/{id}` in a new tab. Only shown when the query contains legal keywords (section, act, IPC, CrPC, judgment, court, statute, regulation, etc.)
+- **Web Sources** — Perplexity results. Each card shows the site favicon and domain name in a collapsed pill. Click to expand — the full article title appears as a primary-coloured clickable link that opens the page in a new tab. Favicon falls back to a Globe icon if it cannot load. Only shown when Perplexity found relevant recent legal updates (amendments, notifications, judicial developments)
+
+**Relevance filtering:** Only citations the AI actually referenced by number (`[1]`, `[2]`, etc.) in its response are displayed — unrelated search results that the AI ignored are automatically suppressed.
+
+**Note:** The Sources section appears only in the Nyaya AI panel. The main DocuChat chat shows page-reference badges only (not an external Sources section), since in document analysis the document's own pages are the canonical source.
 
 **Supported document formats:** PDF (native + scanned), DOCX, DOC, images (JPG, PNG — OCR-processed)
 
@@ -456,7 +467,13 @@ The following improvements were built and shipped in the current development ses
 **Smart compression for long sessions:** For sessions longer than 8 messages, older turns are condensed into a 250-character-per-message summary block and the last 8 messages are sent verbatim. The AI never loses context regardless of session length.
 
 ### DocuChat — Page References on Every Response
-The system prompt now explicitly instructs the AI to include `[Page X]` citations on every response — including follow-up questions — and to end every document-referencing response with a `References: [Page X], [Page Y]` summary line. This ensures the page-reference badges always appear below the AI's answer.
+The system prompt instructs the AI to include `[Page X]` citations inline on every response — including follow-up questions — and to append a `References: [Page X], [Page Y]` summary line at the end. The summary line is stripped by `parseAndCleanContent()` before rendering (so it never appears as raw text), but the inline `[Page X]` markers within the prose are extracted and converted into clickable page-reference badges that appear below the answer.
+
+**How `parseAndCleanContent` works (file: `client/src/pages/hub/chat-pdf.tsx`):**
+1. Pre-strip step: regex removes the trailing `References: [Page X], [Page Y]…` summary line entirely before any further processing
+2. Inline extraction: regex `([^.!?\n]{0,160}?)\s*\[Pages?\s*(\d+)…\]` captures the surrounding context (up to 90 chars) as `refText` for use as a highlight term when jumping to that page
+3. Parenthetical extraction: `(Page X)` form is also recognised and stripped
+4. Result: `{ clean: string, pageRefs: PageRef[] }` — clean text with no `[Page X]` residue, sorted page ref array
 
 ### DocuChat — Nyaya AI Panel Has Document Context
 **Before:** The Nyaya AI panel inside DocuChat was a standalone chat with no knowledge of the uploaded document.
@@ -473,6 +490,115 @@ Removed the amber/yellow information banner that appeared above the document pan
 
 ### Nyaya AI Tab — No Message Count Badge
 Removed the message count badge ("2") from the Nyaya AI tab button in the DocuChat toolbar.
+
+---
+
+### DocuChat — Page Ref Text No Longer Appears as Raw Text in Responses
+**Problem:** The AI was generating a `References: [Page 10], [Page 1], [Page 5]` summary line at the end of every document response. `parseAndCleanContent()` was extracting the page numbers correctly but leaving behind `References: , ,` residue as rendered text in the chat bubble.
+
+**Fix:** Added a pre-processing step at the top of `parseAndCleanContent()` that strips the entire `References: [Page X], [Page Y]…` line before the main extraction pass. The page ref badges still populate correctly from the inline `[Page X]` markers within the prose. No user-visible `References:` text ever appears.
+
+**Regex used:**
+```
+/\n?References:\s*(?:\[Pages?\s*\d+(?:\s*[-–]\s*\d+)?\]\s*,?\s*)+\.?\n?/gi
+```
+
+---
+
+### Nyaya AI — No Page References Section
+**Problem:** Nyaya AI (the right panel inside DocuChat) was showing raw `[Page X]` text in its responses because its two stream handlers were setting message content directly from `fullContent` without passing it through `parseAndCleanContent()`. Page reference markers are meaningless in Nyaya AI since there is no document-viewer to jump to from that panel.
+
+**Fix:** Both Nyaya AI stream handlers (text-selection flow and direct-send flow) now call `parseAndCleanContent(fullContent).clean` before storing the message. The `[Page X]` markers and any `References:` summary lines are silently stripped. The `pageRefs` array from the parse result is intentionally discarded — the Nyaya AI panel renders no page-reference badge section.
+
+**Files changed:** `client/src/pages/hub/chat-pdf.tsx` — both stream handler finalisation blocks.
+
+---
+
+### DocuChat & Nyaya AI — Duplicate Messages on Session Reload Fixed
+**Problem:** Every message was being written to the database twice, causing conversations to show duplicate questions and answers when re-opened.
+
+**Root cause:** The server route (`POST /api/chat/query`) already saves both the user message and the assistant message atomically at the end of every streamed response (lines 1327–1342 in `server/routes.ts`). But four separate `fetch("/api/chat/messages")` calls in the client were also saving those same messages:
+- `handleSend` (DocuChat): saved the user message client-side before sending
+- `handleSend` (DocuChat): saved the assistant message client-side after the stream ended
+- First Nyaya handler (text-selection): saved the assistant message client-side
+- `handleNyayaSend` handler: saved the assistant message client-side
+
+**Fix:** All four redundant client-side `fetch("/api/chat/messages", { method: "POST" })` calls were removed. The server route is the single source of truth for persistence. Message count per session is updated by the server immediately after both messages are saved.
+
+**Note:** Existing sessions that already have duplicate messages in the database retain those duplicates. Only new conversations from the fix forward are stored cleanly.
+
+---
+
+### DocuChat & Nyaya AI — Citation Relevance Filtering
+**Problem:** The server runs an Indian Kanoon keyword search and a Perplexity web search for every query that contains legal keywords. In DocuChat, this returned unrelated historical judgments (e.g. asking "what does clause 7 say?" triggered a search for "clause" which returned 5 old cases irrelevant to the specific document). The AI ignored those results but they still appeared in the Sources section.
+
+**Fix:** A `getReferencedCitations()` helper function was added to `client/src/pages/hub/chat-pdf.tsx`:
+
+```typescript
+function getReferencedCitations(content: string, citations: Citation[]): Citation[] {
+  if (!citations || citations.length === 0) return [];
+  return citations.filter((_, i) => new RegExp(`\\[${i + 1}\\]`).test(content));
+}
+```
+
+This checks the full AI response text for `[1]`, `[2]`, `[3]`… markers. Only citations the AI actually cited inline are returned. Citations that the AI received but chose not to reference are silently dropped and never shown to the user.
+
+**The server still runs both IK and Perplexity** for any query containing legal keywords (section, act, IPC, CrPC, judgment, court, statute, law, legal, contract, property, criminal, civil, tort, arbitration, SEBI, RBI, MCA, GST, income tax, compliance, regulation). The filtering is entirely client-side.
+
+---
+
+### DocuChat — Stream Handler Now Captures Citations
+**Before:** The DocuChat main chat stream handler only read `data.content` events from the SSE stream and ignored the `data.done` event entirely. Citations sent by the server in the `done` event were lost.
+
+**After:** The stream handler now reads `data.done` and extracts `data.citations` (the full citations array). After the stream ends, `getReferencedCitations()` is applied to filter to only referenced ones. These are stored on the `ChatMessage` object. Currently, the citations are not rendered in DocuChat's main chat — the Sources section lives only in the Nyaya AI panel. But the data is now properly captured and available for future use.
+
+**Interface change:** `ChatMessage` now has an optional `citations?: Citation[]` field alongside `pageRefs?: PageRef[]`.
+
+---
+
+### Nyaya AI — Sources Section: Grouped Display with Favicons
+**Before:** The Nyaya AI Sources section showed all citations in a flat list using a generic `CitationCard` component with a file icon and no visual distinction between Indian Kanoon case law and external websites.
+
+**After:** The Sources section is split into two named sub-groups, each with a distinct visual design:
+
+**Case Law sub-group (Indian Kanoon):**
+- Amber-tinted card (`bg-amber-50/60 dark:bg-amber-950/20`) with a Scale ⚖️ icon
+- Shows the case/statute title and a short excerpt (up to 150 characters)
+- Entire card is a `<button>` — click anywhere to open `https://indiankanoon.org/doc/{docId}/` in a new tab
+- ExternalLink icon becomes visible on hover
+
+**Web Sources sub-group (Perplexity):**
+- Collapsed state: site favicon (loaded via `https://www.google.com/s2/favicons?domain={domain}&sz=32`) + domain name + ChevronDown icon
+- Expanded state (click to toggle): full article title as a primary-coloured clickable link + raw URL below it + ExternalLink icon
+- Favicon failure gracefully falls back to a Globe icon via `onError` handler
+- Expand/collapse is managed by internal `useState` — each card is independent
+
+**Routing logic (`CitationCard` dispatcher in `client/src/components/citation-card.tsx`):**
+```typescript
+export function CitationCard({ citation }: CitationCardProps) {
+  const isIK = citation.url?.includes("indiankanoon.org");
+  return isIK
+    ? <IKCitationCard citation={citation} />
+    : <WebCitationCard citation={citation} />;
+}
+```
+
+**Rendering logic in Nyaya AI panel (`client/src/pages/hub/chat-pdf.tsx`):**
+```typescript
+const ikCites  = msg.citations.filter(c => c.url?.includes("indiankanoon.org"));
+const webCites = msg.citations.filter(c => c.id.startsWith("web-"));
+```
+Each sub-group is only rendered when it has entries. If only IK results were cited, only "Case Law" appears. If only Perplexity results were cited, only "Web Sources" appears. If both, both appear.
+
+**Sources section placement rule:** The Sources section (with IK and Web sub-groups) appears **only** in the Nyaya AI panel. The main DocuChat chat bubble shows only page-reference badges. This reflects the purpose of each: DocuChat is document interrogation (the document IS the source); Nyaya AI is general legal research (external sources are relevant).
+
+**Server-side intelligence (unchanged):**
+- Indian Kanoon search: triggered when query contains any of 24 legal keywords
+- Perplexity search: triggered by same `isLegalQuery` check, returns recent amendments/notifications/judicial developments
+- Both searches run in parallel with a 5-second timeout each (fail-safe)
+- IK: top 5 results, each assigned citation index `[1]`…`[5]`
+- Perplexity: top 3 web sources, assigned citation indices continuing from IK (e.g. `[6]`, `[7]`, `[8]`)
+- All results sent to the AI as numbered context blocks; AI decides which to cite based on relevance to the specific question
 
 ---
 
