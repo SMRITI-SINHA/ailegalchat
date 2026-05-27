@@ -130,6 +130,80 @@ When Nyaya AI answers a question that involves statutes, cases, judgments, or re
 
 ---
 
+**Page layout**
+
+The Nyaya AI page has a fixed **header bar** (amber gradient icon + "Nyaya AI" title + subtitle "Your intelligent legal assistant") and two action buttons: **Voice Mode** and **Previous Chats**. Below the header is a scrollable message area. At the bottom is the input bar (file attach icon + text input + send button).
+
+When the message area is empty the page shows a **welcome screen**: a disclaimer card ("This AI provides legal research and information. No legal opinion or advice is provided.") and a 2×3 grid of **sample question cards** covering both legal questions and drafting requests — clicking any card sends that question immediately.
+
+---
+
+**Chat messages**
+
+Each assistant response is shown in a card with:
+- Amber Scale ⚖️ icon + "Nyaya AI" label
+- A small amber-left-border disclaimer reminder
+- The AI response rendered as formatted HTML (markdown converted)
+- Confidence indicator (shown when available)
+- **Sources section** — Case Law cards (Indian Kanoon, opens `indiankanoon.org/doc/{id}`) and Web Sources (Perplexity, expanded by click). Only citations actually referenced by number in the response are displayed (relevance-filtered). See Section 4.1 for full Sources anatomy.
+
+---
+
+**File attachments**
+
+The paperclip button (bottom-left of input bar) opens a file picker accepting `.pdf`, `.doc`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg`. Multiple files may be attached in one upload. Successfully uploaded files appear as chips above the input bar with an ✕ to remove them. Each attached file's name is displayed as a tag inside the user message bubble. The document IDs are sent with the next message so the AI can read and reason over the uploaded content.
+
+---
+
+**Document generation flow (in-chat drafting)**
+
+Nyaya AI can detect when a message is really a request to draft a legal document and activates a dedicated drafting pipeline inline — without leaving the chat.
+
+**Step 1 — Intent detection:**
+Every message is checked against two regex patterns before being sent to the normal chat endpoint:
+- *Drafting verbs:* draft, write, prepare, create, generate, compose, draw up, help me draft, help me write, make me a
+- *Legal document nouns:* notice, petition, contract, agreement, application, affidavit, bail, writ, reply, plaint, complaint, NDA, deed, lease, MOU, letter of intent, will, trust, power of attorney, suit, indemnity, guarantee, injunction, memorandum, resolution, employment agreement, rental agreement, loan agreement
+
+If both patterns match, the message is sent to `POST /api/nyaya/detect-draft` *instead of* the normal chat endpoint. The API returns `{ isDraft, documentType, suggestedTitle, questions[] }`.
+
+**Step 2 — DraftQuestionsCard (amber card):**
+If `isDraft = true` and questions are returned, a **DraftQuestionsCard** is inserted as the next assistant message. It does not send to the normal chat endpoint at all — the loading indicator is cleared immediately and the card is shown. The card has:
+
+| Element | Description |
+|---|---|
+| Header | Amber Scale ⚖️ icon + "Nyaya AI" label + amber **"Drafting Mode"** badge |
+| Intro line | "Sure! To draft your **{documentType}**, I need a few details:" |
+| Question fields | Up to N questions, each with a label, optional hint, required indicator (*), and one of five input types: `text` (single-line Input), `textarea` (min-height 80 px), `select` (dropdown), `radio` (pill-style toggle buttons — amber fill when selected), `multi_select` (rounded chip toggles — amber tint when selected) |
+| Generate Draft button | Full-width amber button, disabled until all required fields are filled. Shows "Generating Draft…" with spinner while in progress. |
+
+Once the user clicks **Generate Draft**, the card collapses to a "Answers submitted — generating your draft below." confirmation with a green tick.
+
+**Step 3 — DraftOutputCard (green-border card):**
+On successful generation the response from `POST /api/drafts/generate` is rendered as a new assistant message — a **DraftOutputCard**. The draft is automatically saved to the user's Drafts in the database.
+
+| Element | Description |
+|---|---|
+| Header | Amber Scale ⚖️ icon + "Nyaya AI" label + green **"Draft Generated"** badge. When firm style is active, an additional amber-outline **"Firm Style Applied"** badge appears. |
+| Document preview | A bordered panel showing the document title on a muted header bar (FileText icon + truncated title), then the full rendered HTML draft in a scrollable area capped at **400 px height** with `prose prose-sm` styling. |
+| **Edit** button | Stores the draft ID in `sessionStorage` (`nyaya_open_draft_id`) then navigates to `/hub/drafting/ai`. The AI Drafting page reads this on mount, locates the matching saved draft, and opens it directly in the editor — no manual selection needed. |
+| **Download** button | Extracts plain text from the HTML, creates a `.txt` blob, and triggers a browser download named `{title}.txt`. |
+| **Saved in Drafts** button | Shows a green CheckCircle ✓ and "Saved in Drafts" (draft is already persisted from generation). Clicking it shows a toast confirming location. |
+| **Use Trained Style** button | Re-runs `POST /api/drafts/generate` with the same params plus `useFirmStyle: true`. Shows "Applying…" spinner while in progress. On success, the preview content is replaced with the firm-style version and the "Firm Style Applied" badge appears. The button toggles to "Discard Trained Style" — clicking it restores the original version. Disabled (with tooltip) if no training documents have been uploaded (checks `GET /api/training-docs`). |
+
+---
+
+**Voice Mode**
+
+Clicking the **Voice Mode** button in the header replaces the entire chat UI with the `VoiceAssistant` component — a dedicated voice interface using Whisper for speech-to-text and OpenAI TTS ("nova" voice) for text-to-speech. An "Exit Voice Mode" control returns to the standard chat.
+
+---
+
+**Session history (Previous Chats)**
+
+Clicking **Previous Chats** opens a dialog listing all Nyaya AI sessions. Each session card shows the session title (first 50 characters of the opening message + "..."), time since last activity, and message count. Hover reveals a red trash icon to delete the session. Clicking a session restores the full message history (fetched from `/api/chat/sessions/{id}/messages`). A **Start New Chat** button at the top of the dialog clears the current session.
+
+---
+
 ### 4.3 CNR Chatbot — Live Case Status
 
 **What it does:** Enter a CNR (Case Number Record) number and get the live status of any court case filed in India. The page has two main tabs.
@@ -297,6 +371,68 @@ Selecting any text in the editor (minimum 3 characters) triggers a floating **Re
 | Discard button | Closes the panel and discards the refined result — original text is untouched. |
 
 All refine operations hit `POST /api/refine` with `{ text, action, customPrompt, selectedHtml }`. The API returns `{ refined, note, isHtml }`.
+
+---
+
+**Research Sidebar (Nyaya AI panel inside the editor)**
+
+All editor contexts that can render the Research Sidebar (AI Drafting, Custom Drafting, Empty Document, Legal Memo Generator) show a **Research Sidebar** as a 400 px right panel (min-width 360 px) that slides alongside the document. The sidebar is activated by a toolbar or header button specific to each context.
+
+The sidebar has **two top-level tabs:**
+
+---
+
+**Tab 1 — AI Legal Research**
+
+At the top of the Research tab:
+
+| Control | Description |
+|---|---|
+| Advanced toggle (Switch) | Toggles between Standard Search and Advanced Research mode |
+| "Live Search" badge | Appears only when Advanced mode is on (amber "⚡ Live Search" badge) |
+| Search input | Placeholder: "Search legal provisions…" (Standard) or "Advanced legal search…" (Advanced). Press Enter or click the Search button to run. |
+| Search button (icon) | Triggers the query. Disabled while a search is pending. |
+
+**Standard Search mode** calls `POST /api/research/search`. Results appear as a card list. After results load, two filter buttons appear:
+
+- **New Laws** — shows only results where the title matches Indian law recency heuristics (newer legislation)
+- **Old Laws** — shows only results that do not match those heuristics
+
+Each result card shows the document title and a short excerpt. Two action buttons per result:
+- **Add to Notes** — appends the result title to the Notes textarea in the Notes tab
+- **Add to Document** (shown only when the sidebar has an `onAddToDocument` callback, i.e., when opened from a live editor context) — inserts the result title text at the current cursor position in the editor
+
+**Advanced Research mode** calls `POST /api/research/advanced`. Results are shown in four collapsible sections:
+
+| Section | Icon | Contents |
+|---|---|---|
+| AI Answer | — | Free-text AI analysis block (JSON artifacts stripped and cleaned before display) |
+| Extracted Paragraphs | ChevronDown | Verbatim quoted paragraphs, each with citation, acts as badges, and an **Add to Document** button (inserts `"quote" — citation` into the editor) |
+| Timeline | Clock | Date + event pairs from the research |
+| Conflicts | ⚠️ amber | Conflicting authority issues — shows the conflict description and the sources in tension |
+
+A source list (up to 5 items, clickable links opening in new tab) appears below the four collapsibles.
+
+A disclaimer note is shown above all advanced results (returned from the API).
+
+---
+
+**Tab 2 — Notes**
+
+The Notes tab has two sub-tabs:
+
+**Write sub-tab:**
+
+| Element | Description |
+|---|---|
+| Textarea | Free-text note editor (fills available height, resizable vertically). Placeholder: "Write your notes here…" |
+| Download button (dropdown) | Exports the current note in three formats: **TXT** (plain text blob download), **DOC** (Word-compatible HTML blob, `.doc` extension), **PDF** (generated client-side via `jsPDF` with automatic page-break handling) |
+| Save Note / Update button | Opens a dialog prompting for a note name. Creates a new note (`POST /api/research/notes`) or updates an existing one (`PATCH /api/research/notes/{id}`). When a `draftId` is provided by the editor context, notes are scoped to that draft. On success, the textarea and name field are cleared. |
+| New button | Appears only when editing an existing note. Clears the textarea and exits edit mode so a fresh note can be written. |
+
+**Saved sub-tab:**
+
+Lists all saved notes (fetched from `/api/research/notes` or `/api/research/notes?draftId={id}` when draft-scoped). Each note card shows its name and a snippet of content. Clicking a note loads it into the Write tab for editing. A delete button (trash icon) permanently removes the note. The tab label shows the live count of saved notes (e.g., "Saved (3)").
 
 ---
 
@@ -838,6 +974,32 @@ Complete documentation of the PremiumEditor (`client/src/components/premium-edit
 - Two-stage streaming: "Researching…" stage (InLegalBERT + IK + Perplexity, Layers 0-2) then "Writing…" stage (SSE token stream)
 - After generation: memo opens in AI Editor (Section 4.6a) with full editing, translation, AI Assistance, Refine; saved as draft type=`memo`
 - IRAC/CRAC/CREAC framework descriptions clarified with audience labels
+
+---
+
+### Docs Update — Section 4.2 Nyaya AI: Full Expansion (Document Generation Flow, Chat UI, Voice, History)
+**What was missing:** Section 4.2 had only a 6-bullet summary. The full in-chat document generation pipeline was completely undocumented.
+
+**What was added:**
+- **Page layout:** Header bar anatomy (amber icon, Voice Mode button, Previous Chats button), welcome screen (disclaimer card, 2×3 sample question grid), chat message card anatomy (confidence indicator, formatted HTML, Sources section)
+- **File attachments:** Paperclip button, accepted types (PDF/DOC/DOCX/TXT/PNG/JPG/JPEG), multi-file, chip display above input bar, file names shown in user message bubble, document IDs sent with next message
+- **Document generation flow — Step 1 Intent detection:** Both regex patterns (drafting verbs + legal doc nouns), `POST /api/nyaya/detect-draft` API call, response shape `{ isDraft, documentType, suggestedTitle, questions[] }`, fall-through to normal chat if either pattern misses or API returns `isDraft: false`
+- **Step 2 DraftQuestionsCard:** Full anatomy — amber card, "Drafting Mode" badge, all five question input types (text, textarea, select, radio pill-buttons, multi_select chip-toggles), required-field validation, Generate Draft button state (disabled until valid, spinner during generation), post-submit collapse to confirmation state
+- **Step 3 DraftOutputCard:** Full anatomy — green-border card, "Draft Generated" badge, "Firm Style Applied" badge (conditional), document preview panel (400 px max-height scrollable), all four action buttons with exact behaviours: Edit (sessionStorage redirect), Download (TXT blob), Saved in Drafts (toast), Use Trained Style (re-generation with `useFirmStyle:true`, toggle/discard, disabled if no training docs)
+- **Voice Mode:** Replaces chat UI with VoiceAssistant component (Whisper STT + TTS "nova" voice)
+- **Session history:** Previous Chats dialog — session cards (title, time, message count, delete on hover), Start New Chat button, session restore from `/api/chat/sessions/{id}/messages`
+
+---
+
+### Docs Update — Section 4.6a AI Editor Interface: Research Sidebar Added
+**What was missing:** The Research Sidebar (Nyaya AI panel inside the editor, `client/src/components/research-sidebar.tsx`) was not documented at all.
+
+**What was added:**
+- **Sidebar container:** 400 px wide right panel (min-width 360 px), two top-level tabs: "AI Legal Research" and "Notes"
+- **Research tab — Standard mode:** Advanced toggle + "Live Search" badge, search input (Enter or button), `POST /api/research/search`, New Laws / Old Laws filter buttons, result cards with "Add to Notes" and "Add to Document" buttons
+- **Research tab — Advanced mode:** `POST /api/research/advanced`, four collapsible sections (AI Answer, Extracted Paragraphs with acts badges + "Add to Document" per paragraph, Timeline, Conflicts in amber), source links list (up to 5), disclaimer note
+- **Notes tab — Write sub-tab:** Full-height textarea, Download dropdown (TXT / DOC / PDF via jsPDF with auto page-break), Save Note / Update button (name dialog, `POST` or `PATCH /api/research/notes`), draft-scoped notes when `draftId` provided, New button clears to fresh note when editing existing
+- **Notes tab — Saved sub-tab:** Live count in tab label, list of saved notes, click to load into Write tab for editing, delete (trash) button, scoped by `draftId` when available
 
 ---
 
