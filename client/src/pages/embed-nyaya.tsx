@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { AiThinkingText } from "@/components/ai-thinking-text";
 import { authFetch } from "@/lib/queryClient";
 import { Scale, Send, Sparkles, Lightbulb, AlertCircle } from "lucide-react";
 
@@ -481,8 +482,8 @@ export default function EmbedNyayaPage() {
                   maxWidth: "90%",
                 }}
               >
-                <Sparkles size={14} color="#b69d74" style={{ animation: "pulse 1.5s infinite" }} />
-                <span style={{ fontSize: 13, color: "#9a8a74" }}>Researching Indian law...</span>
+                <Sparkles size={14} color="#b69d74" style={{ animation: "pulse 1.5s infinite", flexShrink: 0 }} />
+                <AiThinkingText size="xs" color="#9a8a74" />
               </div>
             )}
             <div ref={messagesEndRef} />

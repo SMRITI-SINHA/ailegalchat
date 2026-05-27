@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { AiThinkingText } from "@/components/ai-thinking-text";
 import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -1416,8 +1417,9 @@ export default function ChatWithPDFPage() {
                 ))}
                 {isLoading && (
                   <div className="flex justify-start">
-                    <div className="bg-muted p-3 rounded-lg">
-                      <Sparkles className="h-4 w-4 animate-pulse" />
+                    <div className="bg-muted p-3 rounded-lg flex items-center gap-2.5 max-w-[85%]">
+                      <Sparkles className="h-4 w-4 animate-pulse shrink-0" />
+                      <AiThinkingText />
                     </div>
                   </div>
                 )}
@@ -1648,8 +1650,8 @@ export default function ChatWithPDFPage() {
                         <Card className="border-0 shadow-sm">
                           <CardContent className="p-2.5">
                             <div className="flex items-center gap-2">
-                              <Sparkles className="h-3 w-3 animate-pulse text-primary" />
-                              <span className="text-xs text-muted-foreground">Thinking…</span>
+                              <Sparkles className="h-3 w-3 animate-pulse text-primary shrink-0" />
+                              <AiThinkingText size="xs" />
                             </div>
                           </CardContent>
                         </Card>

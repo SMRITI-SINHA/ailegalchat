@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import { AiThinkingText } from "@/components/ai-thinking-text";
 import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1046,10 +1047,8 @@ export default function NyayaAIPage() {
                     <Card>
                       <CardContent className="p-4">
                         <div className="flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 animate-pulse text-amber-500" />
-                          <span className="text-sm text-muted-foreground">
-                            {isDraftGenerating ? "Generating your draft..." : "Thinking..."}
-                          </span>
+                          <Sparkles className="h-4 w-4 animate-pulse text-amber-500 shrink-0" />
+                          <AiThinkingText />
                         </div>
                       </CardContent>
                     </Card>
