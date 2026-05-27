@@ -1,84 +1,120 @@
-import { FileText, ExternalLink } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState } from "react";
+import { Scale, ExternalLink, ChevronDown, ChevronUp, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface Citation {
+export interface CitationData {
   id: string;
   source: string;
   text: string;
   page?: number;
-  paragraph?: number;
   url?: string;
 }
 
-interface CitationCardProps {
-  citation: Citation;
-  isExpanded?: boolean;
-  onToggle?: () => void;
-  className?: string;
+function getDomain(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
 }
 
-export function CitationCard({
-  citation,
-  isExpanded = false,
-  onToggle,
-  className,
-}: CitationCardProps) {
-  const handleOpen = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (citation.url) {
-      window.open(citation.url, "_blank", "noopener,noreferrer");
-    }
+function FaviconImg({ domain, className }: { domain: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Globe className={cn("h-4 w-4 text-muted-foreground", className)} />;
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+      alt=""
+      className={cn("h-4 w-4 rounded-sm object-contain", className)}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function IKCitationCard({ citation }: { citation: CitationData }) {
+  const handleOpen = () => {
+    if (citation.url) window.open(citation.url, "_blank", "noopener,noreferrer");
   };
 
   return (
-    <Card
-      className={cn(
-        "transition-all hover-elevate",
-        citation.url ? "cursor-pointer" : "cursor-default",
-        isExpanded && "ring-1 ring-primary",
-        className
-      )}
-      onClick={citation.url ? handleOpen : onToggle}
+    <button
+      onClick={handleOpen}
+      className="w-full text-left flex items-start gap-2 p-2 rounded-md bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-900/30 border border-amber-200/50 dark:border-amber-800/30 transition-colors group"
       data-testid={`card-citation-${citation.id}`}
     >
-      <CardContent className="p-3">
-        <div className="flex items-start gap-2">
-          <div className="p-1.5 rounded bg-muted flex-shrink-0">
-            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-          </div>
-          <div className="flex-1 min-w-0 overflow-hidden">
-            <p className="text-sm font-medium break-words" title={citation.source}>
-              {citation.source}
-            </p>
-            {citation.page && (
-              <p className="text-xs text-muted-foreground font-mono">
-                Page {citation.page}
-                {citation.paragraph && `, Para ${citation.paragraph}`}
-              </p>
-            )}
-            {citation.url && (
-              <p className="text-xs text-primary/70 truncate mt-0.5 flex items-center gap-1">
-                <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                {citation.url.replace(/^https?:\/\//, "")}
-              </p>
-            )}
-          </div>
-          {citation.url && (
-            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-          )}
-        </div>
-
-        {isExpanded && citation.text && (
-          <div className="mt-3 pt-3 border-t">
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              "{citation.text}"
-            </p>
-          </div>
+      <div className="p-1 rounded bg-amber-100 dark:bg-amber-900/40 shrink-0 mt-0.5">
+        <Scale className="h-3 w-3 text-amber-700 dark:text-amber-400" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-medium leading-snug text-foreground break-words line-clamp-2">
+          {citation.source}
+        </p>
+        {citation.text && (
+          <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+            {citation.text}
+          </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+      <ExternalLink className="h-3 w-3 text-muted-foreground/50 shrink-0 mt-0.5 group-hover:text-primary/60 transition-colors" />
+    </button>
   );
+}
+
+function WebCitationCard({ citation }: { citation: CitationData }) {
+  const [expanded, setExpanded] = useState(false);
+  const domain = citation.url ? getDomain(citation.url) : citation.source;
+
+  const handleLinkClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (citation.url) window.open(citation.url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div
+      className="rounded-md border border-border/50 overflow-hidden"
+      data-testid={`card-citation-${citation.id}`}
+    >
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 bg-muted/40 hover:bg-muted/70 transition-colors"
+      >
+        <FaviconImg domain={domain} />
+        <span className="flex-1 text-[11px] font-medium text-left truncate text-foreground">
+          {domain}
+        </span>
+        {expanded
+          ? <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />
+          : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+        }
+      </button>
+
+      {expanded && (
+        <div className="px-2 py-2 bg-background border-t border-border/40">
+          <button
+            onClick={handleLinkClick}
+            className="w-full text-left group flex items-start gap-1.5"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-medium text-primary group-hover:underline leading-snug break-words">
+                {citation.text || citation.source}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                {citation.url}
+              </p>
+            </div>
+            <ExternalLink className="h-3 w-3 text-primary/60 shrink-0 mt-0.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface CitationCardProps {
+  citation: CitationData;
+}
+
+export function CitationCard({ citation }: CitationCardProps) {
+  const isIK = citation.url?.includes("indiankanoon.org");
+  return isIK
+    ? <IKCitationCard citation={citation} />
+    : <WebCitationCard citation={citation} />;
 }
 
 interface CitationInlineProps {

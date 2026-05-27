@@ -1634,14 +1634,31 @@ export default function ChatWithPDFPage() {
                                   className="text-xs leading-relaxed prose prose-sm dark:prose-invert max-w-none"
                                   dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }}
                                 />
-                                {msg.citations && msg.citations.length > 0 && (
-                                  <div className="mt-2 pt-2 border-t space-y-1">
-                                    <h4 className="text-[10px] font-medium text-muted-foreground">Sources</h4>
-                                    {msg.citations.map((cite) => (
-                                      <CitationCard key={cite.id} citation={cite} />
-                                    ))}
-                                  </div>
-                                )}
+                                {msg.citations && msg.citations.length > 0 && (() => {
+                                  const ikCites = msg.citations.filter(c => c.url?.includes("indiankanoon.org"));
+                                  const webCites = msg.citations.filter(c => c.id.startsWith("web-"));
+                                  return (
+                                    <div className="mt-2 pt-2 border-t space-y-2">
+                                      <h4 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Sources</h4>
+                                      {ikCites.length > 0 && (
+                                        <div className="space-y-1">
+                                          <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wider font-semibold">Case Law</p>
+                                          {ikCites.map((cite) => (
+                                            <CitationCard key={cite.id} citation={cite} />
+                                          ))}
+                                        </div>
+                                      )}
+                                      {webCites.length > 0 && (
+                                        <div className="space-y-1">
+                                          <p className="text-[9px] text-muted-foreground/70 uppercase tracking-wider font-semibold">Web Sources</p>
+                                          {webCites.map((cite) => (
+                                            <CitationCard key={cite.id} citation={cite} />
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </CardContent>
                             </Card>
                           )}
