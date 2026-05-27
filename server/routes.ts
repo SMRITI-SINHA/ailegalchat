@@ -1198,18 +1198,20 @@ Output your response as clean, readable text. Use proper paragraph breaks for se
         systemPrompt += `\n\n=== USER'S UPLOADED DOCUMENTS ===
 Analyze these documents with the same rigor as you would in legal due diligence.
 
-CRITICAL REQUIREMENT FOR DOCUMENT EXTRACTION:
-1. When extracting ANY fact, date, name, amount, or legal provision from the documents, you MUST include a page reference
-2. Format: "According to the document (Page X)..." or "[Page X]" after each extracted fact
-3. For multi-page references: "(Pages X-Y)" 
-4. If document sections are labeled, include section references: "(Section A, Page X)"
-5. NEVER state information from the document without indicating WHERE in the document it appears
-6. If you cannot determine the exact page, estimate based on document position: "(Beginning section)", "(Middle section)", "(End section)"
+CRITICAL REQUIREMENT FOR DOCUMENT EXTRACTION — MANDATORY ON EVERY RESPONSE:
+1. Every response that references the document MUST include page citations — this applies equally to first questions AND all follow-up questions
+2. Format: "[Page X]" immediately after each extracted fact, e.g. "The agreement was signed on 15th March 2024 [Page 3]"
+3. For multi-page references: "[Pages X-Y]"
+4. If document sections are labeled, include: "(Section A, Page X)"
+5. NEVER state information from the document without indicating WHERE it appears
+6. If you cannot determine the exact page, estimate: "[Beginning section]", "[Middle section]", "[End section]"
+7. End EVERY response with a "References:" line listing every page you cited, e.g. "References: [Page 3], [Page 7], [Pages 12-13]"
 
 Example formats:
 - "The agreement was signed on 15th March 2024 [Page 3]"
-- "The petitioner claims damages of Rs. 50 lakhs (Page 12, Para 4)"
-- "As stated in the FIR (Pages 2-3)..."
+- "The petitioner claims damages of Rs. 50 lakhs [Page 12]"
+- "As stated in the FIR [Pages 2-3]..."
+- "References: [Page 3], [Pages 2-3], [Page 12]"
 
 ${documentContext}`;
       }
@@ -1244,16 +1246,41 @@ ${documentContext}`;
         systemPrompt += `\n\nCRITICAL LANGUAGE REQUIREMENT: The user is speaking to you in ${langName}. You MUST respond ENTIRELY in ${langName}. Every word of your response must be in ${langName}. Only keep English for: proper nouns, case citations (like "AIR 2023 SC 456"), statute names (like "Indian Contract Act, 1872"), and section numbers. All explanations, analysis, and legal advice must be in ${langName} using appropriate legal terminology.`;
       }
 
-      // Build conversation history — fetch the last 8 stored turns so the AI
-      // can maintain context across questions (page refs, prior analysis, etc.)
+      // Build conversation history with smart compression for long sessions.
+      // Short sessions (≤8 msgs): all verbatim.
+      // Long sessions (>8 msgs): compress older turns into a summary block,
+      // then append the last 8 verbatim — no extra AI call needed.
+      const VERBATIM_WINDOW = 8;
       const historyMessages: { role: "user" | "assistant"; content: string }[] = [];
       if (sessionId) {
         try {
           const pastMessages = await storage.getChatMessages(sessionId, req.user!.id);
-          // Take the most recent 8 messages (4 user + 4 assistant turns)
-          const recent = pastMessages.slice(-8);
-          for (const m of recent) {
-            if (m.role === "user" || m.role === "assistant") {
+          const eligible = pastMessages.filter(m => m.role === "user" || m.role === "assistant");
+
+          if (eligible.length <= VERBATIM_WINDOW) {
+            for (const m of eligible) {
+              historyMessages.push({ role: m.role as "user" | "assistant", content: m.content });
+            }
+          } else {
+            // Compress older turns to keep token budget manageable
+            const older = eligible.slice(0, -VERBATIM_WINDOW);
+            const recent = eligible.slice(-VERBATIM_WINDOW);
+
+            const summaryLines = older.map(m => {
+              const preview = m.content.length > 250 ? m.content.substring(0, 250) + "…" : m.content;
+              return `${m.role === "user" ? "User" : "Assistant"}: ${preview}`;
+            });
+
+            historyMessages.push({
+              role: "user",
+              content: `[EARLIER CONVERSATION SUMMARY — context only, not the current question]\n${summaryLines.join("\n\n")}\n[END SUMMARY]`,
+            });
+            historyMessages.push({
+              role: "assistant",
+              content: "Understood. I have noted the earlier conversation context and will maintain consistency with it, including continuing to cite pages from the document.",
+            });
+
+            for (const m of recent) {
               historyMessages.push({ role: m.role as "user" | "assistant", content: m.content });
             }
           }

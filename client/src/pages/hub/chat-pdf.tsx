@@ -1529,23 +1529,7 @@ export default function ChatWithPDFPage() {
                     )}
                   </div>
 
-                  {/* ── Reference banners — shown for BOTH PDF iframe and text view ── */}
-                  {highlightText && (
-                    <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/40 flex items-center justify-between shrink-0">
-                      <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
-                        {usePdfIframe
-                          ? `AI referenced a passage on page ${activeDocPage} — see highlighted section`
-                          : "Highlighted text referenced in the answer"}
-                      </span>
-                      <button
-                        onClick={() => { setHighlightText(""); setIsFullPageRef(false); }}
-                        className="text-[10px] text-amber-600 hover:text-amber-800 underline"
-                        data-testid="button-clear-highlight"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  )}
+                  {/* ── Reference banner — blue only, for full-page refs ── */}
                   {isFullPageRef && !highlightText && (
                     <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-200/50 dark:border-blue-800/40 flex items-center justify-between shrink-0">
                       <span className="text-[10px] text-blue-700 dark:text-blue-400 font-medium">

@@ -103,18 +103,31 @@ export function markdownToHtml(markdown: string | undefined | null): string {
       itemContent = itemContent.replace(/_([^_]+)_/g, '<em>$1</em>');
       processedLines.push(`<li style="margin: 0.5em 0;">${itemContent}</li>`);
     } else {
-      if (inOrderedList) {
+      // Before closing any open list, look ahead to check if the next non-blank
+      // line continues the same type of list. If so, stay inside the list so
+      // blank lines between items don't restart the counter at 1.
+      const nextNonBlankLine = (() => {
+        for (let j = i + 1; j < lines.length; j++) {
+          if (lines[j].trim() !== '') return lines[j];
+        }
+        return '';
+      })();
+      const nextIsOrdered = /^\d+\.\s+/.test(nextNonBlankLine);
+      const nextIsUnordered = /^[-*]\s+/.test(nextNonBlankLine);
+
+      if (inOrderedList && !nextIsOrdered) {
         processedLines.push('</ol>');
         inOrderedList = false;
       }
-      if (inUnorderedList) {
+      if (inUnorderedList && !nextIsUnordered) {
         processedLines.push('</ul>');
         inUnorderedList = false;
       }
-      
+
       // Handle empty lines as paragraph breaks — skip consecutive blanks
+      // and skip inside an open list (blank lines there are inter-item spacing)
       if (line.trim() === '') {
-        if (!lastWasBlank) {
+        if (!lastWasBlank && !inOrderedList && !inUnorderedList) {
           processedLines.push('<br>');
         }
         lastWasBlank = true;
