@@ -1108,12 +1108,7 @@ ${endPart}`;
       
       const searchPromises: Promise<void>[] = [];
       
-      // Skip Indian Kanoon when the user is asking about an uploaded document —
-      // keyword-based case searches return unrelated judgments in that context.
-      // Page citations from the document itself are the relevant "sources" there.
-      const isDocumentQuery = documentIds && Array.isArray(documentIds) && documentIds.length > 0;
-
-      if (isLegalQuery && !isDocumentQuery && indianKanoon.isConfigured()) {
+      if (isLegalQuery && indianKanoon.isConfigured()) {
         searchPromises.push(
           withTimeout(indianKanoon.search(message, 0), 5000, []).then(searchResults => {
             if (searchResults.length > 0) {
@@ -1139,7 +1134,7 @@ ${endPart}`;
         );
       }
       
-      if (isLegalQuery && !isDocumentQuery && legalWebSearch.isConfigured()) {
+      if (isLegalQuery && legalWebSearch.isConfigured()) {
         searchPromises.push(
           withTimeout(legalWebSearch.searchLegal(message), 5000, { answer: null, sources: [] }).then(({ answer, sources }) => {
             if (answer || sources.length > 0) {

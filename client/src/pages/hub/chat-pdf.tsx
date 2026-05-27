@@ -170,6 +170,13 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   pageRefs?: PageRef[];
+  citations?: Citation[];
+}
+
+/** Return only citations that the AI actually referenced as [1], [2] … in the response. */
+function getReferencedCitations(content: string, citations: Citation[]): Citation[] {
+  if (!citations || citations.length === 0) return [];
+  return citations.filter((_, i) => new RegExp(`\\[${i + 1}\\]`).test(content));
 }
 
 interface NyayaMessage {
@@ -556,8 +563,11 @@ export default function ChatWithPDFPage() {
         }
       }
 
+      const { clean: nyayaClean1 } = parseAndCleanContent(fullContent);
       setNyayaMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent, ...metadata } : m))
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: nyayaClean1, ...metadata } : m
+        )
       );
       
       if (sessionId && fullContent) {
@@ -668,8 +678,11 @@ export default function ChatWithPDFPage() {
         }
       }
 
+      const { clean: nyayaClean2 } = parseAndCleanContent(fullContent);
       setNyayaMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent, ...metadata } : m))
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: nyayaClean2, ...metadata } : m
+        )
       );
       
       if (sessionId && fullContent) {
@@ -955,6 +968,8 @@ export default function ChatWithPDFPage() {
       const assistantId = (Date.now() + 1).toString();
       setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
 
+      let docuChatCitations: Citation[] = [];
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -972,6 +987,9 @@ export default function ChatWithPDFPage() {
                   prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
                 );
               }
+              if (data.done && Array.isArray(data.citations)) {
+                docuChatCitations = data.citations;
+              }
             } catch {
               // Skip invalid JSON
             }
@@ -980,8 +998,13 @@ export default function ChatWithPDFPage() {
       }
       
       const { clean, pageRefs } = parseAndCleanContent(fullContent);
+      const referencedCitations = getReferencedCitations(fullContent, docuChatCitations);
       setMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, content: clean, pageRefs } : m))
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: clean, pageRefs, citations: referencedCitations }
+            : m
+        )
       );
 
       if (currentSessionId && fullContent) {
@@ -1431,6 +1454,14 @@ export default function ChatWithPDFPage() {
                                   <BookOpen className="h-2.5 w-2.5" />
                                   pg.{ref.page}
                                 </button>
+                              ))}
+                            </div>
+                          )}
+                          {msg.citations && msg.citations.length > 0 && (
+                            <div className="mt-2.5 pt-2 border-t border-border/40 space-y-1.5">
+                              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Sources</span>
+                              {msg.citations.map((cite) => (
+                                <CitationCard key={cite.id} citation={cite} />
                               ))}
                             </div>
                           )}
