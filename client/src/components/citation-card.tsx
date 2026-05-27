@@ -1,6 +1,5 @@
 import { FileText, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface Citation {
@@ -9,6 +8,7 @@ interface Citation {
   text: string;
   page?: number;
   paragraph?: number;
+  url?: string;
 }
 
 interface CitationCardProps {
@@ -18,20 +18,28 @@ interface CitationCardProps {
   className?: string;
 }
 
-export function CitationCard({ 
-  citation, 
-  isExpanded = false, 
+export function CitationCard({
+  citation,
+  isExpanded = false,
   onToggle,
-  className 
+  className,
 }: CitationCardProps) {
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (citation.url) {
+      window.open(citation.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
   return (
-    <Card 
+    <Card
       className={cn(
-        "cursor-pointer transition-all hover-elevate",
+        "transition-all hover-elevate",
+        citation.url ? "cursor-pointer" : "cursor-default",
         isExpanded && "ring-1 ring-primary",
         className
       )}
-      onClick={onToggle}
+      onClick={citation.url ? handleOpen : onToggle}
       data-testid={`card-citation-${citation.id}`}
     >
       <CardContent className="p-3">
@@ -40,32 +48,32 @@ export function CitationCard({
             <FileText className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
-            <p className="text-sm font-medium break-words" title={citation.source}>{citation.source}</p>
+            <p className="text-sm font-medium break-words" title={citation.source}>
+              {citation.source}
+            </p>
             {citation.page && (
               <p className="text-xs text-muted-foreground font-mono">
                 Page {citation.page}
                 {citation.paragraph && `, Para ${citation.paragraph}`}
               </p>
             )}
+            {citation.url && (
+              <p className="text-xs text-primary/70 truncate mt-0.5 flex items-center gap-1">
+                <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                {citation.url.replace(/^https?:\/\//, "")}
+              </p>
+            )}
           </div>
+          {citation.url && (
+            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+          )}
         </div>
-        
-        {isExpanded && (
+
+        {isExpanded && citation.text && (
           <div className="mt-3 pt-3 border-t">
             <p className="text-sm text-muted-foreground leading-relaxed">
               "{citation.text}"
             </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2 h-7 text-xs"
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            >
-              <ExternalLink className="h-3 w-3 mr-1" />
-              View in document
-            </Button>
           </div>
         )}
       </CardContent>

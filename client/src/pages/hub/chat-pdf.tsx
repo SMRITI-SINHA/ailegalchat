@@ -60,7 +60,15 @@ function parseAndCleanContent(raw: string): { clean: string; pageRefs: PageRef[]
   const refs: PageRef[] = [];
   const seen = new Set<number>();
 
+  // Strip the AI's trailing "References: [Page X], [Page Y]..." summary line first.
+  // The individual [Page X] markers embedded in prose are handled below.
+  // This regex removes the whole line so it never appears as rendered text.
   let clean = raw.replace(
+    /\n?References:\s*(?:\[Pages?\s*\d+(?:\s*[-–]\s*\d+)?\]\s*,?\s*)+\.?\n?/gi,
+    "\n"
+  );
+
+  clean = clean.replace(
     /([^.!?\n]{0,160}?)\s*\[Pages?\s*(\d+)(?:\s*[-–]\s*(\d+))?\]/gi,
     (_, ctx, p1, p2) => {
       const start = parseInt(p1);
