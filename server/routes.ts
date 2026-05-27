@@ -756,7 +756,7 @@ export async function registerRoutes(
 
           if (inLegalBERT.isConfigured() && extracted.text.length > 100) {
             try {
-              const segments = await inLegalBERT.classifySegments(extracted.text);
+              const segments = await withTimeout(inLegalBERT.classifySegments(extracted.text), 8000, []);
               if (segments.length > 0) {
                 const segmentSummary = segments.map(s => `[${s.label}] ${s.text.substring(0, 100)}`).join("\n");
                 const existingText = extracted.text;

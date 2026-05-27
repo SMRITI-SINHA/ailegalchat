@@ -40,8 +40,9 @@ import {
   Trash2,
   FileText,
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import type { IndianLanguage, Draft } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -56,6 +57,7 @@ const memoStructures: { value: MemoStructure; label: string; description: string
 ];
 
 export default function LegalMemoPage() {
+  const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [language, setLanguage] = useState<IndianLanguage>("English");
@@ -66,6 +68,7 @@ export default function LegalMemoPage() {
   const [jurisdiction, setJurisdiction] = useState("");
   const [parties, setParties] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingStage, setGeneratingStage] = useState<"research" | "writing" | "">("");
   const [isSaving, setIsSaving] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [memoContent, setMemoContent] = useState("");
@@ -118,21 +121,76 @@ export default function LegalMemoPage() {
   const handleGenerate = async () => {
     if (!facts.trim()) return;
     setIsGenerating(true);
+    setGeneratingStage("research");
 
     try {
-      const response = await apiRequest("POST", "/api/memos/generate", {
-        facts,
-        issues,
-        language,
-        structure,
-        jurisdiction,
-        parties,
-        title: memoTitle,
+      const response = await authFetch("/api/memos/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          facts,
+          issues,
+          language,
+          structure,
+          jurisdiction,
+          parties,
+          title: memoTitle,
+          stream: true,
+        }),
       });
-      const data = await response.json();
-      const rawMemo = data.fullMemo || generateLocalizedMemo();
-      const generatedMemo = markdownToHtml(rawMemo);
-      
+
+      if (!response.ok) {
+        let errMsg = "Failed to generate memo. Please try again.";
+        try {
+          const errData = await response.json();
+          errMsg = errData.error || errMsg;
+        } catch { /* ignore */ }
+        throw new Error(errMsg);
+      }
+
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullMemo = "";
+      let currentEvent = "";
+      setGeneratingStage("writing");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === "chunk" && data.content) {
+                fullMemo += data.content;
+              } else if (currentEvent === "done" && data.fullMemo) {
+                fullMemo = data.fullMemo;
+              } else if (currentEvent === "error") {
+                throw new Error(data.error || "Generation failed");
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message !== "Unexpected end of JSON input") {
+                throw parseErr;
+              }
+            }
+          }
+        }
+      }
+
+      if (!fullMemo.trim()) {
+        throw new Error("Empty response received. Please try again.");
+      }
+
+      const generatedMemo = markdownToHtml(fullMemo);
+
       const draftResponse = await apiRequest("POST", "/api/drafts", {
         title: memoTitle,
         type: "memo",
@@ -141,7 +199,7 @@ export default function LegalMemoPage() {
         language,
       });
       const draft = await draftResponse.json();
-      
+
       setDraftId(draft.id);
       setMemoContent(generatedMemo);
       setShowGenerateDialog(false);
@@ -150,24 +208,11 @@ export default function LegalMemoPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
     } catch (error) {
       console.error("Memo generation error:", error);
-      const rawFallback = generateLocalizedMemo();
-      const fallbackMemo = markdownToHtml(rawFallback);
-      const draftResponse = await apiRequest("POST", "/api/drafts", {
-        title: memoTitle,
-        type: "memo",
-        content: fallbackMemo,
-        status: "draft",
-        language,
-      });
-      const draft = await draftResponse.json();
-      setDraftId(draft.id);
-      setMemoContent(fallbackMemo);
-      setShowGenerateDialog(false);
-      setViewMode("editor");
-      setShowResearchSidebar(true);
-      queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
+      const msg = error instanceof Error ? error.message : "Memo generation failed. Please try again.";
+      toast({ title: "Generation failed", description: msg, variant: "destructive" });
     } finally {
       setIsGenerating(false);
+      setGeneratingStage("");
     }
   };
 
@@ -487,7 +532,7 @@ export default function LegalMemoPage() {
                   {isGenerating ? (
                     <>
                       <StreamingIndicator className="mr-2" />
-                      Generating...
+                      {generatingStage === "research" ? "Researching law…" : "Writing memo…"}
                     </>
                   ) : (
                     <>
