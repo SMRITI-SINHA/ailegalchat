@@ -2688,6 +2688,28 @@ Output clean plain text only. No markdown symbols.`;
     }
   });
 
+  app.patch("/api/compliance/checklists/:id", async (req: Request, res: Response) => {
+    try {
+      const { items } = req.body;
+      if (!items) {
+        return res.status(400).json({ error: "Items are required" });
+      }
+      const updated = await storage.updateComplianceChecklist(req.params.id, {
+        items: JSON.stringify(items),
+      });
+      if (!updated) {
+        return res.status(404).json({ error: "Checklist not found" });
+      }
+      res.json({
+        ...updated,
+        items: typeof updated.items === "string" ? JSON.parse(updated.items) : updated.items,
+      });
+    } catch (error) {
+      console.error("Error updating checklist:", error);
+      res.status(500).json({ error: "Failed to update checklist" });
+    }
+  });
+
   app.delete("/api/compliance/checklists/:id", async (req: Request, res: Response) => {
     try {
       await storage.deleteComplianceChecklist(req.params.id);
