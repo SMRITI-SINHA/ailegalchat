@@ -1457,14 +1457,6 @@ export default function ChatWithPDFPage() {
                               ))}
                             </div>
                           )}
-                          {msg.citations && msg.citations.length > 0 && (
-                            <div className="mt-2.5 pt-2 border-t border-border/40 space-y-1.5">
-                              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Sources</span>
-                              {msg.citations.map((cite) => (
-                                <CitationCard key={cite.id} citation={cite} />
-                              ))}
-                            </div>
-                          )}
                         </>
                       )}
                     </div>
