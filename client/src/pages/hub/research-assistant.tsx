@@ -47,7 +47,7 @@ import {
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { stripHtmlTags, isNewLaw } from "@/lib/utils";
-import type { ResearchQuery } from "@shared/schema";
+import type { ResearchNote } from "@shared/schema";
 
 interface SearchResult {
   id: string;
@@ -107,7 +107,7 @@ export default function ResearchAssistantPage() {
   const [noteName, setNoteName] = useState("");
   const { toast } = useToast();
 
-  const { data: savedNotes = [] } = useQuery<ResearchQuery[]>({
+  const { data: savedNotes = [] } = useQuery<ResearchNote[]>({
     queryKey: ["/api/research/notes"],
   });
 
@@ -185,10 +185,10 @@ export default function ResearchAssistantPage() {
     });
   };
 
-  const loadSavedNotes = (saved: ResearchQuery) => {
-    const parsed = saved.results as unknown as { title: string; content: string; savedAt: string };
-    if (parsed && parsed.content) {
-      setNotes(parsed.content);
+  const loadSavedNotes = (saved: ResearchNote) => {
+    if (saved.content) {
+      setNotes(saved.content);
+      toast({ title: `Loaded: ${saved.name}` });
     }
   };
 
@@ -659,8 +659,8 @@ Save important findings, citations, and analysis here."
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <h4 className="font-medium text-sm truncate" title={saved.query || ""}>
-                            {truncateText(saved.query, 25)}
+                          <h4 className="font-medium text-sm truncate" title={saved.name}>
+                            {truncateText(saved.name, 25)}
                           </h4>
                           <p className="text-xs text-muted-foreground mt-1">
                             {new Date(saved.createdAt).toLocaleDateString()}
