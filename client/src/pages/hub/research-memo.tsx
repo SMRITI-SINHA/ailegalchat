@@ -41,7 +41,7 @@ import {
   FileText,
 } from "lucide-react";
 import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
-import { markdownToHtml } from "@/lib/utils";
+import { markdownToHtml, stripHtmlTags } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { IndianLanguage, Draft } from "@shared/schema";
 import { indianLanguages } from "@shared/schema";
@@ -394,7 +394,7 @@ export default function LegalMemoPage() {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 line-clamp-2">
-                      {draft.content?.substring(0, 100) || "Empty memo"}...
+                      {stripHtmlTags(draft.content || "").substring(0, 100) || "Empty memo"}...
                     </p>
                     <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
                       <Calendar className="h-3 w-3" />
