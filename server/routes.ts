@@ -708,34 +708,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No files uploaded" });
       }
 
-      const documents = await Promise.all(
+      // Phase 1: extract text + save to DB — respond immediately so user can start chatting
+      const uploadResults = await Promise.all(
         files.map(async (file) => {
           const extracted = await extractTextFromFile(file, { maxPages: 100, skipStructuredHtml: true });
           const pageCount = Math.max(1, Math.ceil(extracted.text.length / 3000));
           const decodedName = decodeFilename(file.originalname);
 
-          const tempId = require("crypto").randomUUID();
-          let storagePath: string | null = null;
-          let storageUrl: string | null = null;
-
-          if (supabaseStorage.isSupabaseConfigured()) {
-            try {
-              const uploaded = await withTimeout(
-                supabaseStorage.uploadDocument(req.user!.id, tempId, file),
-                10000,
-                null,
-              );
-              if (uploaded) {
-                storagePath = uploaded.path;
-                storageUrl = uploaded.signedUrl;
-              } else {
-                console.warn("[DOC UPLOAD] Supabase upload timed out, continuing without cloud storage");
-              }
-            } catch (e: any) {
-              console.warn(`[DOC UPLOAD] Supabase upload failed, continuing without cloud storage: ${e.message}`);
-            }
-          }
-          
           const doc = await storage.createDocument({
             userId: req.user!.id,
             name: decodedName,
@@ -747,8 +726,8 @@ export async function registerRoutes(
             summary: null,
             extractedText: extracted.text,
             extractedHtml: extracted.html,
-            storagePath,
-            storageUrl,
+            storagePath: null,
+            storageUrl: null,
           });
 
           const cost = 0.50 + (pageCount * 0.01);
@@ -762,23 +741,6 @@ export async function registerRoutes(
             modelUsed: "mini",
           });
 
-          if (inLegalBERT.isConfigured() && extracted.text.length > 100) {
-            try {
-              const segments = await withTimeout(inLegalBERT.classifySegments(extracted.text), 8000, []);
-              if (segments.length > 0) {
-                const segmentSummary = segments.map(s => `[${s.label}] ${s.text.substring(0, 100)}`).join("\n");
-                const existingText = extracted.text;
-                const enhancedText = `=== DOCUMENT STRUCTURE (InLegalBERT Analysis) ===\n${segmentSummary}\n=== END STRUCTURE ===\n\n${existingText}`;
-                await storage.updateDocument(doc.id, {
-                  extractedText: enhancedText,
-                });
-                console.log(`[DOC UPLOAD] InLegalBERT classified ${segments.length} segments`);
-              }
-            } catch (e) {
-              console.log(`[DOC UPLOAD] InLegalBERT segmentation failed, keeping original text`);
-            }
-          }
-
           logAudit(req, {
             action: "document_upload",
             resourceType: "document",
@@ -787,9 +749,11 @@ export async function registerRoutes(
             metadata: { fileType: file.mimetype, sizeBytes: file.size, pages: pageCount },
           });
 
-          return doc;
+          return { doc, extracted, file };
         })
       );
+
+      const documents = uploadResults.map(r => r.doc);
 
       // Return metadata only — exclude extractedText/extractedHtml from upload response.
       // For large documents (800+ pages) these fields can be 2–5 MB each.
@@ -804,6 +768,53 @@ export async function registerRoutes(
         processingCost: doc.processingCost,
         uploadedAt: doc.uploadedAt,
       })));
+
+      // Phase 2: Background enrichment — runs AFTER response is sent.
+      // Supabase cloud backup + InLegalBERT structural analysis don't block chat.
+      const bgUserId = req.user!.id;
+      for (const { doc, extracted, file } of uploadResults) {
+        (async () => {
+          const updates: Record<string, unknown> = {};
+
+          // Cloud backup (Supabase)
+          if (supabaseStorage.isSupabaseConfigured()) {
+            try {
+              const tempId = require("crypto").randomUUID();
+              const uploaded = await withTimeout(
+                supabaseStorage.uploadDocument(bgUserId, tempId, file),
+                10000,
+                null,
+              );
+              if (uploaded) {
+                updates.storagePath = uploaded.path;
+                updates.storageUrl = uploaded.signedUrl;
+              } else {
+                console.warn(`[DOC BG] Supabase upload timed out for doc ${doc.id}`);
+              }
+            } catch (e: any) {
+              console.warn(`[DOC BG] Supabase upload failed for doc ${doc.id}: ${e.message}`);
+            }
+          }
+
+          // InLegalBERT structural classification
+          if (inLegalBERT.isConfigured() && extracted.text.length > 100) {
+            try {
+              const segments = await withTimeout(inLegalBERT.classifySegments(extracted.text), 8000, []);
+              if (segments.length > 0) {
+                const segmentSummary = segments.map((s: any) => `[${s.label}] ${s.text.substring(0, 100)}`).join("\n");
+                updates.extractedText = `=== DOCUMENT STRUCTURE (InLegalBERT Analysis) ===\n${segmentSummary}\n=== END STRUCTURE ===\n\n${extracted.text}`;
+                console.log(`[DOC BG] InLegalBERT classified ${segments.length} segments for doc ${doc.id}`);
+              }
+            } catch (e) {
+              console.warn(`[DOC BG] InLegalBERT failed for doc ${doc.id}`);
+            }
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await storage.updateDocument(doc.id, updates);
+          }
+        })().catch(e => console.warn(`[DOC BG] Enrichment error for doc ${doc.id}: ${e.message}`));
+      }
     } catch (error) {
       console.error("[AUDIT] Error uploading documents");
       logAudit(req, { action: "document_upload", resourceType: "document", success: false, errorCode: "UPLOAD_FAILED" });
@@ -2249,15 +2260,15 @@ Generate the requested content now:`;
 
       const [memoBertSettled, memoBaseIKSettled, memoPerplexitySettled, memoTrainingSettled] = await Promise.allSettled([
         inLegalBERT.isConfigured()
-          ? withTimeout(inLegalBERT.identifyStatutes(facts), 7000, [])
+          ? withTimeout(inLegalBERT.identifyStatutes(facts), 5000, [])   // BERT statute pre-identification
           : Promise.resolve([]),
         indianKanoon.isConfigured()
-          ? withTimeout(indianKanoon.search(memoSearchBase, 0), 6000, [])
+          ? withTimeout(indianKanoon.search(memoSearchBase, 0), 5000, []) // Primary authority — keep generous
           : Promise.resolve([]),
         legalWebSearch.isConfigured()
-          ? withTimeout(legalWebSearch.searchLegal(memoRiskQuery), 8000, null)
+          ? withTimeout(legalWebSearch.searchLegal(memoRiskQuery), 5000, null) // Advisory only
           : Promise.resolve(null),
-        withTimeout(trainingDataLoader.getTrainingContext(), 5000, ""),
+        withTimeout(trainingDataLoader.getTrainingContext(), 3000, ""),   // Firm SOP training context
       ]);
 
       // Process BERT results (Layer 0)
@@ -2277,7 +2288,7 @@ Generate the requested content now:`;
       if (memoBertQueries.length > 0 && indianKanoon.isConfigured()) {
         console.log("[MEMO PIPELINE] Running BERT-enhanced IK queries in parallel...");
         const memoBertIKSettled = await Promise.allSettled(
-          memoBertQueries.map(q => withTimeout(indianKanoon.search(q, 0), 6000, []))
+          memoBertQueries.map(q => withTimeout(indianKanoon.search(q, 0), 3000, []))
         );
         const seenMemoDocIds = new Set(allMemoResults.map(r => r.docId));
         for (const r of memoBertIKSettled) {
