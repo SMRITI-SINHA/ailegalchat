@@ -1,0 +1,44 @@
+summary of doc
+
+The "Chakshi AI Hub — SOC 2 Compliance Report" outlines the current security posture of the Chakshi AI Hub, gaps in compliance, and a roadmap to achieve SOC 2 Type II certification.
+
+
+According to the Executive Summary (Page 1), the Chakshi AI Hub demonstrates a strong foundation with established protections like JWT-based authentication, PostgreSQL Row-Level Security, and audit logging. However, it also identifies critical and high-severity dependency vulnerabilities, code-level risks, and operational compliance gaps that need to be addressed before certification.
+
+
+The report is structured into several parts:
+
+
+Existing Security Strengths (Page 2): Highlights strong technical controls like JWT Authentication, rate limiting, and audit logging, all marked as implemented.
+Security Remediation Progress (Pages 2-3): Details the upgrade of high-risk packages to resolve vulnerabilities and the implementation of secure coding practices.
+New Security Controls Added (Page 3): Lists additional governance measures such as a formal security policy and audit log failure visibility.
+Remaining Security Tasks (Page 4): Identifies outstanding tasks that need to be completed for compliance, including upgrades and detailed documentation.
+Operational & Compliance Gaps (Pages 4-5): Specifies missing organizational processes like a written security policy, employee training records, vendor risk assessments, and incident response plans.
+Recommended SOC 2 Certification Process (Pages 5-6): Provides a step-by-step approach for achieving SOC 2 certification, including remediating issues, defining audit scope, and independent auditing.
+Estimated Timeline (Page 7): Outlines a timeline for completing the necessary tasks in approximately 9-11 months to achieve certification.
+Main Chakshi Platform Security Checklist (Pages 8-9): Recommends comprehensive checks for authentication and access control, data security, network infrastructure, logging, and third-party vendor compliance.
+Immediate Practical Compliance Checklist (Pages 10-11): Suggests operational actions to enhance audit preparedness, such as enabling multi-factor authentication (MFA) and creating policy documents.
+The final recommendation stresses that with focused remediation and disciplined operational processes, the Chakshi AI Hub is capable of achieving SOC 2 Type II certification within approximately one year (Page 11).
+
+summary of doc
+
+The "Chakshi AI Hub — SOC 2 Compliance Report" outlines the current security posture of the Chakshi AI Hub, gaps in compliance, and a roadmap to achieve SOC 2 Type II certification.
+
+
+According to the Executive Summary (Page 1), the Chakshi AI Hub demonstrates a strong foundation with established protections like JWT-based authentication, PostgreSQL Row-Level Security, and audit logging. However, it also identifies critical and high-severity dependency vulnerabilities, code-level risks, and operational compliance gaps that need to be addressed before certification.
+
+
+The report is structured into several parts:
+
+
+Existing Security Strengths (Page 2): Highlights strong technical controls like JWT Authentication, rate limiting, and audit logging, all marked as implemented.
+Security Remediation Progress (Pages 2-3): Details the upgrade of high-risk packages to resolve vulnerabilities and the implementation of secure coding practices.
+New Security Controls Added (Page 3): Lists additional governance measures such as a formal security policy and audit log failure visibility.
+Remaining Security Tasks (Page 4): Identifies outstanding tasks that need to be completed for compliance, including upgrades and detailed documentation.
+Operational & Compliance Gaps (Pages 4-5): Specifies missing organizational processes like a written security policy, employee training records, vendor risk assessments, and incident response plans.
+Recommended SOC 2 Certification Process (Pages 5-6): Provides a step-by-step approach for achieving SOC 2 certification, including remediating issues, defining audit scope, and independent auditing.
+Estimated Timeline (Page 7): Outlines a timeline for completing the necessary tasks in approximately 9-11 months to achieve certification.
+Main Chakshi Platform Security Checklist (Pages 8-9): Recommends comprehensive checks for authentication and access control, data security, network infrastructure, logging, and third-party vendor compliance.
+Immediate Practical Compliance Checklist (Pages 10-11): Suggests operational actions to enhance audit preparedness, such as enabling multi-factor authentication (MFA) and creating policy documents.
+The final recommendation stresses that with focused remediation and disciplined operational processes, the Chakshi AI Hub is capable of achieving SOC 2 Type II certification within approximately one year (Page 11).
+

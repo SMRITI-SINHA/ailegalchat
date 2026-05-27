@@ -609,7 +609,7 @@ export default function ChatWithPDFPage() {
           const doc = await res.json();
           if (doc.status === "completed" || doc.status === "ready") {
             setUploadedDocs(prev =>
-              prev.map(d => d.id === id ? { ...d, status: "ready" as const, pages: doc.pages || d.pages } : d)
+              prev.map(d => d.id === id ? { ...d, status: "ready" as const, pages: doc.pages || d.pages, content: doc.extractedText || d.content } : d)
             );
           } else if (doc.status === "failed") {
             setUploadedDocs(prev =>
@@ -711,6 +711,11 @@ export default function ChatWithPDFPage() {
       
       const session = await response.json() as ChatSession;
       
+      setMessages([]);
+      setNyayaMessages([]);
+      setNyayaSessionId(null);
+      setActiveDocPage(1);
+      setHighlightText("");
       setSessionDocumentIds(documentIds);
       queryClient.invalidateQueries({ queryKey: ["/api/chat/sessions"] });
       setCurrentSessionId(session.id);
@@ -913,7 +918,11 @@ export default function ChatWithPDFPage() {
   ];
 
   const CHARS_PER_PAGE = 3000;
-  const docContent = uploadedDocs[0]?.content || "";
+  const rawDocContent = uploadedDocs[0]?.content || "";
+  // Strip InLegalBERT analysis header that server prepends — show only the actual document text
+  const docContent = rawDocContent
+    .replace(/^=== DOCUMENT STRUCTURE \(InLegalBERT Analysis\) ===[\s\S]*?=== END STRUCTURE ===\n*/m, "")
+    .trim();
   const docTotalPages = uploadedDocs[0]?.pages || 1;
   const docPages = docContent
     ? Array.from(
