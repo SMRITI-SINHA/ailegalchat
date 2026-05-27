@@ -180,6 +180,24 @@ interface UploadedDoc {
   pages: number;
   status: "processing" | "ready";
   content?: string;
+  type?: string;     // mime type — determines whether to show native iframe viewer
+  hasFile?: boolean; // true when /api/documents/:id/file will serve the raw file
+}
+
+function getAuthToken(): string {
+  return sessionStorage.getItem("chakshi_token") || "";
+}
+
+function buildFileUrl(docId: string): string {
+  const token = getAuthToken();
+  return token
+    ? `/api/documents/${docId}/file?token=${encodeURIComponent(token)}`
+    : `/api/documents/${docId}/file`;
+}
+
+function isNativeViewable(type?: string): boolean {
+  if (!type) return false;
+  return type.includes("pdf") || type.startsWith("image/");
 }
 
 interface SelectionPosition {
@@ -643,7 +661,7 @@ export default function ChatWithPDFPage() {
           const doc = await res.json();
           if (doc.status === "completed" || doc.status === "ready") {
             setUploadedDocs(prev =>
-              prev.map(d => d.id === id ? { ...d, status: "ready" as const, pages: doc.pages || d.pages, content: doc.extractedText || d.content } : d)
+              prev.map(d => d.id === id ? { ...d, status: "ready" as const, pages: doc.pages || d.pages, content: doc.extractedText || d.content, type: doc.type || d.type, hasFile: !!doc.storagePath } : d)
             );
           } else if (doc.status === "failed") {
             setUploadedDocs(prev =>
@@ -693,12 +711,14 @@ export default function ChatWithPDFPage() {
       }
 
       const uploadedDocuments = await response.json();
-      const initialDocs = uploadedDocuments.map((doc: { id: string; name: string; pages: number; status?: string }) => ({
+      const initialDocs = uploadedDocuments.map((doc: { id: string; name: string; pages: number; status?: string; type?: string }) => ({
         id: doc.id,
         name: doc.name,
         pages: doc.pages || 0,
         status: (doc.status === "completed" ? "ready" : "processing") as "ready" | "processing",
         content: "",
+        type: doc.type,
+        hasFile: true, // server always saves file to disk in Phase 1 now
       }));
       setUploadedDocs(initialDocs);
       setIsUploadingDocs(false);
@@ -826,12 +846,14 @@ export default function ChatWithPDFPage() {
         );
         const validDocs = docs.filter((d) => d !== null);
         setUploadedDocs(
-          validDocs.map((doc: { id: string; name: string; pages: number; extractedText?: string }) => ({
+          validDocs.map((doc: { id: string; name: string; pages: number; extractedText?: string; type?: string; storagePath?: string }) => ({
             id: doc.id,
             name: doc.name,
             pages: doc.pages || 0,
             status: "ready" as const,
             content: doc.extractedText || "",
+            type: doc.type,
+            hasFile: !!doc.storagePath,
           }))
         );
       } catch (error) {
@@ -1417,78 +1439,115 @@ export default function ChatWithPDFPage() {
           <div className={`flex flex-col overflow-hidden ${hasDocViewer ? "flex-1" : "w-80"}`}>
 
             {/* ── Document viewer ── */}
-            {rightPanel === "doc" && hasDocViewer && (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="p-3 border-b flex items-center justify-between bg-muted/20 shrink-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <BookOpen className="h-4 w-4 text-primary shrink-0" />
-                    <span className="text-sm font-medium truncate">{uploadedDocs[0]?.name || "Document"}</span>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{docPages.length} pg</Badge>
+            {rightPanel === "doc" && hasDocViewer && (() => {
+              const currentDoc = uploadedDocs[0];
+              const usePdfIframe = !!(currentDoc?.hasFile && isNativeViewable(currentDoc?.type));
+              const fileUrl = currentDoc ? buildFileUrl(currentDoc.id) : "";
+              const totalPages = usePdfIframe ? (currentDoc?.pages || 1) : docPages.length;
+              return (
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {/* Header */}
+                  <div className="p-3 border-b flex items-center justify-between bg-muted/20 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <BookOpen className="h-4 w-4 text-primary shrink-0" />
+                      <span className="text-sm font-medium truncate">{currentDoc?.name || "Document"}</span>
+                      <Badge variant="outline" className="text-[10px] shrink-0">{totalPages} pg</Badge>
+                      {usePdfIframe && (
+                        <Badge variant="outline" className="text-[10px] shrink-0 text-primary border-primary/40">Native viewer</Badge>
+                      )}
+                    </div>
+                    {/* Show prev/next only for text view — native PDF viewer has its own controls */}
+                    {!usePdfIframe && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled={activeDocPage <= 1}
+                          onClick={() => { setActiveDocPage((p) => Math.max(1, p - 1)); setHighlightText(""); setIsFullPageRef(false); }}
+                          data-testid="button-prev-page"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground min-w-[52px] text-center tabular-nums">
+                          {activeDocPage} / {docPages.length}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled={activeDocPage >= docPages.length}
+                          onClick={() => { setActiveDocPage((p) => Math.min(docPages.length, p + 1)); setHighlightText(""); setIsFullPageRef(false); }}
+                          data-testid="button-next-page"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    {usePdfIframe && activeDocPage > 1 && (
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        Jumped to p.{activeDocPage}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled={activeDocPage <= 1}
-                      onClick={() => { setActiveDocPage((p) => Math.max(1, p - 1)); setHighlightText(""); setIsFullPageRef(false); }}
-                      data-testid="button-prev-page"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-xs text-muted-foreground min-w-[52px] text-center tabular-nums">
-                      {activeDocPage} / {docPages.length}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled={activeDocPage >= docPages.length}
-                      onClick={() => { setActiveDocPage((p) => Math.min(docPages.length, p + 1)); setHighlightText(""); setIsFullPageRef(false); }}
-                      data-testid="button-next-page"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
+
+                  {/* Native PDF / image iframe */}
+                  {usePdfIframe && (
+                    <div className="flex-1 overflow-hidden">
+                      <iframe
+                        key={`pdf-${currentDoc!.id}-${activeDocPage}`}
+                        src={activeDocPage > 1 ? `${fileUrl}#page=${activeDocPage}` : fileUrl}
+                        className="w-full h-full border-none"
+                        title={currentDoc!.name}
+                        data-testid="iframe-document-viewer"
+                      />
+                    </div>
+                  )}
+
+                  {/* Text viewer — for DOCX or docs without file */}
+                  {!usePdfIframe && (
+                    <>
+                      {highlightText && !!docPages[activeDocPage - 1] && (
+                        <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/40 flex items-center justify-between shrink-0">
+                          <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                            Highlighted text referenced in the answer
+                          </span>
+                          <button
+                            onClick={() => { setHighlightText(""); setIsFullPageRef(false); }}
+                            className="text-[10px] text-amber-600 hover:text-amber-800 underline"
+                            data-testid="button-clear-highlight"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      )}
+                      {isFullPageRef && !highlightText && (
+                        <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-200/50 dark:border-blue-800/40 flex items-center justify-between shrink-0">
+                          <span className="text-[10px] text-blue-700 dark:text-blue-400 font-medium">
+                            The answer referenced this page broadly — no specific passage was cited
+                          </span>
+                          <button
+                            onClick={() => setIsFullPageRef(false)}
+                            className="text-[10px] text-blue-600 hover:text-blue-800 underline"
+                            data-testid="button-clear-fullpage-ref"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
+                      <ScrollArea className="flex-1 p-5">
+                        <div ref={docPanelRef} className="text-foreground leading-relaxed">
+                          <HighlightedPageText
+                            text={docPages[activeDocPage - 1] || ""}
+                            highlight={highlightText}
+                          />
+                        </div>
+                      </ScrollArea>
+                    </>
+                  )}
                 </div>
-                {highlightText && !!docPages[activeDocPage - 1] && (
-                  <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/40 flex items-center justify-between shrink-0">
-                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
-                      Highlighted text referenced in the answer
-                    </span>
-                    <button
-                      onClick={() => { setHighlightText(""); setIsFullPageRef(false); }}
-                      className="text-[10px] text-amber-600 hover:text-amber-800 underline"
-                      data-testid="button-clear-highlight"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-                {isFullPageRef && !highlightText && (
-                  <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-200/50 dark:border-blue-800/40 flex items-center justify-between shrink-0">
-                    <span className="text-[10px] text-blue-700 dark:text-blue-400 font-medium">
-                      The answer referenced this page broadly — no specific passage was cited
-                    </span>
-                    <button
-                      onClick={() => setIsFullPageRef(false)}
-                      className="text-[10px] text-blue-600 hover:text-blue-800 underline"
-                      data-testid="button-clear-fullpage-ref"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                )}
-                <ScrollArea className="flex-1 p-5">
-                  <div ref={docPanelRef} className="text-foreground leading-relaxed">
-                    <HighlightedPageText
-                      text={docPages[activeDocPage - 1] || ""}
-                      highlight={highlightText}
-                    />
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── Nyaya AI panel ── */}
             {rightPanel === "nyaya" && (

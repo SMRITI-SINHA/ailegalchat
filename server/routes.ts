@@ -10,7 +10,8 @@ import { checkAIUsage, recordAIUsage, getTodayUsage, AI_DAILY_LIMIT, getISTDateS
 import { logAudit } from "./audit";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { writeFile, unlink } from "fs/promises";
+import { writeFile, unlink, mkdir, stat } from "fs/promises";
+import { createReadStream } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 const execFileAsync = promisify(execFile);
@@ -717,10 +718,13 @@ export async function registerRoutes(
       // Text extraction (pdftotext) can take 5–30 s for large files and must
       // NOT block the HTTP response — the client polls GET /api/documents/:id
       // until status changes to "completed".
+      const uploadsDir = join(process.cwd(), 'uploads');
+      await mkdir(uploadsDir, { recursive: true }).catch(() => {});
+
       const pendingDocs = await Promise.all(
         files.map(async (file) => {
           const decodedName = decodeFilename(file.originalname);
-          return storage.createDocument({
+          const doc = await storage.createDocument({
             userId,
             name: decodedName,
             type: file.mimetype,
@@ -734,6 +738,15 @@ export async function registerRoutes(
             storagePath: null,
             storageUrl: null,
           });
+          // Save raw bytes immediately so /api/documents/:id/file works right away
+          const localPath = join(uploadsDir, doc.id);
+          try {
+            await writeFile(localPath, file.buffer);
+            await storage.updateDocument(doc.id, { storagePath: localPath });
+          } catch (e: any) {
+            console.warn(`[DOC] Local file save failed for ${doc.id}: ${e.message}`);
+          }
+          return { ...doc, storagePath: localPath };
         })
       );
 
@@ -755,7 +768,15 @@ export async function registerRoutes(
         (async () => {
           try {
             const extracted = await extractTextFromFile(file, { maxPages: 100, skipStructuredHtml: true });
-            const pageCount = Math.max(1, Math.ceil(extracted.text.length / 3000));
+            // Try to get the real PDF page count via pdfinfo (more accurate than char/3000 estimate)
+            let pageCount = Math.max(1, Math.ceil(extracted.text.length / 3000));
+            if (file.mimetype === 'application/pdf' && doc.storagePath) {
+              try {
+                const { stdout } = await execFileAsync('pdfinfo', [doc.storagePath], { timeout: 5000 });
+                const m = stdout.match(/Pages:\s+(\d+)/i);
+                if (m) pageCount = parseInt(m[1], 10);
+              } catch { /* keep text-length estimate */ }
+            }
             const cost = 0.50 + (pageCount * 0.01);
 
             const updates: Record<string, unknown> = {
@@ -823,6 +844,37 @@ export async function registerRoutes(
       console.error("[AUDIT] Error uploading documents");
       logAudit(req, { action: "document_upload", resourceType: "document", success: false, errorCode: "UPLOAD_FAILED" });
       res.status(500).json({ error: "Failed to upload documents" });
+    }
+  });
+
+  // Serve the raw uploaded file — used by the doc panel iframe viewer.
+  // Priority: local disk (fast, cached) → Supabase signed URL (redirect for production).
+  app.get("/api/documents/:id/file", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const doc = await storage.getDocument(req.params.id, req.user!.id);
+      if (!doc) return res.status(404).json({ error: "Document not found" });
+
+      // Try local disk first (always available in dev; may survive short container restarts in prod)
+      if (doc.storagePath) {
+        const localOk = await stat(doc.storagePath).then(() => true).catch(() => false);
+        if (localOk) {
+          const safeName = doc.name.replace(/["\\]/g, "_");
+          res.setHeader("Content-Type", doc.type || "application/octet-stream");
+          res.setHeader("Cache-Control", "private, max-age=3600");
+          res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+          return createReadStream(doc.storagePath).pipe(res);
+        }
+      }
+
+      // Fallback: redirect to Supabase signed URL (production after container restart)
+      if (doc.storageUrl) {
+        return res.redirect(302, doc.storageUrl);
+      }
+
+      return res.status(404).json({ error: "File not available — please re-upload the document" });
+    } catch (error) {
+      console.error("[DOC FILE] Serve error:", error);
+      res.status(500).json({ error: "Failed to serve file" });
     }
   });
 
