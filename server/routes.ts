@@ -1244,11 +1244,30 @@ ${documentContext}`;
         systemPrompt += `\n\nCRITICAL LANGUAGE REQUIREMENT: The user is speaking to you in ${langName}. You MUST respond ENTIRELY in ${langName}. Every word of your response must be in ${langName}. Only keep English for: proper nouns, case citations (like "AIR 2023 SC 456"), statute names (like "Indian Contract Act, 1872"), and section numbers. All explanations, analysis, and legal advice must be in ${langName} using appropriate legal terminology.`;
       }
 
+      // Build conversation history — fetch the last 8 stored turns so the AI
+      // can maintain context across questions (page refs, prior analysis, etc.)
+      const historyMessages: { role: "user" | "assistant"; content: string }[] = [];
+      if (sessionId) {
+        try {
+          const pastMessages = await storage.getChatMessages(sessionId, req.user!.id);
+          // Take the most recent 8 messages (4 user + 4 assistant turns)
+          const recent = pastMessages.slice(-8);
+          for (const m of recent) {
+            if (m.role === "user" || m.role === "assistant") {
+              historyMessages.push({ role: m.role as "user" | "assistant", content: m.content });
+            }
+          }
+        } catch (e) {
+          console.warn("[CHAT] Failed to load history for session", sessionId, e);
+        }
+      }
+
       try {
         const stream = await callAIStream(openai, {
           model,
           messages: [
             { role: "system", content: systemPrompt },
+            ...historyMessages,
             { role: "user", content: message },
           ],
           stream: true,
