@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "WBTSTzS9iXt7z742xDNkY"
+uri = "file://CHAKSHI_PRODUCT_DOCS.md"
+type = "text"
+title = "Chakshi Product Documentation"
