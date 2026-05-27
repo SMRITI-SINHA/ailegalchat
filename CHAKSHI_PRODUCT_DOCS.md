@@ -132,13 +132,40 @@ When Nyaya AI answers a question that involves statutes, cases, judgments, or re
 
 ### 4.3 CNR Chatbot — Live Case Status
 
-**What it does:** Enter a CNR (Case Number Record) number and get the live status of any court case filed in India, along with the full case history.
+**What it does:** Enter a CNR (Case Number Record) number and get the live status of any court case filed in India. The page has two main tabs.
 
-**Key capabilities:**
-- Real-time case status lookup
-- Full hearing history timeline
-- Built-in note editor — take notes about the case and save them to your account
-- All notes are private and tied to the specific CNR number
+---
+
+**Tab 1 — CNR Search**
+
+An embedded eCourts chatbot (iframe) handles the live case lookup. Enter the CNR number (format: `STATECOURT0000002024`) and the bot returns the full live record directly from eCourts. After a result appears, a **"Save this case"** button lets you save the full record to your account. All subsequent lookups for that CNR will always show the saved snapshot.
+
+---
+
+**Tab 2 — Saved Cases**
+
+A library of all cases you have saved. Each saved case card shows:
+
+| Field | Description |
+|---|---|
+| Case Type | e.g., Civil Suit, Writ Petition, Criminal Appeal |
+| CNR Number | Machine-readable identifier in mono font |
+| Filing Number | Unique filing reference |
+| Case Status | Colour-coded badge (Pending / Disposed / In Progress) |
+| Case Stage | Current procedural stage |
+| Court & Judge | Court number and judge assigned |
+| Next Hearing Date | Date of next scheduled hearing |
+
+Clicking a card opens the **full case detail view** inside the same panel. It shows all fields including petitioners, respondents, acts and sections invoked, case transfer details, and full case history (hearing date + event per row, expandable beyond first 5 entries). Cases can be removed from the saved list at any time.
+
+---
+
+**Right panel — Case Notes**
+
+Alongside both tabs, a Case Notes panel (right column) has two sub-tabs:
+
+- **Editor tab:** Title field, optional CNR number linkage, free-text note body. Save / update with one click.
+- **Saved tab:** Scrollable list of all saved notes. Click any note to load it into the editor for reading or editing. Notes are private, per-user, and persist across sessions.
 
 ---
 
@@ -177,21 +204,99 @@ Before delivering the draft, the AI simulates a judge reviewing the document and
 
 **Integrated Research Panel:** The drafting page has a side panel showing all the case law and statutes that were found during research, with links to the source documents on Indian Kanoon.
 
+**Language support:** The drafting form includes a **Language** selector (all 22 Indian languages). The generated draft is produced in the selected language. Once in the editor, the document can be translated to any other language using the in-editor **Translate** button (see Section 4.6 — AI Editor Interface).
+
+**Use trained style toggle:** A "Use trained style" switch on the drafting form (identified by a graduation cap icon) tells the AI to adopt the writing style learned from your firm's uploaded documents (see Section 4.6 — Firm Style Training). Default is off.
+
 ---
 
 ### 4.5 Custom Drafting & Empty Document
 
-**Custom Drafting:** Upload your own template or a previous document. The AI uses it as a structural and stylistic reference when generating the new draft.
+**Custom Drafting:** Upload your own template or a previous document. The AI uses it as a structural and stylistic reference when generating the new draft. Supports PDF, DOCX, DOC, and TXT (max 10 reference documents, 50 pages each, 150 pages total combined). A "Use trained style" toggle is also available here.
 
-**Empty Document:** A blank canvas using the built-in rich text editor — for manual drafting without AI, or for editing AI-generated content.
+**Empty Document:** A blank canvas using the built-in AI editor — for manual drafting without AI, or for editing AI-generated content. Supports language translation of the full document to any of the 22 Indian languages.
+
+The AI editor is shared across AI Drafting, Custom Drafting, Empty Document, and Legal Memo Generator. See Section 4.6 for the full AI Editor Interface documentation.
 
 ---
 
 ### 4.6 Firm Style Training
 
-**What it does:** Upload previous drafts, pleadings, or firm SOPs. The AI analyses the writing style, preferred clause structures, and terminology. All subsequent drafts from that account adopt the trained style.
+**What it does:** Upload previous drafts, pleadings, or firm SOPs. The AI analyses the writing style, preferred clause structures, and terminology. All subsequent drafts that have "Use trained style" enabled will adopt this learned style.
 
 **Why it matters:** Every firm has preferences — how they address courts, their preferred boilerplate language, their formatting. This feature makes Chakshi feel like it was trained by your firm, not a generic platform.
+
+**How to train:**
+1. Go to Firm Style Training (under Drafting)
+2. Upload one or more sample documents (PDF, DOCX, DOC, TXT)
+3. The system processes them in the background — live status shows "Processing…" with 1-second polling until all documents flip to "Completed" or "Error"
+4. A toast notification confirms: "Documents trained and ready — Chakshi has learned your firm's style."
+5. Trained documents appear in a list with status badges. Individual documents can be deleted to remove their influence.
+
+Once training is complete, the "Use trained style" toggle appears on the AI Drafting and Custom Drafting form pages. Turn it on to apply the style.
+
+---
+
+### 4.6a AI Editor Interface
+
+All drafted documents open in the **PremiumEditor** — a rich text editor purpose-built for legal documents. It is used across AI Drafting, Custom Drafting, Empty Document, and Legal Memo Generator.
+
+---
+
+**Header bar (top of editor)**
+
+| Control | What it does |
+|---|---|
+| Title field | Editable document title (inline rename) |
+| Language selector | Choose any of 22 Indian languages |
+| Translate button | Appears only when selected language ≠ current language. Sends full document to `/api/drafts/translate` and replaces content with the translated version |
+| Save button | Saves draft to account (create or update) |
+
+---
+
+**Toolbar (below header)**
+
+| Group | Controls |
+|---|---|
+| File menu | Open (load any saved draft), Make a Copy, Download (TXT / Word .doc / PDF via print), Rename |
+| History | Undo, Redo |
+| Zoom | 50% / 75% / 100% / 125% / 150% |
+| Font | Family (Arial, Georgia, Times New Roman, Courier New, Verdana), Size (8–72 pt with +/- buttons) |
+| Heading style | Heading 1–4 (applied via `execCommand`; pressing Enter after a heading auto-continues as normal paragraph) |
+| Formatting | Bold, Italic, Underline, Yellow highlight (toggle), Strikethrough |
+| Alignment | Left, Centre, Right, Justify |
+| Lists & indent | Bulleted list, Numbered list, Increase indent, Decrease indent |
+| **AI Assistance** | Sparkles button — opens the "Help me write" dialog (see below) |
+
+---
+
+**AI Assistance feature**
+
+Clicking the **AI Assistance** toolbar button (or pressing **Alt + W**) opens a modal dialog:
+
+- **Header:** Amber gradient banner with a rotating carousel of legal prompt examples (NDA, Legal Notice, Power of Attorney, Sale Deed, Bail Application, Writ Petition, etc.) — cycles every 3 seconds.
+- **Input:** Free-text textarea — describe what you want the AI to write.
+- **Behaviour:** On submit, the AI generates the complete legal content and inserts it at the cursor's last known position within the document. The generated markdown/text is converted to properly structured HTML before insertion.
+- **When used on an empty document:** The editor shows a "Help me write" placeholder (with a blinking cursor and Sparkles icon) — clicking it opens the same dialog.
+
+---
+
+**Refine feature (inline AI editing)**
+
+Selecting any text in the editor (minimum 3 characters) triggers a floating **Refine** button (wand icon) that appears above the selection. Clicking it opens the **AI Refine panel** — a 300 px right sidebar that slides in alongside the document:
+
+**Refine panel anatomy:**
+
+| Section | Description |
+|---|---|
+| Quick action chips | **Concise** — trims verbosity; **Formal** — raises register to court-appropriate language; **Persuasive** — adds rhetorical force; **Judicial** — restructures for judge-facing submission |
+| Selected text preview | Shows the highlighted text (2-line clamp) |
+| Custom prompt input | Free-text field at the bottom — type any instruction (e.g., "Convert to bullet points", "Remove the heading", "Summarize in 2 lines", "Simplify for layperson") and press Enter or click the submit button |
+| Result area | Shows the AI-refined output. Editable textarea (plain text) or rendered HTML block if the refinement produces structured markup. Also shows an AI note explaining what was changed. |
+| Apply button | Replaces the selected text in the document in-place. The previous content is pushed onto an internal undo stack so the replacement can be rolled back with the Undo Refine button. |
+| Discard button | Closes the panel and discards the refined result — original text is untouched. |
+
+All refine operations hit `POST /api/refine` with `{ text, action, customPrompt, selectedHtml }`. The API returns `{ refined, note, isHtml }`.
 
 ---
 
@@ -217,25 +322,77 @@ All results are organised into a research panel that can be saved as notes.
 
 **What it does:** Generate a structured legal memo on any topic in minutes.
 
-**Supported frameworks:**
-- **IRAC** — Issue, Rule, Application, Conclusion (most common in Indian legal practice)
-- **CRAC** — Conclusion, Rule, Application, Conclusion
-- **CREAC** — Conclusion, Rule, Explanation, Application, Conclusion
+**Input fields:**
+- **Facts** — the facts of the matter (required; a detail-quality meter shows live feedback as you type)
+- **Issues** — specific legal questions to be addressed (optional)
+- **Memo Title** — defaults to "Legal Memorandum"
+- **Parties** — optional party names
+- **Jurisdiction** — optional court or jurisdiction context
+- **Structure** — choose the memo framework (see below)
+- **Language** — any of the 22 Indian languages; the entire memo is generated and delivered in the selected language
 
-The memo is generated using the same three-layer research pipeline as drafting — InLegalBERT → Indian Kanoon → Perplexity — so every point in the memo is backed by verified authority.
+**Supported frameworks:**
+- **IRAC** — Issue → Rule → Application → Conclusion (most common in Indian legal practice)
+- **CRAC** — Conclusion → Rule → Application → Conclusion (partner-first, bottom-line up front)
+- **CREAC** — Conclusion → Rule → Explanation → Application → Conclusion (senior counsel format)
+
+**Generation pipeline:** Two-stage streaming — the UI shows "Researching…" while InLegalBERT + Indian Kanoon + Perplexity run (Layer 0-2), then transitions to "Writing…" as the memo streams in token-by-token. The full memo is backed by verified authority from the research layers.
+
+**After generation:** The memo opens in the AI Editor (Section 4.6a) — full rich-text editing, language translation, AI Assistance, and Refine features are all available. Memos are saved as drafts (type = `memo`) and appear in the Memo list view for future access. Saved memos can be renamed, deleted, or re-opened.
 
 ---
 
 ### 4.9 Compliance Checklist Generator
 
-**What it does:** Enter an industry, business activity, or specific regulation, and get a complete compliance checklist with direct citations to the applicable statutes and rules.
+**What it does:** Select an industry, jurisdiction, and business activity from structured dropdowns. The AI generates a complete compliance checklist for that specific combination, with each item citing the exact statute and section that mandates it.
 
-**Example use cases:**
-- "What compliance does a fintech startup need in India?"
-- "Checklist for opening a restaurant in Maharashtra"
-- "SEBI compliance for a listed company"
+---
 
-Each checklist item includes the specific section of the law that requires it, so the lawyer can verify the source directly.
+**Step 1 — Configure (three required selects)**
+
+| Selector | Options |
+|---|---|
+| **Industry** | Startup / Tech, Fintech, Edtech, Healthcare, E-commerce, Real Estate, Manufacturing, NBFC, Banking, Insurance |
+| **Jurisdiction** | Pan India, Maharashtra, Delhi NCR, Karnataka, Tamil Nadu, Gujarat, Telangana |
+| **Activity** | Company Incorporation, Fundraising / Investment, Employment / HR, Data Processing / Privacy, Licensing & Permits, Tax Compliance, Environmental Clearance, Export / Import |
+
+All three selects must be filled before "Generate Checklist" is enabled.
+
+**Realistic use cases (industry + jurisdiction + activity):**
+- Fintech startup in Maharashtra doing Company Incorporation → Companies Act 2013, RBI licensing, DPIIT startup recognition, state GST registration
+- Healthcare company Pan India handling Data Processing / Privacy → DPDP Act 2023, IT Act 2000, MoHFW health data guidelines, consent framework
+- NBFC in Delhi NCR for Fundraising / Investment → RBI NBFC regulations, FEMA, SEBI FPI norms, Companies Act fundraising provisions
+- Manufacturing company in Gujarat seeking Environmental Clearance → Environment Protection Act 1986, EIA Notification 2006, GPCB consent to operate, factory license under Factories Act
+- E-commerce company Pan India for Tax Compliance → GST Act TCS obligations, Income Tax TDS on payments, customs duty on cross-border sales
+
+---
+
+**Step 2 — Generated checklist**
+
+Each checklist item contains:
+
+| Field | Description |
+|---|---|
+| **Title** | The specific compliance requirement (e.g., "Register with Registrar of Companies (ROC)") |
+| **Description** | What must actually be done |
+| **Legal Reference** | Exact statute + section (e.g., "Companies Act, 2013 — Section 7") |
+| **Deadline** | When it must be completed (e.g., "Within 30 days of incorporation") |
+| **Risk Badge** | **High risk** (red), **Medium risk** (grey), or **Low risk** (outline) |
+| **Completed checkbox** | Check off items as you complete them — progress counter updates in real time |
+
+**Per-item actions (each item has two buttons):**
+- **Notes** — opens a dialog to add free-text notes for that specific requirement. A green tick icon appears on the button once a note is saved.
+- **Proof** — upload a proof document (e.g., registration certificate, receipt) for that item. A green tick icon appears once a proof is attached.
+
+**Live Verified badge:** If Perplexity successfully cross-referenced the checklist against trusted Indian government and legal sources, a green "Live Verified" badge appears at the top of the checklist alongside a count of sources used (e.g., "Verified from 4 trusted government sources").
+
+---
+
+**Saving and loading checklists**
+
+- **Save Checklist** — prompts for a title and saves the full checklist (industry + jurisdiction + activity + all items + completion state) to your account.
+- **Saved Checklists tab** — a card grid showing all your saved checklists. Click any card to load it back into the generate view with all items restored. Cards can be deleted individually.
+- **New Checklist** — clears the current checklist so you can generate a fresh one.
 
 ---
 
@@ -599,6 +756,107 @@ Each sub-group is only rendered when it has entries. If only IK results were cit
 - IK: top 5 results, each assigned citation index `[1]`…`[5]`
 - Perplexity: top 3 web sources, assigned citation indices continuing from IK (e.g. `[6]`, `[7]`, `[8]`)
 - All results sent to the AI as numbered context blocks; AI decides which to cite based on relevance to the specific question
+
+---
+
+### Docs Update — Section 4.3 CNR Chatbot: Saved Cases Feature Documented
+**What was missing:** Section 4.3 only mentioned the notes editor and real-time lookup. It did not document the "Saved Cases" capability at all.
+
+**What was added:**
+- Two-tab layout explained: CNR Search tab (embedded eCourts chatbot iframe) and Saved Cases tab
+- "Save this case" button: after a lookup result appears, users click this to save the full case record to their account
+- Full saved case card fields documented: Case Type, CNR Number, Filing Number, Case Status (colour-coded badge), Case Stage, Court & Judge, Next Hearing Date
+- Full case detail view: petitioners, respondents, acts & sections, case transfer details, full hearing history (expandable beyond 5 entries), remove button
+- Right-panel Case Notes anatomy: Editor sub-tab (title + optional CNR linkage + free-text body) and Saved sub-tab (scrollable list, click to load)
+
+---
+
+### Docs Update — Section 4.4 AI Legal Drafting: Language Support & Trained Style Toggle
+**What was missing:** No mention of the Language selector on the drafting form, or the "Use trained style" toggle.
+
+**What was added:**
+- Language selector: all 22 Indian languages; draft is generated in the selected language
+- Cross-reference to in-editor Translate button (Section 4.6a)
+- "Use trained style" toggle (GraduationCap icon + Switch): applies firm-trained style when enabled; default off
+- Cross-reference to Section 4.6 for training setup
+
+---
+
+### Docs Update — Section 4.5 Custom Drafting & Empty Document: Language & File Limits
+**What was missing:** File limits, language support, and cross-reference to the shared editor were absent.
+
+**What was added:**
+- Upload limits for Custom Drafting: max 10 reference documents, 50 pages each, 150 pages total, PDF/DOCX/DOC/TXT
+- "Use trained style" toggle also available on reference-document flow
+- Language translation available in Empty Document via in-editor Translate
+- Cross-reference to Section 4.6a for AI Editor Interface documentation
+
+---
+
+### Docs Update — Section 4.6 Firm Style Training: Step-by-step How-to
+**What was missing:** The section described the concept but not how it actually works operationally.
+
+**What was added:**
+- Step-by-step training flow (upload → background processing → 1-second polling → toast confirmation → document list with status badges)
+- Toast message text: "Documents trained and ready — Chakshi has learned your firm's style."
+- Clarified that individual trained documents can be deleted to remove their influence
+- Clarified that the toggle appears on the AI Drafting and Custom Drafting form pages (not a global setting)
+
+---
+
+### Docs Update — Section 4.6a AI Editor Interface (new section)
+**What was missing:** Entirely absent from the docs. The PremiumEditor is used across four features and has non-obvious capabilities.
+
+**What was added:**
+
+Complete documentation of the PremiumEditor (`client/src/components/premium-editor.tsx`), covering:
+
+**Header bar:** Title field, Language selector (22 languages), Translate button (appears only when selected ≠ current; calls `/api/drafts/translate`), Save button
+
+**Toolbar groups:** File menu (Open, Make a Copy, Download TXT/DOC/PDF, Rename), Undo/Redo, Zoom (50%–150%), Font family (5 options), Font size (8–72 pt with ±), Heading styles (H1–H4 with auto paragraph continuation on Enter), Bold/Italic/Underline/Highlight (toggle yellow)/Strikethrough, Alignment (Left/Centre/Right/Justify), Lists and indent, AI Assistance button
+
+**AI Assistance feature:**
+- Triggered by toolbar button or **Alt+W** keyboard shortcut
+- Empty editor shows "Help me write" placeholder — clicking it also opens the dialog
+- Modal: amber gradient header, rotating carousel of 12 legal prompt examples (cycles every 3 s), free-text textarea, "Generate Document" button
+- Behaviour: generates content via `onAiAssist(prompt)`, inserts at last-known cursor position, converts markdown to structured HTML before insertion
+
+**Refine feature (inline AI editing):**
+- Triggered by selecting ≥3 characters in the editor → floating "Refine" wand button appears above selection
+- Opens 300 px AI Refine right sidebar with: Quick action chips (Concise, Formal, Persuasive, Judicial), selected text preview (2-line clamp), result area (editable textarea or rendered HTML), AI note explaining the change, custom prompt input (Enter or button to submit), Apply button (replaces selection in-place, pushes to undo stack), Discard button
+- API: `POST /api/refine` with `{ text, action, customPrompt, selectedHtml }` → returns `{ refined, note, isHtml }`
+- Custom prompt examples shown in panel when no result yet: "Convert to bullet points", "Remove the heading", "Make bold and italic", "Summarize in 2 lines", "Simplify for layperson"
+
+---
+
+### Docs Update — Section 4.8 Legal Memo Generator: Language Support & Full Input Fields
+**What was missing:** No mention of the Language selector, input fields, or two-stage streaming pipeline.
+
+**What was added:**
+- All 7 input fields documented: Facts, Issues, Memo Title, Parties, Jurisdiction, Structure, Language
+- Language note: entire memo generated and delivered in the chosen language (not post-translated)
+- Two-stage streaming: "Researching…" stage (InLegalBERT + IK + Perplexity, Layers 0-2) then "Writing…" stage (SSE token stream)
+- After generation: memo opens in AI Editor (Section 4.6a) with full editing, translation, AI Assistance, Refine; saved as draft type=`memo`
+- IRAC/CRAC/CREAC framework descriptions clarified with audience labels
+
+---
+
+### Docs Update — Section 4.9 Compliance Checklist Generator: Full Rewrite
+**What was wrong:** The old section described an open freeform text input ("Enter an industry, business activity...") and gave incorrect use cases (restaurant, SEBI listed company). The actual feature uses three structured dropdown selects, not a text field.
+
+**What was added:**
+
+**Step 1 — Configuration:** Three required Select dropdowns — Industry (10 options), Jurisdiction (7 options), Activity (8 options). All options listed. All three must be filled before generate is enabled.
+
+**Corrected use cases:** Five realistic examples using actual dropdown combinations with the specific Indian statutes those combinations trigger (e.g., Fintech + Maharashtra + Company Incorporation → Companies Act 2013, RBI licensing, DPIIT recognition, GST; Healthcare + Pan India + Data Processing/Privacy → DPDP Act 2023, IT Act 2000, MoHFW guidelines).
+
+**Step 2 — Generated checklist:** Full checklist item anatomy documented: Title, Description, Legal Reference (statute + section), Deadline, Risk Badge (high/medium/low colour coding), completed checkbox with real-time progress counter.
+
+**Per-item actions:** Notes button (per-item free-text note dialog, green tick on button when note exists), Proof button (upload proof document per item, green tick on button when proof attached).
+
+**Live Verified badge:** Appears when Perplexity successfully cross-referenced sources; shows count of trusted government sources.
+
+**Save/Load:** Save Checklist (prompts for title, saves industry + jurisdiction + activity + all items + completion state), Saved Checklists tab (card grid, click to load back, delete individual), New Checklist button.
 
 ---
 
