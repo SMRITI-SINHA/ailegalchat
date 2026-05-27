@@ -42,6 +42,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { apiRequest, authFetch, queryClient } from "@/lib/queryClient";
 import { markdownToHtml } from "@/lib/utils";
 import type { ChatSession, ModelTier, Citation } from "@shared/schema";
@@ -174,6 +175,7 @@ interface PdfNote {
 type ViewMode = "list" | "chat";
 
 export default function ChatWithPDFPage() {
+  const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
