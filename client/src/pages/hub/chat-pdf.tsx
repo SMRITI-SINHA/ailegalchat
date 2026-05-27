@@ -82,7 +82,8 @@ function parseAndCleanContent(raw: string): { clean: string; pageRefs: PageRef[]
   });
 
   refs.sort((a, b) => a.page - b.page);
-  return { clean: clean.replace(/\s{2,}/g, " ").trim(), pageRefs: refs };
+  // Preserve newlines — only collapse multiple horizontal spaces on the same line
+  return { clean: clean.replace(/[^\S\n]+/g, " ").replace(/\n{3,}/g, "\n\n").trim(), pageRefs: refs };
 }
 
 function HighlightedPageText({ text, highlight }: { text: string; highlight: string }) {
@@ -97,27 +98,48 @@ function HighlightedPageText({ text, highlight }: { text: string; highlight: str
       </div>
     );
   }
-  if (!highlight || highlight.length < 4) {
-    return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text}</pre>;
+
+  const searchTerm = highlight && highlight.length >= 4 ? highlight.slice(0, 80) : null;
+  let regex: RegExp | null = null;
+  if (searchTerm) {
+    try {
+      const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      regex = new RegExp(`(${escaped})`, "gi");
+    } catch {
+      regex = null;
+    }
   }
-  const search = highlight.slice(0, 60);
-  const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  let parts: string[];
-  try {
-    parts = text.split(new RegExp(`(${escaped})`, "gi"));
-  } catch {
-    return <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{text}</pre>;
+
+  function applyHighlight(chunk: string): JSX.Element[] {
+    if (!regex || !searchTerm) return [<span key="0">{chunk}</span>];
+    const parts = chunk.split(regex);
+    return parts.map((part, i) =>
+      part.toLowerCase() === searchTerm.toLowerCase() ? (
+        <mark key={i} className="bg-amber-200 dark:bg-amber-700/60 text-inherit rounded-sm px-0.5 py-px">{part}</mark>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
   }
+
+  const paragraphs = text.split(/\n{2,}/);
+
   return (
-    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-      {parts.map((part, i) =>
-        part.toLowerCase() === search.toLowerCase() ? (
-          <mark key={i} className="bg-amber-200 dark:bg-amber-700/60 text-inherit rounded-sm px-0.5 py-px">{part}</mark>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
-    </pre>
+    <div className="text-sm leading-relaxed space-y-3 font-sans">
+      {paragraphs.map((para, pi) => {
+        const lines = para.split("\n");
+        return (
+          <p key={pi} className="text-foreground">
+            {lines.map((line, li) => (
+              <span key={li}>
+                {applyHighlight(line)}
+                {li < lines.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        );
+      })}
+    </div>
   );
 }
 
@@ -188,6 +210,8 @@ export default function ChatWithPDFPage() {
   const [nyayaMessages, setNyayaMessages] = useState<NyayaMessage[]>([]);
   const [nyayaInput, setNyayaInput] = useState("");
   const [nyayaLoading, setNyayaLoading] = useState(false);
+  const [isFullPageRef, setIsFullPageRef] = useState(false);
+  const docPanelRef = useRef<HTMLDivElement>(null);
   const [nyayaSessionId, setNyayaSessionId] = useState<string | null>(null);
   const [selectionPosition, setSelectionPosition] = useState<SelectionPosition | null>(null);
 
@@ -263,6 +287,16 @@ export default function ChatWithPDFPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Auto-scroll to highlighted text in doc panel when a page ref is clicked
+  useEffect(() => {
+    if (!highlightText || highlightText.length < 4) return;
+    const timer = setTimeout(() => {
+      const mark = docPanelRef.current?.querySelector("mark");
+      mark?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [activeDocPage, highlightText]);
 
   // Load notes from localStorage when session changes
   useEffect(() => {
@@ -1332,6 +1366,7 @@ export default function ChatWithPDFPage() {
                                   onClick={() => {
                                     setActiveDocPage(ref.page);
                                     setHighlightText(ref.refText || "");
+                                    setIsFullPageRef(!ref.refText);
                                     setRightPanel("doc");
                                     setPanelCollapsed(false);
                                   }}
@@ -1396,7 +1431,7 @@ export default function ChatWithPDFPage() {
                       size="icon"
                       className="h-7 w-7"
                       disabled={activeDocPage <= 1}
-                      onClick={() => { setActiveDocPage((p) => Math.max(1, p - 1)); setHighlightText(""); }}
+                      onClick={() => { setActiveDocPage((p) => Math.max(1, p - 1)); setHighlightText(""); setIsFullPageRef(false); }}
                       data-testid="button-prev-page"
                     >
                       <ChevronLeft className="h-4 w-4" />
@@ -1409,7 +1444,7 @@ export default function ChatWithPDFPage() {
                       size="icon"
                       className="h-7 w-7"
                       disabled={activeDocPage >= docPages.length}
-                      onClick={() => { setActiveDocPage((p) => Math.min(docPages.length, p + 1)); setHighlightText(""); }}
+                      onClick={() => { setActiveDocPage((p) => Math.min(docPages.length, p + 1)); setHighlightText(""); setIsFullPageRef(false); }}
                       data-testid="button-next-page"
                     >
                       <ChevronRight className="h-4 w-4" />
@@ -1422,7 +1457,7 @@ export default function ChatWithPDFPage() {
                       Highlighted text referenced in the answer
                     </span>
                     <button
-                      onClick={() => setHighlightText("")}
+                      onClick={() => { setHighlightText(""); setIsFullPageRef(false); }}
                       className="text-[10px] text-amber-600 hover:text-amber-800 underline"
                       data-testid="button-clear-highlight"
                     >
@@ -1430,8 +1465,22 @@ export default function ChatWithPDFPage() {
                     </button>
                   </div>
                 )}
+                {isFullPageRef && !highlightText && (
+                  <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-200/50 dark:border-blue-800/40 flex items-center justify-between shrink-0">
+                    <span className="text-[10px] text-blue-700 dark:text-blue-400 font-medium">
+                      The answer referenced this page broadly — no specific passage was cited
+                    </span>
+                    <button
+                      onClick={() => setIsFullPageRef(false)}
+                      className="text-[10px] text-blue-600 hover:text-blue-800 underline"
+                      data-testid="button-clear-fullpage-ref"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
                 <ScrollArea className="flex-1 p-5">
-                  <div className="text-foreground leading-relaxed">
+                  <div ref={docPanelRef} className="text-foreground leading-relaxed">
                     <HighlightedPageText
                       text={docPages[activeDocPage - 1] || ""}
                       highlight={highlightText}
