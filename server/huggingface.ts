@@ -1,12 +1,11 @@
 import * as ort from "onnxruntime-node";
-import { join, dirname } from "path";
+import { join } from "path";
 import { existsSync, readFileSync } from "fs";
-import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const MODEL_DIR = join(__dirname, "models", "inlegalbert");
+// process.cwd() = project root in both dev (tsx) and production (node dist/index.cjs)
+// The entire Repl filesystem is included in the production container layer, so
+// server/models/... is always reachable regardless of where dist/index.cjs lives.
+const MODEL_DIR = join(process.cwd(), "server", "models", "inlegalbert");
 const ONNX_PATH = join(MODEL_DIR, "model_quantized.onnx");
 const VOCAB_PATH = join(MODEL_DIR, "vocab.txt");
 
