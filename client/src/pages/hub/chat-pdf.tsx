@@ -489,10 +489,21 @@ export default function ChatWithPDFPage() {
     }
 
     try {
+      // Pass the document IDs so Nyaya AI has the same document context.
+      // The server applies smart truncation (80 K chars, beginning+middle+end
+      // for large docs) so even 800-page files stay within token limits.
+      const nyayaDocIds = sessionDocumentIds.length > 0
+        ? sessionDocumentIds
+        : uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
+
       const response = await authFetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg.content, sessionId }),
+        body: JSON.stringify({
+          message: userMsg.content,
+          sessionId,
+          documentIds: nyayaDocIds.length > 0 ? nyayaDocIds : undefined,
+        }),
       });
 
       if (!response.body) throw new Error("No response body");
@@ -593,10 +604,18 @@ export default function ChatWithPDFPage() {
     }
 
     try {
+      const nyayaDocIds = sessionDocumentIds.length > 0
+        ? sessionDocumentIds
+        : uploadedDocs.map(d => d.id).filter(id => !id.startsWith("temp-"));
+
       const response = await authFetch("/api/chat/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: nyayaInput, sessionId }),
+        body: JSON.stringify({
+          message: messageContent,
+          sessionId,
+          documentIds: nyayaDocIds.length > 0 ? nyayaDocIds : undefined,
+        }),
       });
 
       if (!response.body) throw new Error("No response body");
@@ -1284,9 +1303,6 @@ export default function ChatWithPDFPage() {
           >
             <Scale className="mr-1.5 h-3.5 w-3.5" />
             Nyaya AI
-            {nyayaMessages.length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-[10px]">{nyayaMessages.length}</Badge>
-            )}
           </Button>
           <Button
             variant={rightPanel === "notes" && !panelCollapsed ? "default" : "outline"}
