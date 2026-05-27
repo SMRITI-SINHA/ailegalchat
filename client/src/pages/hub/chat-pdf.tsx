@@ -242,6 +242,9 @@ export default function ChatWithPDFPage() {
   const [notesTab, setNotesTab] = useState<"write" | "saved">("write");
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(42); // % of main area width
+  const mainAreaRef = useRef<HTMLDivElement>(null);
+  const isDraggingDivider = useRef(false);
   
   const [showNyayaPromptDialog, setShowNyayaPromptDialog] = useState(false);
   const [pendingSelectedText, setPendingSelectedText] = useState("");
@@ -418,6 +421,22 @@ export default function ChatWithPDFPage() {
   useEffect(() => {
     scrollNyayaToBottom();
   }, [nyayaMessages]);
+
+  const handleDividerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button")) return; // let collapse button handle its own click
+    e.preventDefault();
+    isDraggingDivider.current = true;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleDividerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingDivider.current || !mainAreaRef.current) return;
+    const rect = mainAreaRef.current.getBoundingClientRect();
+    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    setLeftPanelWidth(Math.min(72, Math.max(28, pct)));
+  };
+
+  const handleDividerPointerUp = () => { isDraggingDivider.current = false; };
 
   const handleAskNyayaAI = (selectedText?: string) => {
     const query = selectedText || selectionPosition?.text;
@@ -1285,31 +1304,20 @@ export default function ChatWithPDFPage() {
             Notes
           </Button>
 
-          {/* ── Panel collapse/expand toggle ── */}
-          {(hasDocViewer || rightPanel !== "doc") && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setPanelCollapsed(c => !c)}
-              title={panelCollapsed ? "Show panel" : "Hide panel — full-width chat"}
-              data-testid="button-toggle-panel-collapse"
-              className="ml-1 text-muted-foreground hover:text-foreground"
-            >
-              {panelCollapsed
-                ? <PanelRightOpen className="h-4 w-4" />
-                : <PanelRightClose className="h-4 w-4" />
-              }
-            </Button>
-          )}
         </div>
       </div>
 
-      {/* ── Main area: chat left + right panel ── */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* ── Main area: chat left + resizable divider + right panel ── */}
+      <div className="flex-1 flex overflow-hidden" ref={mainAreaRef}>
 
         {/* LEFT — Chat */}
         <div
-          className={`flex flex-col overflow-hidden relative ${(hasDocViewer || rightPanel !== "doc") && !panelCollapsed ? "w-[42%] border-r" : "flex-1"}`}
+          className="flex flex-col overflow-hidden relative"
+          style={
+            (hasDocViewer || rightPanel !== "doc") && !panelCollapsed
+              ? { width: `${leftPanelWidth}%` }
+              : { flex: 1 }
+          }
           ref={chatContainerRef}
         >
           {selectionPosition && (
@@ -1434,9 +1442,37 @@ export default function ChatWithPDFPage() {
           </div>
         </div>
 
+        {/* DIVIDER — drag to resize, centre button collapses/expands right panel */}
+        {(hasDocViewer || rightPanel === "nyaya" || rightPanel === "notes") && (
+          <div
+            className="relative flex-none w-3 cursor-col-resize select-none group z-10"
+            onPointerDown={handleDividerPointerDown}
+            onPointerMove={handleDividerPointerMove}
+            onPointerUp={handleDividerPointerUp}
+            onLostPointerCapture={handleDividerPointerUp}
+            data-testid="divider-panel-resize"
+          >
+            {/* Visible line */}
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border group-hover:bg-primary/40 transition-colors" />
+            {/* Collapse / expand arrow button */}
+            <button
+              onClick={() => setPanelCollapsed(c => !c)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-5 h-9 rounded-sm bg-background border border-border shadow-sm hover:bg-muted hover:border-primary/40 transition-colors cursor-pointer"
+              title={panelCollapsed ? "Expand panel" : "Collapse panel"}
+              data-testid="button-toggle-panel-collapse"
+            >
+              {panelCollapsed
+                ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                : <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+              }
+            </button>
+          </div>
+        )}
+
         {/* RIGHT — tabbed panel (Document / Nyaya AI / Notes) */}
         {(hasDocViewer || rightPanel === "nyaya" || rightPanel === "notes") && !panelCollapsed && (
-          <div className={`flex flex-col overflow-hidden ${hasDocViewer ? "flex-1" : "w-80"}`}>
+          <div className="flex-1 flex flex-col overflow-hidden">
 
             {/* ── Document viewer ── */}
             {rightPanel === "doc" && hasDocViewer && (() => {
