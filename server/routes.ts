@@ -1054,7 +1054,7 @@ ${endPart}`;
       
       if (isLegalQuery && indianKanoon.isConfigured()) {
         searchPromises.push(
-          indianKanoon.search(message, 0).then(searchResults => {
+          withTimeout(indianKanoon.search(message, 0), 5000, []).then(searchResults => {
             if (searchResults.length > 0) {
               const topResults = searchResults.slice(0, 5);
               indianKanoonContext = "\n\n=== Case Law & Statutes from Indian Kanoon ===\n";
@@ -1080,7 +1080,7 @@ ${endPart}`;
       
       if (isLegalQuery && legalWebSearch.isConfigured()) {
         searchPromises.push(
-          legalWebSearch.searchLegal(message).then(({ answer, sources }) => {
+          withTimeout(legalWebSearch.searchLegal(message), 5000, { answer: null, sources: [] }).then(({ answer, sources }) => {
             if (answer || sources.length > 0) {
               webSearchContext = "\n\n=== Recent Legal Updates from Web Sources ===\n";
               if (answer) {
@@ -1104,7 +1104,7 @@ ${endPart}`;
       // Load training context in parallel with IK + web searches
       let chakshiTrainingKnowledge = "";
       searchPromises.push(
-        trainingDataLoader.getTrainingContext()
+        withTimeout(trainingDataLoader.getTrainingContext(), 3000, "")
           .then(ctx => { chakshiTrainingKnowledge = ctx; })
           .catch(() => console.log("[NYAYA AI] Training data loader failed, continuing without training context"))
       );
@@ -1544,17 +1544,17 @@ Output clean plain text only. No markdown symbols.`;
 
       const [draftBertSettled, draftBaseIKSettled, draftPerplexitySettled, draftStyleSettled] = await Promise.allSettled([
         inLegalBERT.isConfigured()
-          ? withTimeout(inLegalBERT.identifyStatutes(facts), 7000, [])
+          ? withTimeout(inLegalBERT.identifyStatutes(facts), 5000, [])          // Layer 0: BERT statute pre-id
           : Promise.resolve([]),
         indianKanoon.isConfigured()
-          ? withTimeout(indianKanoon.search(baseSearchTerms, 0), 6000, [])
+          ? withTimeout(indianKanoon.search(baseSearchTerms, 0), 5000, [])      // Layer 1: primary authority
           : Promise.resolve([]),
         legalWebSearch.isConfigured()
-          ? withTimeout(legalWebSearch.searchLegal(riskQuery), 8000, null)
+          ? withTimeout(legalWebSearch.searchLegal(riskQuery), 5000, null)      // Layer 2: advisory only
           : Promise.resolve(null),
         useFirmStyle
           ? storage.getTrainingDocs(userId)
-          : withTimeout(trainingDataLoader.getDraftingGuidelines(documentTypeForTraining), 5000, ""),
+          : withTimeout(trainingDataLoader.getDraftingGuidelines(documentTypeForTraining), 3000, ""), // Firm SOP
       ]);
 
       // Process BERT results (Layer 0)
@@ -1574,7 +1574,7 @@ Output clean plain text only. No markdown symbols.`;
       if (bertEnhancedQueries.length > 0 && indianKanoon.isConfigured()) {
         console.log("[DRAFTING PIPELINE] Running BERT-enhanced IK queries in parallel...");
         const bertIKSettled = await Promise.allSettled(
-          bertEnhancedQueries.map(q => withTimeout(indianKanoon.search(q, 0), 6000, []))
+          bertEnhancedQueries.map(q => withTimeout(indianKanoon.search(q, 0), 3000, []))
         );
         const seenDocIds = new Set(allDraftResults.map(r => r.docId));
         for (const r of bertIKSettled) {
@@ -1593,7 +1593,7 @@ Output clean plain text only. No markdown symbols.`;
             const docsToRank = allDraftResults.slice(0, 15).map(r => ({
               id: r.docId, title: r.title, text: r.headline?.replace(/<[^>]*>/g, "") || r.title,
             }));
-            const ranked = await withTimeout(inLegalBERT.rankByRelevance(facts.substring(0, 500), docsToRank), 5000, null);
+            const ranked = await withTimeout(inLegalBERT.rankByRelevance(facts.substring(0, 500), docsToRank), 2000, null);
             if (ranked) {
               rankedResults = ranked.map(rd => {
                 const original = allDraftResults.find(r => r.docId === rd.id);
@@ -2113,23 +2113,34 @@ Generate the requested content now:`;
       // Cache Indian Kanoon results for 24h — same query always returns same statutes/cases
       const kanoonCacheKey = { query: query.toLowerCase().trim(), page };
       let results: IndianKanoonResult[] | null = aiCache.get<IndianKanoonResult[]>("kanoon-search", kanoonCacheKey) ?? null;
-      if (!results) {
-        results = await indianKanoon.search(query, page);
-        if (results?.length) aiCache.set("kanoon-search", kanoonCacheKey, results);
-      }
-      
+
+      // Run IK search + BERT statute identification in parallel (they don't depend on each other)
       let bertStatutes: { statute: string; confidence: number }[] = [];
-      if (inLegalBERT.isConfigured() && page === 0) {
+      if (!results) {
+        const [freshResults, bertResult] = await Promise.allSettled([
+          withTimeout(indianKanoon.search(query, page), 5000, []),
+          inLegalBERT.isConfigured() && page === 0
+            ? withTimeout(inLegalBERT.identifyStatutes(query), 3000, [])
+            : Promise.resolve([]),
+        ]);
+        results = freshResults.status === "fulfilled" ? freshResults.value : [];
+        bertStatutes = bertResult.status === "fulfilled" ? bertResult.value : [];
+        if (results?.length) aiCache.set("kanoon-search", kanoonCacheKey, results);
+      } else if (inLegalBERT.isConfigured() && page === 0) {
+        // Cache hit — still run BERT identify (fast local ONNX, no network)
+        bertStatutes = await withTimeout(inLegalBERT.identifyStatutes(query), 3000, []);
+      }
+
+      // Re-rank IK results by BERT semantic relevance
+      if (bertStatutes.length > 0 && results.length > 2 && inLegalBERT.isConfigured()) {
         try {
-          bertStatutes = await inLegalBERT.identifyStatutes(query);
-          
-          if (bertStatutes.length > 0 && results.length > 2) {
-            const docsToRank = results.slice(0, 10).map(r => ({
-              id: r.docId,
-              title: r.title,
-              text: r.headline?.replace(/<[^>]*>/g, "") || r.title,
-            }));
-            const ranked = await inLegalBERT.rankByRelevance(query, docsToRank);
+          const docsToRank = results.slice(0, 10).map(r => ({
+            id: r.docId,
+            title: r.title,
+            text: r.headline?.replace(/<[^>]*>/g, "") || r.title,
+          }));
+          const ranked = await withTimeout(inLegalBERT.rankByRelevance(query, docsToRank), 2000, null);
+          if (ranked) {
             results = ranked.map(rd => {
               const original = results!.find(r => r.docId === rd.id);
               return original ? { ...original, relevanceScore: rd.relevanceScore } : original!;
