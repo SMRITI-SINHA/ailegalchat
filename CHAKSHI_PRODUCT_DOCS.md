@@ -118,15 +118,7 @@ When Nyaya AI answers a question that involves statutes, cases, judgments, or re
 
 ### 4.2 Nyaya AI — Expert Legal Assistant
 
-**What it does:** A general-purpose AI legal assistant trained on live Indian legal sources. Think of it as a senior advocate who knows all Indian statutes, landmark cases, and legal procedure — available 24/7.
-
-**Key capabilities:**
-- Answers any Indian law question with verified citations from Indian Kanoon
-- Can help draft documents through an interactive questionnaire flow (detects when a question is really a drafting request and asks clarifying questions before generating)
-- Applies "Firm Style" — if your firm has trained Chakshi on its drafting style (see section 4.6), Nyaya AI uses that style
-- Full persistent conversation history — same smart compression as DocuChat (verbatim last 8 messages + summary of earlier turns)
-- Supports voice input (Whisper speech-to-text) and voice output (OpenAI TTS, "nova" voice)
-- Answers in 22 Indian languages
+**What it does:** A general-purpose AI legal assistant trained on live Indian legal sources. Think of it as a senior advocate who knows all Indian statutes, landmark cases, and legal procedure — available 24/7. It answers Indian law questions with verified citations, drafts legal documents through an interactive questionnaire flow, applies your firm's trained drafting style, maintains full persistent conversation history, supports voice input/output, and works in 22 Indian languages.
 
 ---
 
