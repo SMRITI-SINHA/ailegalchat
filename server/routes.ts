@@ -720,9 +720,17 @@ export async function registerRoutes(
 
           if (supabaseStorage.isSupabaseConfigured()) {
             try {
-              const uploaded = await supabaseStorage.uploadDocument(req.user!.id, tempId, file);
-              storagePath = uploaded.path;
-              storageUrl = uploaded.signedUrl;
+              const uploaded = await withTimeout(
+                supabaseStorage.uploadDocument(req.user!.id, tempId, file),
+                10000,
+                null,
+              );
+              if (uploaded) {
+                storagePath = uploaded.path;
+                storageUrl = uploaded.signedUrl;
+              } else {
+                console.warn("[DOC UPLOAD] Supabase upload timed out, continuing without cloud storage");
+              }
             } catch (e: any) {
               console.warn(`[DOC UPLOAD] Supabase upload failed, continuing without cloud storage: ${e.message}`);
             }

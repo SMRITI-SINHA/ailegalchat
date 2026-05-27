@@ -56,6 +56,10 @@ const memoStructures: { value: MemoStructure; label: string; description: string
   { value: "CREAC", label: "CREAC (Senior Counsel)", description: "Conclusion → Rule → Explanation → Application → Conclusion" },
 ];
 
+class SseServerError extends Error {
+  constructor(msg: string) { super(msg); this.name = "SseServerError"; }
+}
+
 export default function LegalMemoPage() {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -174,12 +178,11 @@ export default function LegalMemoPage() {
               } else if (currentEvent === "done" && data.fullMemo) {
                 fullMemo = data.fullMemo;
               } else if (currentEvent === "error") {
-                throw new Error(data.error || "Generation failed");
+                throw new SseServerError(data.error || "Generation failed");
               }
             } catch (parseErr) {
-              if (parseErr instanceof Error && parseErr.message !== "Unexpected end of JSON input") {
-                throw parseErr;
-              }
+              if (parseErr instanceof SseServerError) throw parseErr;
+              // all other errors are JSON parse failures from incomplete chunks — ignore
             }
           }
         }
