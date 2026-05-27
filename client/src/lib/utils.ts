@@ -62,6 +62,29 @@ export function markdownToHtml(markdown: string | undefined | null): string {
   let inOrderedList = false;
   let inUnorderedList = false;
   let lastWasBlank = false;
+
+  // Shared helper: apply all inline formatting (bold, italic, code, links)
+  const applyInline = (text: string): string => {
+    // Bold / italic (order matters — ** before *)
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+    // Inline code (before link processing so URLs inside code aren't linkified)
+    text = text.replace(/`([^`]+)`/g,
+      '<code style="background:rgba(0,0,0,.07);padding:.15em .4em;border-radius:3px;font-size:.875em;font-family:monospace;word-break:break-all;">$1</code>');
+    // Markdown links [text](url)
+    text = text.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;word-break:break-all;">$1</a>'
+    );
+    // Bare URLs not already inside an href attribute
+    text = text.replace(
+      /(?<![="'/])(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]+)/g,
+      '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;word-break:break-all;">$1</a>'
+    );
+    return text;
+  };
   
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
@@ -79,13 +102,7 @@ export function markdownToHtml(markdown: string | undefined | null): string {
         processedLines.push('<ol style="margin: 1em 0; padding-left: 2em;">');
         inOrderedList = true;
       }
-      // Apply emphasis to the list item content
-      let itemContent = orderedMatch[2];
-      itemContent = itemContent.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      itemContent = itemContent.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-      itemContent = itemContent.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-      itemContent = itemContent.replace(/_([^_]+)_/g, '<em>$1</em>');
-      processedLines.push(`<li style="margin: 0.5em 0;">${itemContent}</li>`);
+      processedLines.push(`<li style="margin: 0.5em 0;">${applyInline(orderedMatch[2])}</li>`);
     } else if (unorderedMatch) {
       if (!inUnorderedList) {
         if (inOrderedList) {
@@ -95,13 +112,7 @@ export function markdownToHtml(markdown: string | undefined | null): string {
         processedLines.push('<ul style="margin: 1em 0; padding-left: 2em;">');
         inUnorderedList = true;
       }
-      // Apply emphasis to the list item content
-      let itemContent = unorderedMatch[1];
-      itemContent = itemContent.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-      itemContent = itemContent.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-      itemContent = itemContent.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-      itemContent = itemContent.replace(/_([^_]+)_/g, '<em>$1</em>');
-      processedLines.push(`<li style="margin: 0.5em 0;">${itemContent}</li>`);
+      processedLines.push(`<li style="margin: 0.5em 0;">${applyInline(unorderedMatch[1])}</li>`);
     } else {
       // Before closing any open list, look ahead to check if the next non-blank
       // line continues the same type of list. If so, stay inside the list so
@@ -134,13 +145,7 @@ export function markdownToHtml(markdown: string | undefined | null): string {
         continue;
       } else if (!line.startsWith('<h') && !line.startsWith('<hr')) {
         lastWasBlank = false;
-        // Apply emphasis AFTER list check for regular paragraphs
-        line = line.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-        line = line.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-        line = line.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-        line = line.replace(/_([^_]+)_/g, '<em>$1</em>');
-        // Wrap non-header content in paragraph
-        processedLines.push(`<p style="margin: 0.75em 0; line-height: 1.6;">${line}</p>`);
+        processedLines.push(`<p style="margin: 0.75em 0; line-height: 1.6;">${applyInline(line)}</p>`);
       } else {
         lastWasBlank = false;
         processedLines.push(line);

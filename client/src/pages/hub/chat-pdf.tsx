@@ -530,7 +530,7 @@ export default function ChatWithPDFPage() {
               if (data.content) {
                 fullContent += data.content;
                 setNyayaMessages((prev) =>
-                  prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent) } : m))
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
                 );
               }
               if (data.done) {
@@ -549,7 +549,7 @@ export default function ChatWithPDFPage() {
       }
 
       setNyayaMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent), ...metadata } : m))
+        prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent, ...metadata } : m))
       );
       
       if (sessionId && fullContent) {
@@ -642,7 +642,7 @@ export default function ChatWithPDFPage() {
               if (data.content) {
                 fullContent += data.content;
                 setNyayaMessages((prev) =>
-                  prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent) } : m))
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent } : m))
                 );
               }
               if (data.done) {
@@ -661,7 +661,7 @@ export default function ChatWithPDFPage() {
       }
 
       setNyayaMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, content: stripMarkdown(fullContent), ...metadata } : m))
+        prev.map((m) => (m.id === assistantId ? { ...m, content: fullContent, ...metadata } : m))
       );
       
       if (sessionId && fullContent) {
