@@ -145,6 +145,13 @@ function emitReady() {
     return;
   }
 
+  // In development the Replit preview pane is itself an iframe, so window.parent !== window.
+  // Skip the handshake — the backend accepts tokenless requests in dev mode (dev-user-001).
+  if (import.meta.env.DEV) {
+    console.log("[chakshi:token] Dev mode — skipping CHAKSHI_HUB_READY handshake (backend uses dev-user-001)");
+    return;
+  }
+
   console.log("[chakshi:token] Running inside iframe — sending CHAKSHI_HUB_READY to parent");
   emitReady();
 
