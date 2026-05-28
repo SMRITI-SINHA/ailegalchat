@@ -1201,17 +1201,18 @@ Analyze these documents with the same rigor as you would in legal due diligence.
 
 CRITICAL REQUIREMENT FOR DOCUMENT EXTRACTION — MANDATORY ON EVERY RESPONSE:
 1. Every response that references the document MUST include page citations — this applies equally to first questions AND all follow-up questions
-2. Format: "[Page X]" immediately after each extracted fact, e.g. "The agreement was signed on 15th March 2024 [Page 3]"
-3. For multi-page references: "[Pages X-Y]"
-4. If document sections are labeled, include: "(Section A, Page X)"
+2. FORMAT — cite pages INLINE using [Page X: "verbatim text"] where "verbatim text" is a SHORT (≤20 words) exact quote copied from the document that supports your statement. This lets the reader jump straight to the highlighted passage.
+3. If you are referencing a page broadly (no single passage supports it), use [Page X] without a quote — do NOT fabricate a quote.
+4. For multi-page references: [Pages X-Y: "verbatim text"] or [Pages X-Y]
 5. NEVER state information from the document without indicating WHERE it appears
 6. If you cannot determine the exact page, estimate: "[Beginning section]", "[Middle section]", "[End section]"
 7. End EVERY response with a "References:" line listing every page you cited, e.g. "References: [Page 3], [Page 7], [Pages 12-13]"
 
-Example formats:
-- "The agreement was signed on 15th March 2024 [Page 3]"
-- "The petitioner claims damages of Rs. 50 lakhs [Page 12]"
-- "As stated in the FIR [Pages 2-3]..."
+Example formats (note verbatim quotes inside the brackets):
+- The agreement was executed [Page 3: "this Agreement is entered into on the 15th day of March 2024"]
+- The penalty clause states [Page 12: "the party shall pay a sum of Rs. 50 lakhs as liquidated damages"]
+- The FIR records [Pages 2-3: "the accused was apprehended at the scene"]
+- For a broad page reference (no specific passage): The indemnity provisions are covered on [Page 6]
 - "References: [Page 3], [Pages 2-3], [Page 12]"
 
 ${documentContext}`;

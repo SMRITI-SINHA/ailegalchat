@@ -68,16 +68,19 @@ function parseAndCleanContent(raw: string): { clean: string; pageRefs: PageRef[]
     "\n"
   );
 
+  // Handle [Page X: "verbatim quote"] and plain [Page X] inline markers.
+  // New AI prompt format: [Page 3: "exact text from the document"]
+  // Old / broad-reference format: [Page 3]  (no quote → shows blue banner instead)
   clean = clean.replace(
-    /([^.!?\n]{0,160}?)\s*\[Pages?\s*(\d+)(?:\s*[-–]\s*(\d+))?\]/gi,
-    (_, ctx, p1, p2) => {
+    /\[Pages?\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*(?::\s*"([^"]{0,300})")?\]/gi,
+    (_, p1, p2, quote) => {
       const start = parseInt(p1);
       const end = p2 ? parseInt(p2) : start;
-      const refText = (ctx || "").trim().slice(-90);
+      const refText = quote ? quote.trim() : undefined;
       for (let p = start; p <= Math.min(end, 9999); p++) {
         if (!seen.has(p)) { seen.add(p); refs.push({ page: p, refText }); }
       }
-      return ctx || "";
+      return ""; // Remove the citation marker from the rendered text
     }
   );
 
@@ -108,7 +111,7 @@ function HighlightedPageText({ text, highlight }: { text: string; highlight: str
     );
   }
 
-  const searchTerm = highlight && highlight.length >= 4 ? highlight.slice(0, 80) : null;
+  const searchTerm = highlight && highlight.length >= 4 ? highlight.slice(0, 250) : null;
   let regex: RegExp | null = null;
   if (searchTerm) {
     try {
