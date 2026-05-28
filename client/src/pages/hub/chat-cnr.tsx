@@ -56,6 +56,7 @@ export default function CNRChatPage() {
   const [cnrNumber, setCnrNumber] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [iframeCacheBust, setIframeCacheBust] = useState(() => Date.now());
   const [activeTab, setActiveTab] = useState("search");
   const [rightTab, setRightTab] = useState("editor");
   const [selectedCase, setSelectedCase] = useState<SavedCase | null>(null);
@@ -388,7 +389,7 @@ export default function CNRChatPage() {
                     </div>
                   )}
                   <iframe
-                    src="https://cnr-chatbot--smritiseema1022.replit.app"
+                    src={`https://cnr-chatbot--smritiseema1022.replit.app?v=${iframeCacheBust}`}
                     width="100%"
                     height="100%"
                     style={{
