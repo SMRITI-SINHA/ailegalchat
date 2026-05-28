@@ -389,7 +389,7 @@ export default function CNRChatPage() {
                     </div>
                   )}
                   <iframe
-                    src={`https://cnr-chatbot--smritiseema1022.replit.app?v=${iframeCacheBust}`}
+                    src={`https://cnr-chatbot--smritiseema1022.replit.app/?v=${iframeCacheBust}`}
                     width="100%"
                     height="100%"
                     style={{
