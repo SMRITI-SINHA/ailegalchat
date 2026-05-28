@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Bot, Plus, Save, Trash2, FileText, Clock, List, Edit3,
-  BookmarkCheck, Scale, Building2, Users, Info, Calendar,
+  BookmarkCheck, BookmarkPlus, Scale, Building2, Users, Info, Calendar,
   Gavel, ArrowLeft, Hash, FileCheck, AlertCircle, ArrowRightLeft,
   History, ChevronDown, ChevronUp
 } from "lucide-react";
@@ -60,6 +60,7 @@ export default function CNRChatPage() {
   const [rightTab, setRightTab] = useState("editor");
   const [selectedCase, setSelectedCase] = useState<SavedCase | null>(null);
   const [expandedHistory, setExpandedHistory] = useState(false);
+  const [saveCnrInput, setSaveCnrInput] = useState("");
 
   const { data: notes = [], isLoading: notesLoading } = useQuery<CnrNote[]>({
     queryKey: ["/api/cnr/notes"],
@@ -131,6 +132,26 @@ export default function CNRChatPage() {
     },
     onError: () => {
       toast({ title: "Failed to remove case", variant: "destructive" });
+    },
+  });
+
+  const saveCaseMutation = useMutation({
+    mutationFn: async (cnrNum: string) => {
+      const res = await apiRequest("POST", "/api/cnr/saved-cases", { cnrNumber: cnrNum.trim().toUpperCase() });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cnr/saved-cases"] });
+      setSaveCnrInput("");
+      toast({ title: "Case saved", description: "You can view it in the Saved Cases tab." });
+    },
+    onError: (err: Error) => {
+      const msg = err.message?.toLowerCase() ?? "";
+      if (msg.includes("unique") || msg.includes("duplicate") || msg.includes("already")) {
+        toast({ title: "Already saved", description: "This CNR number is already in your saved cases.", variant: "destructive" });
+      } else {
+        toast({ title: "Failed to save case", variant: "destructive" });
+      }
     },
   });
 
@@ -375,35 +396,67 @@ export default function CNRChatPage() {
             </CardHeader>
             <CardContent className="p-0 flex-1 overflow-hidden">
               {activeTab === "search" && (
-                <div className="flex justify-center p-4 h-full relative">
-                  {!iframeLoaded && (
-                    <div className="absolute inset-4 flex items-center justify-center">
-                      <div className="w-full max-w-[500px] space-y-4">
-                        <Skeleton className="h-12 w-full rounded-lg" />
-                        <Skeleton className="h-8 w-3/4" />
-                        <Skeleton className="h-24 w-full rounded-lg" />
-                        <Skeleton className="h-8 w-1/2" />
-                        <Skeleton className="h-32 w-full rounded-lg" />
+                <div className="flex flex-col h-full">
+                  <div className="flex-1 flex justify-center p-4 relative min-h-0">
+                    {!iframeLoaded && (
+                      <div className="absolute inset-4 flex items-center justify-center">
+                        <div className="w-full max-w-[500px] space-y-4">
+                          <Skeleton className="h-12 w-full rounded-lg" />
+                          <Skeleton className="h-8 w-3/4" />
+                          <Skeleton className="h-24 w-full rounded-lg" />
+                          <Skeleton className="h-8 w-1/2" />
+                          <Skeleton className="h-32 w-full rounded-lg" />
+                        </div>
                       </div>
+                    )}
+                    <iframe
+                      src="https://cnr-chatbot--smritiseema1022.replit.app"
+                      width="100%"
+                      height="100%"
+                      style={{
+                        border: "none",
+                        borderRadius: "12px",
+                        maxWidth: "500px",
+                        opacity: iframeLoaded ? 1 : 0,
+                        transition: "opacity 0.3s ease-in-out"
+                      }}
+                      title="eCourts CNR Search"
+                      data-testid="iframe-cnr-chatbot"
+                      onLoad={() => setIframeLoaded(true)}
+                      loading="eager"
+                    />
+                  </div>
+
+                  <div className="flex-shrink-0 border-t px-4 py-3 bg-muted/30">
+                    <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                      <BookmarkPlus className="h-3 w-3" />
+                      Found your case? Save it by entering its CNR number below.
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="e.g. DLND0100196120"
+                        value={saveCnrInput}
+                        onChange={(e) => setSaveCnrInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && saveCnrInput.trim()) {
+                            saveCaseMutation.mutate(saveCnrInput);
+                          }
+                        }}
+                        className="font-mono text-sm h-8"
+                        data-testid="input-save-cnr"
+                      />
+                      <Button
+                        size="sm"
+                        className="h-8 px-3 flex-shrink-0"
+                        disabled={!saveCnrInput.trim() || saveCaseMutation.isPending}
+                        onClick={() => saveCaseMutation.mutate(saveCnrInput)}
+                        data-testid="button-save-case"
+                      >
+                        <BookmarkPlus className="h-3 w-3 mr-1" />
+                        {saveCaseMutation.isPending ? "Saving..." : "Save Case"}
+                      </Button>
                     </div>
-                  )}
-                  <iframe
-                    src="https://cnr-chatbot--smritiseema1022.replit.app"
-                    width="100%"
-                    height="100%"
-                    style={{
-                      border: "none",
-                      borderRadius: "12px",
-                      maxWidth: "500px",
-                      minHeight: "550px",
-                      opacity: iframeLoaded ? 1 : 0,
-                      transition: "opacity 0.3s ease-in-out"
-                    }}
-                    title="eCourts CNR Search"
-                    data-testid="iframe-cnr-chatbot"
-                    onLoad={() => setIframeLoaded(true)}
-                    loading="eager"
-                  />
+                  </div>
                 </div>
               )}
 
