@@ -928,6 +928,7 @@ export async function registerRoutes(
         title: req.body.title || "New Chat",
         sessionType: req.body.sessionType || "general",
         documentIds: verifiedDocumentIds,
+        parentSessionId: req.body.parentSessionId || null,
         modelTier: "mini",
         totalCost: 0,
         messageCount: 0,

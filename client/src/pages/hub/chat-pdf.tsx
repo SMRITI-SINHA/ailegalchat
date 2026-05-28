@@ -495,14 +495,6 @@ export default function ChatWithPDFPage() {
     setNyayaLoading(true);
     setPendingSelectedText("");
     
-    if (sessionId) {
-      authFetch("/api/chat/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, role: "user", content: fullMessage }),
-      }).catch(console.error);
-    }
-
     try {
       // Pass the document IDs so Nyaya AI has the same document context.
       // The server applies smart truncation (80 K chars, beginning+middle+end
@@ -605,14 +597,6 @@ export default function ChatWithPDFPage() {
     setNyayaMessages((prev) => [...prev, userMsg]);
     setNyayaInput("");
     setNyayaLoading(true);
-    
-    if (sessionId) {
-      authFetch("/api/chat/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, role: "user", content: messageContent }),
-      }).catch(console.error);
-    }
 
     try {
       const nyayaDocIds = sessionDocumentIds.length > 0
@@ -849,17 +833,24 @@ export default function ChatWithPDFPage() {
       const messagesResponse = await authFetch(`/api/chat/sessions/${session.id}/messages`);
       if (messagesResponse.ok) {
         const loadedMessages = await messagesResponse.json();
-        setMessages(loadedMessages.map((m: { id: string; role: string; content: string }) => ({
-          id: m.id,
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })));
+        setMessages(loadedMessages.map((m: { id: string; role: string; content: string }) => {
+          if (m.role !== "assistant") return { id: m.id, role: m.role as "user" | "assistant", content: m.content };
+          const { clean, pageRefs } = parseAndCleanContent(m.content);
+          return { id: m.id, role: "assistant" as const, content: clean, pageRefs };
+        }));
       }
     } catch (error) {
       console.error("Error loading session messages:", error);
     }
-    
-    const nyayaSession = sessions.find(
+
+    // Fetch fresh sessions to find the nyaya child session — stale state may miss it
+    let freshSessions = sessions;
+    try {
+      const freshRes = await authFetch("/api/chat/sessions");
+      if (freshRes.ok) freshSessions = await freshRes.json();
+    } catch { /* fall back to cached sessions */ }
+
+    const nyayaSession = freshSessions.find(
       (s) => s.sessionType === "nyaya" && s.parentSessionId === session.id
     );
     if (nyayaSession) {
@@ -868,11 +859,11 @@ export default function ChatWithPDFPage() {
         const nyayaMessagesResponse = await authFetch(`/api/chat/sessions/${nyayaSession.id}/messages`);
         if (nyayaMessagesResponse.ok) {
           const loadedNyayaMessages = await nyayaMessagesResponse.json();
-          setNyayaMessages(loadedNyayaMessages.map((m: { id: string; role: string; content: string }) => ({
-            id: m.id,
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })));
+          setNyayaMessages(loadedNyayaMessages.map((m: { id: string; role: string; content: string }) => {
+            if (m.role !== "assistant") return { id: m.id, role: m.role as "user" | "assistant", content: m.content };
+            const { clean } = parseAndCleanContent(m.content);
+            return { id: m.id, role: "assistant" as const, content: clean };
+          }));
         }
       } catch (error) {
         console.error("Error loading Nyaya AI messages:", error);
