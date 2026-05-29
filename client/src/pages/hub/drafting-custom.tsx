@@ -57,6 +57,10 @@ import {
 
 type ViewMode = "list" | "editor";
 
+class SseServerError extends Error {
+  constructor(msg: string) { super(msg); this.name = "SseServerError"; }
+}
+
 export default function CustomDraftPage() {
   const [, navigate] = useLocation();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -72,6 +76,7 @@ export default function CustomDraftPage() {
   const [showResearchSidebar, setShowResearchSidebar] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingStage, setGeneratingStage] = useState<"research" | "writing" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState<IndianLanguage>("English");
@@ -150,34 +155,82 @@ export default function CustomDraftPage() {
   const handleGenerate = async () => {
     if (!caseFacts.trim() || !uploadedFormat) return;
     setIsGenerating(true);
+    setGeneratingStage("research");
 
     try {
       const documentTypeStr = getDocumentTypeForPrompt(documentTypeSelection);
       const documentTypeFullStr = getDocumentTypeString(documentTypeSelection);
-      
-      const response = await apiRequest("POST", "/api/drafts/generate", {
-        type: "custom", // Always use "custom" type for custom drafting page
-        title: draftTitle || documentTypeFullStr || "Custom Draft",
-        facts: caseFacts,
-        additionalPrompts,
-        language,
-        formatReference: uploadedFormat.name,
-        formatHtml: extractedFormatHtml,
-        documentTypeDetails: documentTypeSelection,
-        documentSubType: documentTypeStr, // Pass specific type for prompt context
+
+      const response = await authFetch("/api/drafts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "custom",
+          title: draftTitle || documentTypeFullStr || "Custom Draft",
+          facts: caseFacts,
+          additionalPrompts,
+          language,
+          formatReference: uploadedFormat.name,
+          formatHtml: extractedFormatHtml,
+          documentTypeDetails: documentTypeSelection,
+          documentSubType: documentTypeStr,
+          stream: true,
+        }),
       });
-      const draft = await response.json();
-      setDraftId(draft.id);
-      setDraftTitle(draft.title || "Custom Draft");
-      setDraftContent(draft.content || "");
+
+      if (!response.ok) {
+        let errMsg = "Failed to generate draft. Please try again.";
+        try { const e = await response.json(); errMsg = e.error || errMsg; } catch {}
+        throw new Error(errMsg);
+      }
+
+      if (!response.body) throw new Error("No response body");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let currentEvent = "";
+      let savedDraft: any = null;
+      setGeneratingStage("writing");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === "chunk" && data.content) {
+                fullContent += data.content;
+              } else if (currentEvent === "done" && data.draft) {
+                savedDraft = data.draft;
+              } else if (currentEvent === "error") {
+                throw new SseServerError(data.error || "Generation failed");
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof SseServerError) throw parseErr;
+            }
+          }
+        }
+      }
+
+      if (!fullContent.trim()) throw new Error("Empty response. Please try again.");
+      setDraftId(savedDraft?.id ?? null);
+      setDraftTitle(savedDraft?.title || draftTitle || "Custom Draft");
+      setDraftContent(fullContent);
       setShowGenerateDialog(false);
       setViewMode("editor");
       setShowResearchSidebar(true);
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
     } catch (error) {
       console.error("Draft generation error:", error);
+      const msg = error instanceof Error ? error.message : "Draft generation failed.";
+      toast({ title: "Generation failed", description: msg, variant: "destructive" });
     } finally {
       setIsGenerating(false);
+      setGeneratingStage(null);
     }
   };
 
@@ -497,7 +550,7 @@ export default function CustomDraftPage() {
                   {isGenerating ? (
                     <>
                       <StreamingIndicator className="mr-2" />
-                      Generating...
+                      {generatingStage === "research" ? "Researching..." : "Writing Draft..."}
                     </>
                   ) : (
                     <>

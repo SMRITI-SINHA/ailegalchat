@@ -165,6 +165,10 @@ function DetailQualityMeter({ text, label }: { text: string; label?: string }) {
   );
 }
 
+class SseServerError extends Error {
+  constructor(msg: string) { super(msg); this.name = "SseServerError"; }
+}
+
 export default function AIDraftingPage() {
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -175,6 +179,7 @@ export default function AIDraftingPage() {
   const [draftTitle, setDraftTitle] = useState("Untitled Draft");
   const [draftContent, setDraftContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingStage, setGeneratingStage] = useState<"research" | "writing" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [showResearchSidebar, setShowResearchSidebar] = useState(false);
@@ -301,35 +306,83 @@ export default function AIDraftingPage() {
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setGeneratingStage("research");
     try {
-      const factsWithInstructions = formData.additionalInstructions 
+      const factsWithInstructions = formData.additionalInstructions
         ? `${formData.facts}\n\nADDITIONAL INSTRUCTIONS:\n${formData.additionalInstructions}`
         : formData.facts;
-      
+
       const documentTypeStr = getDocumentTypeForPrompt(documentTypeSelection);
       const documentTypeFullStr = getDocumentTypeString(documentTypeSelection);
-      
-      const response = await apiRequest("POST", "/api/drafts/generate", {
-        type: documentTypeStr,
-        title: formData.title || `${documentTypeFullStr || "Draft"}`,
-        facts: factsWithInstructions,
-        parties: formData.parties,
-        jurisdiction: formData.jurisdiction,
-        language,
-        useFirmStyle,
-        documentTypeDetails: documentTypeSelection,
+
+      const response = await authFetch("/api/drafts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: documentTypeStr,
+          title: formData.title || `${documentTypeFullStr || "Draft"}`,
+          facts: factsWithInstructions,
+          parties: formData.parties,
+          jurisdiction: formData.jurisdiction,
+          language,
+          useFirmStyle,
+          documentTypeDetails: documentTypeSelection,
+          stream: true,
+        }),
       });
-      const draft = await response.json();
-      setSelectedDraftId(draft.id);
-      setDraftTitle(draft.title || "Generated Draft");
-      setDraftContent(markdownToHtml(draft.content || ""));
+
+      if (!response.ok) {
+        let errMsg = "Failed to generate draft. Please try again.";
+        try { const e = await response.json(); errMsg = e.error || errMsg; } catch {}
+        throw new Error(errMsg);
+      }
+
+      if (!response.body) throw new Error("No response body");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let currentEvent = "";
+      let savedDraft: any = null;
+      setGeneratingStage("writing");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === "chunk" && data.content) {
+                fullContent += data.content;
+              } else if (currentEvent === "done" && data.draft) {
+                savedDraft = data.draft;
+              } else if (currentEvent === "error") {
+                throw new SseServerError(data.error || "Generation failed");
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof SseServerError) throw parseErr;
+            }
+          }
+        }
+      }
+
+      if (!fullContent.trim()) throw new Error("Empty response. Please try again.");
+      setSelectedDraftId(savedDraft?.id ?? null);
+      setDraftTitle(savedDraft?.title || formData.title || "Generated Draft");
+      setDraftContent(markdownToHtml(fullContent));
       setViewMode("editor");
       setShowResearchSidebar(true);
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
     } catch (error) {
       console.error("Draft generation error:", error);
+      const msg = error instanceof Error ? error.message : "Draft generation failed.";
+      toast({ title: "Generation failed", description: msg, variant: "destructive" });
     } finally {
       setIsGenerating(false);
+      setGeneratingStage(null);
     }
   };
 
@@ -500,35 +553,83 @@ export default function AIDraftingPage() {
 
   const handleGenerateFromReference = async () => {
     setIsGenerating(true);
+    setGeneratingStage("research");
     try {
       const referenceContext = uploadedReferenceFiles
         .map(f => `=== ${f.name} ===\n${f.content}`)
         .join("\n\n");
-      
+
       const documentTypeStr = getDocumentTypeForPrompt(documentTypeSelection);
       const documentTypeFullStr = getDocumentTypeString(documentTypeSelection);
-      
-      const response = await apiRequest("POST", "/api/drafts/generate", {
-        type: documentTypeStr,
-        title: formData.title || `${documentTypeFullStr || "Draft"}`,
-        facts: `REFERENCE DOCUMENTS:\n${referenceContext}\n\nADDITIONAL CONTEXT / INSTRUCTIONS:\n${referencePrompt || "Use the reference documents to understand the case details."}`,
-        parties: formData.parties,
-        jurisdiction: formData.jurisdiction,
-        language,
-        useFirmStyle,
-        documentTypeDetails: documentTypeSelection,
+
+      const response = await authFetch("/api/drafts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: documentTypeStr,
+          title: formData.title || `${documentTypeFullStr || "Draft"}`,
+          facts: `REFERENCE DOCUMENTS:\n${referenceContext}\n\nADDITIONAL CONTEXT / INSTRUCTIONS:\n${referencePrompt || "Use the reference documents to understand the case details."}`,
+          parties: formData.parties,
+          jurisdiction: formData.jurisdiction,
+          language,
+          useFirmStyle,
+          documentTypeDetails: documentTypeSelection,
+          stream: true,
+        }),
       });
-      const draft = await response.json();
-      setSelectedDraftId(draft.id);
-      setDraftTitle(draft.title || "Generated Draft");
-      setDraftContent(markdownToHtml(draft.content || ""));
+
+      if (!response.ok) {
+        let errMsg = "Failed to generate draft. Please try again.";
+        try { const e = await response.json(); errMsg = e.error || errMsg; } catch {}
+        throw new Error(errMsg);
+      }
+
+      if (!response.body) throw new Error("No response body");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let currentEvent = "";
+      let savedDraft: any = null;
+      setGeneratingStage("writing");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === "chunk" && data.content) {
+                fullContent += data.content;
+              } else if (currentEvent === "done" && data.draft) {
+                savedDraft = data.draft;
+              } else if (currentEvent === "error") {
+                throw new SseServerError(data.error || "Generation failed");
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof SseServerError) throw parseErr;
+            }
+          }
+        }
+      }
+
+      if (!fullContent.trim()) throw new Error("Empty response. Please try again.");
+      setSelectedDraftId(savedDraft?.id ?? null);
+      setDraftTitle(savedDraft?.title || formData.title || "Generated Draft");
+      setDraftContent(markdownToHtml(fullContent));
       setViewMode("editor");
       setShowResearchSidebar(true);
       queryClient.invalidateQueries({ queryKey: ["/api/drafts"] });
     } catch (error) {
       console.error("Draft generation error:", error);
+      const msg = error instanceof Error ? error.message : "Draft generation failed.";
+      toast({ title: "Generation failed", description: msg, variant: "destructive" });
     } finally {
       setIsGenerating(false);
+      setGeneratingStage(null);
     }
   };
 
@@ -910,7 +1011,7 @@ export default function AIDraftingPage() {
                   data-testid="button-generate"
                 >
                   {isGenerating ? <StreamingIndicator className="mr-2" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                  {isGenerating ? "Generating..." : "Generate Draft"}
+                  {isGenerating ? (generatingStage === "research" ? "Researching..." : "Writing Draft...") : "Generate Draft"}
                 </Button>
               </CardContent>
             </Card>
@@ -1032,7 +1133,7 @@ export default function AIDraftingPage() {
                       disabled={isGenerating || uploadedReferenceFiles.length === 0 || !formData.title || !formData.parties || !documentTypeSelection}
                     >
                       {isGenerating ? <StreamingIndicator className="mr-2" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                      {isGenerating ? "Generating..." : "Generate Draft with AI"}
+                      {isGenerating ? (generatingStage === "research" ? "Researching..." : "Writing Draft...") : "Generate Draft with AI"}
                     </Button>
                   </>
                 )}
