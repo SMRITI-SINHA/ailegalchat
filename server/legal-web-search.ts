@@ -376,7 +376,7 @@ Be precise and always cite your sources with proper legal citations.`
       }));
 
       const result = { answer, sources };
-      if (answer) aiCache.set("perplexity:legal", cacheKey, result);
+      if (answer) aiCache.setWithTtl("perplexity:legal", cacheKey, result, 12 * 60 * 60 * 1000); // 12h
       return result;
     } catch (error) {
       console.error("Legal web search error:", error);
@@ -501,7 +501,7 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
       }
 
       const result = { answer, sources, recentChanges: Array.from(new Set(recentChanges)) };
-      if (answer) aiCache.set("perplexity:compliance", cacheKey, result);
+      if (answer) aiCache.setWithTtl("perplexity:compliance", cacheKey, result, 12 * 60 * 60 * 1000); // 12h
       return result;
     } catch (error) {
       console.error("Compliance search error:", error);
@@ -561,7 +561,7 @@ Focus on requirements that are CURRENTLY APPLICABLE. Include state-specific requ
           source: this.extractSourceName(url),
         })),
       };
-      if (result.answer) aiCache.set("perplexity:regulatory", cacheKey, result);
+      if (result.answer) aiCache.setWithTtl("perplexity:regulatory", cacheKey, result, 12 * 60 * 60 * 1000); // 12h
       return result;
     } catch (error) {
       console.error("Regulatory search error:", error);

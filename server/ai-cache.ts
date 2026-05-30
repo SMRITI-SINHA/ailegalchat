@@ -63,6 +63,11 @@ class AICache {
   }
 
   set<T>(namespace: string, params: Record<string, unknown>, value: T): void {
+    this.setWithTtl(namespace, params, value, this.ttlMs);
+  }
+
+  /** Like set() but with a custom TTL in milliseconds for this entry only. */
+  setWithTtl<T>(namespace: string, params: Record<string, unknown>, value: T, ttlMs: number): void {
     if (this.store.size >= this.maxEntries) {
       // Evict the oldest entry
       const firstKey = this.store.keys().next().value;
@@ -72,7 +77,7 @@ class AICache {
     const key = this.makeKey(namespace, params);
     this.store.set(key, {
       value,
-      expiresAt: Date.now() + this.ttlMs,
+      expiresAt: Date.now() + ttlMs,
       hits: 0,
     });
   }

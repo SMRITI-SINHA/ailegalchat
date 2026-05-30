@@ -1137,7 +1137,7 @@ ${endPart}`;
       
       if (isLegalQuery && legalWebSearch.isConfigured()) {
         searchPromises.push(
-          withTimeout(legalWebSearch.searchLegal(message), 5000, { answer: null, sources: [] }).then(({ answer, sources }) => {
+          withTimeout(legalWebSearch.searchLegal(message), 3000, { answer: null, sources: [] }).then(({ answer, sources }) => {
             if (answer || sources.length > 0) {
               webSearchContext = "\n\n=== Recent Legal Updates from Web Sources ===\n";
               if (answer) {
@@ -1662,7 +1662,7 @@ Output clean plain text only. No markdown symbols.`;
           ? withTimeout(indianKanoon.search(baseSearchTerms, 0), 5000, [])      // Layer 1: primary authority
           : Promise.resolve([]),
         legalWebSearch.isConfigured()
-          ? withTimeout(legalWebSearch.searchLegal(riskQuery), 5000, null)      // Layer 2: advisory only
+          ? withTimeout(legalWebSearch.searchLegal(riskQuery), 3000, null)      // Layer 2: advisory only
           : Promise.resolve(null),
         useFirmStyle
           ? storage.getTrainingDocs(userId)
@@ -2396,7 +2396,7 @@ Generate the requested content now:`;
           ? withTimeout(indianKanoon.search(memoSearchBase, 0), 5000, []) // Primary authority — keep generous
           : Promise.resolve([]),
         legalWebSearch.isConfigured()
-          ? withTimeout(legalWebSearch.searchLegal(memoRiskQuery), 5000, null) // Advisory only
+          ? withTimeout(legalWebSearch.searchLegal(memoRiskQuery), 3000, null) // Advisory only
           : Promise.resolve(null),
         withTimeout(trainingDataLoader.getTrainingContext(), 3000, ""),   // Firm SOP training context
       ]);
