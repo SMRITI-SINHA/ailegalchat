@@ -545,13 +545,13 @@ export default function NyayaAIPage() {
       if (response.ok) {
         const docs = await response.json();
         const newFiles: UploadedFile[] = docs
-          .filter((d: { id: string; extractedText?: string }) => d.id && d.extractedText && d.extractedText.length > 20)
+          .filter((d: { id: string; status?: string }) => d.id && d.status !== "error")
           .map((d: { id: string; name?: string }, i: number) => ({
             id: d.id,
             name: fileList[i]?.name || d.name || `Document ${i + 1}`,
           }));
         setUploadedFiles((prev) => [...prev, ...newFiles]);
-        if (newFiles.length < fileList.length) {
+        if (newFiles.length === 0) {
           toast({
             title: "Some files could not be read",
             description: "Only PDF, DOCX, and TXT files are fully supported.",

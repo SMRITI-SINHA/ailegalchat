@@ -54,7 +54,7 @@ import {
   calendarEvents as calendarEventsTable,
   aiUsage as aiUsageTable,
 } from "@shared/schema";
-import { desc, asc, eq, gte, and, sql } from "drizzle-orm";
+import { desc, asc, eq, ne, gte, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -923,7 +923,7 @@ export class DatabaseStorage implements IStorage {
 
   // ── Drafts ─────────────────────────────────────────────────────────────────
   async getDrafts(userId: string): Promise<Draft[]> {
-    return getDb().select().from(drafts).where(eq(drafts.userId, userId)).orderBy(desc(drafts.updatedAt));
+    return getDb().select().from(drafts).where(and(eq(drafts.userId, userId), ne(drafts.type, "memo"))).orderBy(desc(drafts.updatedAt));
   }
 
   async getDraft(id: string, userId: string): Promise<Draft | undefined> {

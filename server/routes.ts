@@ -434,10 +434,28 @@ function xmlToSemanticHtml(xml: string): string {
 }
 
 async function extractDocxFast(buffer: Buffer): Promise<{ text: string; html: string }> {
-  // Run once for HTML — derive plain text from the HTML output (saves 40-50% time)
-  const htmlResult = await mammoth.convertToHtml({ buffer });
+  // Style mappings preserve Word heading styles, bold, italic, underline, tables
+  const options = {
+    styleMap: [
+      "p[style-name='Heading 1'] => h1:fresh",
+      "p[style-name='Heading 2'] => h2:fresh",
+      "p[style-name='Heading 3'] => h3:fresh",
+      "p[style-name='Heading 4'] => h4:fresh",
+      "p[style-name='Heading 5'] => h5:fresh",
+      "p[style-name='Title'] => h1:fresh",
+      "p[style-name='Subtitle'] => h2:fresh",
+      "b => strong",
+      "i => em",
+      "u => u",
+      "strike => s",
+    ],
+  };
+  const htmlResult = await mammoth.convertToHtml({ buffer }, options);
   const rawHtml = htmlResult.value || "";
-  const html = sanitizeHtml(rawHtml);
+  const html = sanitizeHtml(rawHtml, {
+    allowedTags: ["h1","h2","h3","h4","h5","h6","p","br","strong","em","u","s","ul","ol","li","table","thead","tbody","tr","th","td","blockquote","pre","code","span","div","a"],
+    allowedAttributes: { a: ["href"], span: ["class"], div: ["class"] },
+  });
   // Strip tags for plain text
   const text = rawHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   return { text, html };
@@ -547,6 +565,8 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/msword",
+  "application/zip",            // some browsers send DOCX as zip
+  "application/octet-stream",   // mobile Chrome often sends DOCX/PDF as octet-stream
   "image/jpeg",
   "image/png",
   "image/webp",
@@ -554,15 +574,23 @@ const ALLOWED_MIME_TYPES = new Set([
   "text/plain",
 ]);
 
+const ALLOWED_EXTENSIONS = new Set([".pdf", ".docx", ".doc", ".txt", ".jpg", ".jpeg", ".png", ".webp", ".tiff"]);
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
       cb(null, true);
-    } else {
-      cb(new Error(`File type '${file.mimetype}' is not allowed. Please upload a PDF, Word document, or image.`));
+      return;
     }
+    // Fallback: accept by extension for browsers that send wrong MIME types (e.g. mobile Chrome)
+    const ext = ("." + file.originalname.split(".").pop()).toLowerCase();
+    if (ALLOWED_EXTENSIONS.has(ext)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error(`File type '${file.mimetype}' is not allowed. Please upload a PDF, Word document, or image.`));
   },
 });
 

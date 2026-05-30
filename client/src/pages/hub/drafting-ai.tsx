@@ -422,6 +422,19 @@ export default function AIDraftingPage() {
     setReferencePrompt("");
   };
 
+  // Poll GET /api/documents/:id until status is "completed" or "error" (max 45s)
+  const pollDocumentReady = async (docId: string): Promise<any> => {
+    const deadline = Date.now() + 45_000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 700));
+      const res = await authFetch(`/api/documents/${docId}`);
+      if (!res.ok) break;
+      const doc = await res.json();
+      if (doc.status === "completed" || doc.status === "error") return doc;
+    }
+    return null;
+  };
+
   const handleReferenceFilesUpload = async (files: File[]) => {
     setIsUploadingRef(true);
     try {
@@ -438,22 +451,19 @@ export default function AIDraftingPage() {
       });
       
       if (response.ok) {
-        const docs = await response.json();
-        // Handle all returned documents
-        for (let i = 0; i < docs.length; i++) {
-          const doc = docs[i];
-          const fileName = files[i]?.name || doc.name || `Document ${i + 1}`;
-          
-          // Check if document has an error message (old .doc format or extraction failed)
-          if (doc.extractedText?.includes("Please save it as .docx format") || 
-              doc.extractedText?.includes("could not be read") ||
-              doc.extractedText?.includes("[Error extracting")) {
+        const pendingDocs = await response.json();
+        // Poll each doc until extraction completes
+        for (let i = 0; i < pendingDocs.length; i++) {
+          const pending = pendingDocs[i];
+          const fileName = files[i]?.name || pending.name || `Document ${i + 1}`;
+          const doc = pending.status === "completed" ? pending : await pollDocumentReady(pending.id);
+          if (!doc || doc.status === "error") {
             errorFiles.push(fileName);
-          } else if (doc.extractedText && doc.extractedText.length > 50) {
-            uploadedFiles.push({
-              name: fileName,
-              content: doc.extractedText,
-            });
+            continue;
+          }
+          const content = doc.extractedText || "";
+          if (content.length > 50) {
+            uploadedFiles.push({ name: fileName, content });
           } else {
             errorFiles.push(fileName);
           }
@@ -463,7 +473,7 @@ export default function AIDraftingPage() {
         if (errorFiles.length > 0) {
           toast({
             title: "Some files could not be processed",
-            description: `${errorFiles.join(", ")} - Please convert to .docx format and try again.`,
+            description: `${errorFiles.join(", ")} — file may be empty or in an unsupported format.`,
             variant: "destructive",
           });
         }
@@ -496,24 +506,20 @@ export default function AIDraftingPage() {
       });
       
       if (response.ok) {
-        const docs = await response.json();
-        if (docs.length > 0) {
-          const doc = docs[0];
-          
-          // Check if document has an error message (old .doc format or extraction failed)
-          if (doc.extractedText?.includes("Please save it as .docx format") || 
-              doc.extractedText?.includes("could not be read") ||
-              doc.extractedText?.includes("[Error extracting")) {
+        const pendingDocs = await response.json();
+        if (pendingDocs.length > 0) {
+          const pending = pendingDocs[0];
+          // Poll until extraction completes (DOCX <1s, PDF 2-5s)
+          const doc = pending.status === "completed" ? pending : await pollDocumentReady(pending.id);
+          if (!doc || doc.status === "error") {
             toast({
-              title: "File format not supported",
-              description: `"${file.name}" is in an older format. Please convert it to .docx format and try again.`,
+              title: "Could not read file",
+              description: "The document appears to be empty or couldn't be processed. Please try a different file.",
               variant: "destructive",
             });
             return;
           }
-          
           // Use extractedHtml from server (preserves legal document structure)
-          // Fallback to extractedText if HTML not available
           const htmlContent = doc.extractedHtml || doc.extractedText || "";
           if (htmlContent.length < 50) {
             toast({
@@ -523,7 +529,6 @@ export default function AIDraftingPage() {
             });
             return;
           }
-          
           setUploadedDraftFile({
             name: file.name,
             content: htmlContent,

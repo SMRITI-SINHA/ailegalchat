@@ -199,6 +199,7 @@ interface UploadedDoc {
   pages: number;
   status: "processing" | "ready";
   content?: string;
+  htmlContent?: string; // extractedHtml — preserves DOCX formatting (headings, bold, tables)
   type?: string;     // mime type — determines whether to show native iframe viewer
   hasFile?: boolean; // true when /api/documents/:id/file will serve the raw file
 }
@@ -694,7 +695,7 @@ export default function ChatWithPDFPage() {
           const doc = await res.json();
           if (doc.status === "completed" || doc.status === "ready") {
             setUploadedDocs(prev =>
-              prev.map(d => d.id === id ? { ...d, status: "ready" as const, pages: doc.pages || d.pages, content: doc.extractedText || d.content, type: doc.type || d.type, hasFile: !!doc.storagePath } : d)
+              prev.map(d => d.id === id ? { ...d, status: "ready" as const, pages: doc.pages || d.pages, content: doc.extractedText || d.content, htmlContent: doc.extractedHtml || d.htmlContent, type: doc.type || d.type, hasFile: !!doc.storagePath } : d)
             );
           } else if (doc.status === "failed") {
             setUploadedDocs(prev =>
@@ -886,12 +887,13 @@ export default function ChatWithPDFPage() {
         );
         const validDocs = docs.filter((d) => d !== null);
         setUploadedDocs(
-          validDocs.map((doc: { id: string; name: string; pages: number; extractedText?: string; type?: string; storagePath?: string }) => ({
+          validDocs.map((doc: { id: string; name: string; pages: number; extractedText?: string; extractedHtml?: string; type?: string; storagePath?: string }) => ({
             id: doc.id,
             name: doc.name,
             pages: doc.pages || 0,
             status: "ready" as const,
             content: doc.extractedText || "",
+            htmlContent: doc.extractedHtml || "",
             type: doc.type,
             hasFile: !!doc.storagePath,
           }))
@@ -1574,10 +1576,17 @@ export default function ChatWithPDFPage() {
                   {!usePdfIframe && (
                     <ScrollArea className="flex-1 p-5">
                       <div ref={docPanelRef} className="text-foreground leading-relaxed">
-                        <HighlightedPageText
-                          text={docPages[activeDocPage - 1] || ""}
-                          highlight={highlightText}
-                        />
+                        {currentDoc?.htmlContent ? (
+                          <div
+                            className="prose prose-sm dark:prose-invert max-w-none text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_table]:text-xs [&_td]:p-1 [&_th]:p-1"
+                            dangerouslySetInnerHTML={{ __html: currentDoc.htmlContent }}
+                          />
+                        ) : (
+                          <HighlightedPageText
+                            text={docPages[activeDocPage - 1] || ""}
+                            highlight={highlightText}
+                          />
+                        )}
                       </div>
                     </ScrollArea>
                   )}
