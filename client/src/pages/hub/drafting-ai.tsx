@@ -357,8 +357,13 @@ export default function AIDraftingPage() {
               const data = JSON.parse(line.slice(6));
               if (currentEvent === "status" && data.stage) {
                 setGeneratingStage(data.stage as "research" | "writing");
+                if (data.stage === "writing") {
+                  setShowGenerateDialog(false);
+                  setViewMode("editor");
+                }
               } else if (currentEvent === "chunk" && data.content) {
                 fullContent += data.content;
+                setDraftContent(markdownToHtml(fullContent));
               } else if (currentEvent === "done" && data.draft) {
                 savedDraft = data.draft;
               } else if (currentEvent === "error") {
@@ -605,8 +610,13 @@ export default function AIDraftingPage() {
               const data = JSON.parse(line.slice(6));
               if (currentEvent === "status" && data.stage) {
                 setGeneratingStage(data.stage as "research" | "writing");
+                if (data.stage === "writing") {
+                  setShowGenerateDialog(false);
+                  setViewMode("editor");
+                }
               } else if (currentEvent === "chunk" && data.content) {
                 fullContent += data.content;
+                setDraftContent(markdownToHtml(fullContent));
               } else if (currentEvent === "done" && data.draft) {
                 savedDraft = data.draft;
               } else if (currentEvent === "error") {
@@ -1210,6 +1220,16 @@ export default function AIDraftingPage() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex-1 flex flex-col min-h-0">
+        {isGenerating && (
+          <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 bg-muted/60 border-b">
+            <StreamingIndicator />
+            <span className="text-sm font-medium">
+              {generatingStage === "research" ? "Researching…" : "Writing draft…"}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <AiThinkingText size="xs" />
+          </div>
+        )}
         <PremiumEditor
           title={draftTitle}
           onTitleChange={setDraftTitle}
