@@ -1644,6 +1644,14 @@ Output clean plain text only. No markdown symbols.`;
       const riskQuery = `Recent amendments, notifications, or judicial developments affecting ${type} in India ${jurisdiction || ""} ${new Date().getFullYear()}`;
       const documentTypeForTraining = documentTypeDetails?.subtypeLabel || type;
 
+      // Establish SSE connection BEFORE research so the proxy doesn't timeout during the ~8-10s research phase
+      if (stream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        sendSse(res, "status", { stage: "research" });
+      }
+
       console.log("[DRAFTING PIPELINE] Launching parallel: BERT + IK base + Perplexity + style/training...");
 
       const [draftBertSettled, draftBaseIKSettled, draftPerplexitySettled, draftStyleSettled] = await Promise.allSettled([
@@ -1766,9 +1774,8 @@ NOTE: This is advisory information only. Recent amendments/notifications should 
       }
 
       if (stream) {
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
+        // Headers already sent at the top of this block — just signal writing phase
+        sendSse(res, "status", { stage: "writing" });
 
         const aiStream = await callAIStream(openai, {
           model,
@@ -2371,6 +2378,14 @@ Generate the requested content now:`;
       const memoSearchBase = (issues || facts).substring(0, 300);
       const memoRiskQuery = `Recent amendments, notifications, or judicial developments in India ${jurisdiction || ""} ${new Date().getFullYear()} ${issues?.substring(0, 100) || ""}`;
 
+      // Establish SSE connection BEFORE research so the proxy doesn't timeout during the ~8-10s research phase
+      if (stream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        sendSse(res, "status", { stage: "research" });
+      }
+
       console.log("[MEMO PIPELINE] Launching parallel: BERT + IK base + Perplexity + training context...");
 
       const [memoBertSettled, memoBaseIKSettled, memoPerplexitySettled, memoTrainingSettled] = await Promise.allSettled([
@@ -2553,9 +2568,8 @@ Output clean plain text only. No markdown symbols.`;
       }
 
       if (stream) {
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
+        // Headers already sent at the top of this block — just signal writing phase
+        sendSse(res, "status", { stage: "writing" });
 
         const aiStream = await callAIStream(openai, {
           model: MODEL_TIERS.standard,

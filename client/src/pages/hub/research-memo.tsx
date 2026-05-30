@@ -158,7 +158,6 @@ export default function LegalMemoPage() {
       const decoder = new TextDecoder();
       let fullMemo = "";
       let currentEvent = "";
-      setGeneratingStage("writing");
 
       while (true) {
         const { done, value } = await reader.read();
@@ -173,7 +172,9 @@ export default function LegalMemoPage() {
           } else if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (currentEvent === "chunk" && data.content) {
+              if (currentEvent === "status" && data.stage) {
+                setGeneratingStage(data.stage as "research" | "writing");
+              } else if (currentEvent === "chunk" && data.content) {
                 fullMemo += data.content;
               } else if (currentEvent === "done" && data.fullMemo) {
                 fullMemo = data.fullMemo;

@@ -190,7 +190,6 @@ export default function CustomDraftPage() {
       let fullContent = "";
       let currentEvent = "";
       let savedDraft: any = null;
-      setGeneratingStage("writing");
 
       while (true) {
         const { done, value } = await reader.read();
@@ -202,7 +201,9 @@ export default function CustomDraftPage() {
           } else if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (currentEvent === "chunk" && data.content) {
+              if (currentEvent === "status" && data.stage) {
+                setGeneratingStage(data.stage as "research" | "writing");
+              } else if (currentEvent === "chunk" && data.content) {
                 fullContent += data.content;
               } else if (currentEvent === "done" && data.draft) {
                 savedDraft = data.draft;

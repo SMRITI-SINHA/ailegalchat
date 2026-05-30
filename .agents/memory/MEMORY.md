@@ -1,0 +1,1 @@
+- [SSE early connection for long pipelines](sse-early-connection.md) — SSE headers must be sent BEFORE any long async work or proxy timeouts will silently kill the stream.
