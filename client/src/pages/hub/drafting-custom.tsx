@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import { AiThinkingText } from "@/components/ai-thinking-text";
 import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -561,6 +562,11 @@ export default function CustomDraftPage() {
                   )}
                 </Button>
               </div>
+              {isGenerating && (
+                <div className="text-center pt-1">
+                  <AiThinkingText />
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { AiThinkingText } from "@/components/ai-thinking-text";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -1015,6 +1016,11 @@ export default function AIDraftingPage() {
                   {isGenerating ? <StreamingIndicator className="mr-2" /> : <Wand2 className="mr-2 h-4 w-4" />}
                   {isGenerating ? (generatingStage === "research" ? "Researching..." : "Writing Draft...") : "Generate Draft"}
                 </Button>
+                {isGenerating && (
+                  <div className="text-center pt-2">
+                    <AiThinkingText />
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1137,6 +1143,11 @@ export default function AIDraftingPage() {
                       {isGenerating ? <StreamingIndicator className="mr-2" /> : <Wand2 className="mr-2 h-4 w-4" />}
                       {isGenerating ? (generatingStage === "research" ? "Researching..." : "Writing Draft...") : "Generate Draft with AI"}
                     </Button>
+                    {isGenerating && (
+                      <div className="text-center pt-2">
+                        <AiThinkingText />
+                      </div>
+                    )}
                   </>
                 )}
               </CardContent>
